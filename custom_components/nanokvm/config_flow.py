@@ -1,6 +1,7 @@
 """Config flow for Sipeed NanoKVM integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -51,7 +52,8 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> str:
         device_info = await client.get_info()
     except NanoKVMAuthenticationFailure as err:
         raise InvalidAuth from err
-    except (aiohttp.ClientError, NanoKVMError) as err:
+    except (aiohttp.ClientConnectorError, asyncio.TimeoutError,
+            aiohttp.ClientError, NanoKVMError) as err:
         raise CannotConnect from err
 
     return normalize_mdns(device_info.mdns)
