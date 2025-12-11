@@ -18,7 +18,6 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -39,6 +38,7 @@ from nanokvm.models import (
     MouseJigglerMode,
 )
 
+from .config_flow import normalize_host
 from .const import (
     ATTR_BUTTON_TYPE,
     ATTR_DURATION,
@@ -106,26 +106,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     username = entry.data[CONF_USERNAME]
     password = entry.data[CONF_PASSWORD]
 
-    # Ensure the host has a scheme
-    if not host.startswith(("http://", "https://")):
-        host = f"http://{host}"
-
-    # Ensure the host ends with /api/
-    if not host.endswith("/api/"):
-        host = f"{host}/api/" if host.endswith("/") else f"{host}/api/"
-
     session = async_get_clientsession(hass)
-    client = NanoKVMClient(host, session)
+    client = NanoKVMClient(normalize_host(host), session)
 
+    device_info = None
     try:
         await client.authenticate(username, password)
         device_info = await client.get_info() # Fetch device_info immediately
     except NanoKVMAuthenticationFailure as err:
         _LOGGER.error("Authentication failed: %s", err)
         return False
-    except (aiohttp.ClientError, NanoKVMError) as err:
-        _LOGGER.error("Failed to connect: %s", err)
-        raise ConfigEntryNotReady from err
+    except (aiohttp.ClientError, NanoKVMError, asyncio.TimeoutError):
+        device_info = type('DeviceInfo', (), {'device_key': f"{host}_{username}", 'mdns': host, 'application': 'Unknown'})()
 
     coordinator = NanoKVMDataUpdateCoordinator(
         hass,
@@ -358,16 +350,29 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
                     "mouse_jiggler_state": self.mouse_jiggler_state,
                     "hdmi_state": self.hdmi_state,
                 }
-        except (NanoKVMError, aiohttp.ClientError, asyncio.TimeoutError) as err:
-            # If we get an authentication error, try to re-authenticate
-            if isinstance(err, NanoKVMAuthenticationFailure):
+        except (aiohttp.ClientResponseError, NanoKVMAuthenticationFailure) as err:
+            if ((isinstance(err, NanoKVMAuthenticationFailure) or
+                 (isinstance(err, aiohttp.ClientResponseError) and err.status == 401)) and
+                hasattr(self.device_info, 'application') and self.device_info.application != 'Unknown'):
+                session = async_get_clientsession(self.hass)
+                host = normalize_host(self.config_entry.data[CONF_HOST])
+                new_client = NanoKVMClient(host, session)
                 try:
-                    await self.client.authenticate(self.username, self.password)
-                    # Try the update again
+                    await new_client.authenticate(self.username, self.password)
+                    self.client = new_client
                     return await self._async_update_data()
                 except Exception as auth_err:
-                    raise UpdateFailed(f"Authentication failed: {auth_err}") from auth_err
+                    if isinstance(err, aiohttp.ClientResponseError):
+                        raise UpdateFailed(f"Reauthentication failed: {auth_err}") from auth_err
+                    else:
+                        raise UpdateFailed(f"Authentication failed: {auth_err}") from auth_err
 
+            if isinstance(err, aiohttp.ClientResponseError):
+                raise UpdateFailed(f"HTTP error with NanoKVM: {err}") from err
+            else:
+                raise UpdateFailed(f"Authentication failed: {err}") from err
+
+        except (NanoKVMError, aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise UpdateFailed(f"Error communicating with NanoKVM: {err}") from err
 
 
