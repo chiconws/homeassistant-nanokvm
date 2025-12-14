@@ -1,0 +1,196 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Se connecter à Sipeed NanoKVM",
+        "description": "Configurer une intégration Sipeed NanoKVM.",
+        "data": {
+          "host": "Hôte (adresse IP ou nom d'hôte)"
+        }
+      },
+      "auth": {
+        "title": "S'authentifier auprès de Sipeed NanoKVM",
+        "description": "S'authentifier auprès de votre appareil Sipeed NanoKVM.",
+        "data": {
+          "username": "Nom d'utilisateur",
+          "password": "Mot de passe"
+        }
+      },
+      "confirm": {
+        "title": "Sipeed NanoKVM découvert",
+        "description": "Voulez-vous configurer l'appareil NanoKVM nommé {name} ?"
+      }
+    },
+    "error": {
+      "cannot_connect": "Échec de la connexion",
+      "invalid_auth": "Authentification invalide",
+      "unknown": "Erreur inattendue"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "power_led": {
+        "name": "LED d'alimentation"
+      },
+      "hdd_led": {
+        "name": "LED du disque dur"
+      },
+      "network_device": {
+        "name": "Périphérique réseau virtuel"
+      },
+      "disk_device": {
+        "name": "Périphérique de disque virtuel"
+      },
+      "ssh_enabled": {
+        "name": "SSH activé"
+      },
+      "mdns_enabled": {
+        "name": "mDNS activé"
+      },
+      "oled_present": {
+        "name": "Écran OLED présent"
+      },
+      "wifi_supported": {
+        "name": "WiFi pris en charge"
+      },
+      "wifi_connected": {
+        "name": "WiFi connecté"
+      },
+      "cdrom_mode": {
+        "name": "Mode CD-ROM"
+      },
+      "mouse_jiggler": {
+        "name": "Agitateur de souris"
+      }
+    },
+    "sensor": {
+      "hid_mode": {
+        "name": "Mode HID"
+      },
+      "oled_sleep": {
+        "name": "Délai de veille OLED"
+      },
+      "hardware_version": {
+        "name": "Version matérielle"
+      },
+      "application_version": {
+        "name": "Version de l'application"
+      },
+      "mounted_image": {
+        "name": "Image montée"
+      }
+    },
+    "switch": {
+      "ssh": {
+        "name": "SSH"
+      },
+      "mdns": {
+        "name": "mDNS"
+      },
+      "virtual_network": {
+        "name": "Réseau virtuel"
+      },
+      "virtual_disk": {
+        "name": "Disque virtuel"
+      },
+      "power": {
+        "name": "Alimentation"
+      },
+      "hdmi": {
+        "name": "Sortie HDMI"
+      }
+    },
+    "select": {
+      "mouse_jiggler_mode": {
+        "name": "Mode d'agitateur de souris",
+        "state": {
+          "disable": "Désactiver",
+          "relative_mode": "Mode relatif",
+          "absolute_mode": "Mode absolu"
+        }
+      }
+    },
+    "button": {
+      "power": {
+        "name": "Bouton d'alimentation"
+      },
+      "reset": {
+        "name": "Bouton de réinitialisation"
+      },
+      "reboot": {
+        "name": "Redémarrer le système"
+      },
+      "reset_hdmi": {
+        "name": "Réinitialiser HDMI"
+      },
+      "reset_hid": {
+        "name": "Réinitialiser HID"
+      },
+      "update_application": {
+        "name": "Mettre à jour l'application"
+      }
+    }
+  },
+  "services": {
+    "push_button": {
+      "name": "Appuyer sur un bouton",
+      "description": "Simuler l'appui sur un bouton matériel de l'appareil NanoKVM.",
+      "fields": {
+        "button_type": {
+          "name": "Type de bouton",
+          "description": "Le type de bouton sur lequel appuyer (alimentation ou réinitialisation)."
+        },
+        "duration": {
+          "name": "Durée",
+          "description": "La durée de maintien du bouton en millisecondes (100-5000)."
+        }
+      }
+    },
+    "paste_text": {
+      "name": "Coller du texte",
+      "description": "Coller du texte via la simulation de clavier HID.",
+      "fields": {
+        "text": {
+          "name": "Texte",
+          "description": "Le texte à coller. Seuls les caractères ASCII imprimables sont pris en charge."
+        }
+      }
+    },
+    "reboot": {
+      "name": "Redémarrer le système",
+      "description": "Redémarrer l'appareil NanoKVM."
+    },
+    "reset_hdmi": {
+      "name": "Réinitialiser HDMI",
+      "description": "Réinitialiser la connexion HDMI (pertinent pour la version PCIe)."
+    },
+    "reset_hid": {
+      "name": "Réinitialiser HID",
+      "description": "Réinitialiser le sous-système HID."
+    },
+    "wake_on_lan": {
+      "name": "Wake on LAN",
+      "description": "Envoyer un paquet Wake-on-LAN à l'adresse MAC spécifiée.",
+      "fields": {
+        "mac": {
+          "name": "Adresse MAC",
+          "description": "L'adresse MAC à laquelle envoyer le paquet Wake-on-LAN."
+        }
+      }
+    },
+    "set_mouse_jiggler": {
+      "name": "Définir l'agitateur de souris",
+      "description": "Configurer l'état et le mode de l'agitateur de souris.",
+      "fields": {
+        "enabled": {
+          "name": "Activé",
+          "description": "Activer ou désactiver l'agitateur de souris."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Le mode de l'agitateur de souris (absolu ou relatif)."
+        }
+      }
+    }
+  }
+}
