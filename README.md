@@ -197,6 +197,7 @@ automation:
 This integration includes translations for:
 
 - English (en)
+- French (fr)
 - Portuguese (Brazil) (pt-BR)
 
 ## License
