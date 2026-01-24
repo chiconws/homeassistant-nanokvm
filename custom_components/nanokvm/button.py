@@ -113,5 +113,6 @@ class NanoKVMButton(NanoKVMEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Press the button."""
-        await self.entity_description.press_fn(self.coordinator)
+        async with self.coordinator.client:
+            await self.entity_description.press_fn(self.coordinator)
         await self.coordinator.async_request_refresh()

@@ -157,12 +157,14 @@ class NanoKVMSwitch(NanoKVMEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
-        await self.entity_description.turn_on_fn(self.coordinator)
+        async with self.coordinator.client:
+            await self.entity_description.turn_on_fn(self.coordinator)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
-        await self.entity_description.turn_off_fn(self.coordinator)
+        async with self.coordinator.client:
+            await self.entity_description.turn_off_fn(self.coordinator)
         await self.coordinator.async_request_refresh()
 
 
@@ -171,13 +173,15 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
-        await self.entity_description.turn_on_fn(self.coordinator)
+        async with self.coordinator.client:
+            await self.entity_description.turn_on_fn(self.coordinator)
         await asyncio.sleep(1)  # Give the device a moment to respond
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the power switch with monitoring for actual shutdown."""
-        await self.entity_description.turn_off_fn(self.coordinator)
+        async with self.coordinator.client:
+            await self.entity_description.turn_off_fn(self.coordinator)
 
         # Wait for the device to be off, with a timeout
         SHUTDOWN_TIMEOUT = 300
