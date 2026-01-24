@@ -96,5 +96,6 @@ class NanoKVMSelect(NanoKVMEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        await self.entity_description.select_option_fn(self.coordinator, option)
+        async with self.coordinator.client:
+            await self.entity_description.select_option_fn(self.coordinator, option)
         await self.coordinator.async_request_refresh()

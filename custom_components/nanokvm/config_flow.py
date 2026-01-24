@@ -43,18 +43,15 @@ def normalize_mdns(mdns: str) -> str:
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> str:
     """Validate the user input allows us to connect.
     """
-    session = async_get_clientsession(hass)
-
-    client = NanoKVMClient(normalize_host(data[CONF_HOST]), session)
-
-    try:
-        await client.authenticate(data[CONF_USERNAME], data[CONF_PASSWORD])
-        device_info = await client.get_info()
-    except NanoKVMAuthenticationFailure as err:
-        raise InvalidAuth from err
-    except (aiohttp.ClientConnectorError, asyncio.TimeoutError,
-            aiohttp.ClientError, NanoKVMError) as err:
-        raise CannotConnect from err
+    async with NanoKVMClient(normalize_host(data[CONF_HOST])) as client:
+        try:
+            await client.authenticate(data[CONF_USERNAME], data[CONF_PASSWORD])
+            device_info = await client.get_info()
+        except NanoKVMAuthenticationFailure as err:
+            raise InvalidAuth from err
+        except (aiohttp.ClientConnectorError, asyncio.TimeoutError,
+                aiohttp.ClientError, NanoKVMError) as err:
+            raise CannotConnect from err
 
     return normalize_mdns(device_info.mdns)
 
@@ -180,27 +177,25 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(normalize_mdns(discovery_info.hostname))
         self._abort_if_unique_id_configured()
 
-        session = async_get_clientsession(self.hass)
-        client = NanoKVMClient(normalize_host(discovery_info.hostname), session)
+        async with NanoKVMClient(normalize_host(discovery_info.hostname)) as client:
+            try:
+                await client.authenticate(DEFAULT_USERNAME, DEFAULT_PASSWORD)
+                await client.get_info()
 
-        try:
-            await client.authenticate(DEFAULT_USERNAME, DEFAULT_PASSWORD)
-            await client.get_info()
-
-            _LOGGER.debug(
-                "Discovered NanoKVM device at %s that uses default credentials.",
-                discovery_info.hostname,
-            )
-        except NanoKVMAuthenticationFailure:
-            _LOGGER.debug(
-                "Discovered NanoKVM device at %s requires user credentials.",
-                discovery_info.hostname,
-            )
-            # If authentication fails, it's still a NanoKVM device, but we can't get device_info.
-            # We'll let the flow continue to prompt for credentials.
-        except (aiohttp.ClientError, NanoKVMError) as err:
-            _LOGGER.debug("Failed to connect to %s during discovery: %s. Ignoring as most likely not a NanoKVM device.", discovery_info.hostname, err)
-            return
+                _LOGGER.debug(
+                    "Discovered NanoKVM device at %s that uses default credentials.",
+                    discovery_info.hostname,
+                )
+            except NanoKVMAuthenticationFailure:
+                _LOGGER.debug(
+                    "Discovered NanoKVM device at %s requires user credentials.",
+                    discovery_info.hostname,
+                )
+                # If authentication fails, it's still a NanoKVM device, but we can't get device_info.
+                # We'll let the flow continue to prompt for credentials.
+            except (aiohttp.ClientError, NanoKVMError) as err:
+                _LOGGER.debug("Failed to connect to %s during discovery: %s. Ignoring as most likely not a NanoKVM device.", discovery_info.hostname, err)
+                return
         
         self.context["title_placeholders"] = {"name": discovery_info.hostname}
 

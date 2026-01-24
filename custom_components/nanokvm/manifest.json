@@ -7,7 +7,7 @@
   "documentation": "https://github.com/Wouter0100/homeassistant-nanokvm",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Wouter0100/homeassistant-nanokvm/issues",
-  "requirements": ["nanokvm>=0.0.4"],
+  "requirements": ["nanokvm>=0.2.0"],
   "version": "0.1.0",
   "zeroconf": ["_workstation._tcp.local."]
 }

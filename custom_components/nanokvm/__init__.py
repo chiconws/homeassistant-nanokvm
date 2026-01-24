@@ -18,7 +18,6 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -106,13 +105,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     username = entry.data[CONF_USERNAME]
     password = entry.data[CONF_PASSWORD]
 
-    session = async_get_clientsession(hass)
-    client = NanoKVMClient(normalize_host(host), session)
+    client = NanoKVMClient(normalize_host(host))
 
     device_info = None
     try:
-        await client.authenticate(username, password)
-        device_info = await client.get_info() # Fetch device_info immediately
+        async with client:
+            await client.authenticate(username, password)
+            device_info = await client.get_info() # Fetch device_info immediately
     except NanoKVMAuthenticationFailure as err:
         _LOGGER.error("Authentication failed: %s", err)
         return False
@@ -136,74 +135,71 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Register services
+    async def _execute_service(service_name: str, handler) -> None:
+        """Execute a service on all configured NanoKVM devices."""
+        for coordinator in hass.data[DOMAIN].values():
+            client = coordinator.client
+            try:
+                async with client:
+                    await handler(client)
+            except Exception as err:
+                _LOGGER.error("Error executing %s service for %s: %s", service_name, client.host, err)
+
     async def handle_push_button(call: ServiceCall) -> None:
         """Handle the push button service."""
         button_type = call.data[ATTR_BUTTON_TYPE]
         duration = call.data[ATTR_DURATION]
-
         gpio_type = GpioType.POWER if button_type == BUTTON_TYPE_POWER else GpioType.RESET
 
-        for entry_id, coordinator in hass.data[DOMAIN].items():
-            client = coordinator.client
-            try:
-                await client.push_button(gpio_type, duration)
-                _LOGGER.debug("Button %s pushed for %d ms", button_type, duration)
-            except Exception as err:
-                _LOGGER.error("Failed to push button: %s", err)
+        async def service_logic(client: NanoKVMClient):
+            await client.push_button(gpio_type, duration)
+            _LOGGER.debug("Button %s pushed for %d ms on %s", button_type, duration, client.host)
+
+        await _execute_service(SERVICE_PUSH_BUTTON, service_logic)
 
     async def handle_paste_text(call: ServiceCall) -> None:
         """Handle the paste text service."""
         text = call.data[ATTR_TEXT]
 
-        for entry_id, coordinator in hass.data[DOMAIN].items():
-            client = coordinator.client
-            try:
-                await client.paste_text(text)
-                _LOGGER.debug("Text pasted: %s", text)
-            except Exception as err:
-                _LOGGER.error("Failed to paste text: %s", err)
+        async def service_logic(client: NanoKVMClient):
+            await client.paste_text(text)
+            _LOGGER.debug("Text pasted on %s", client.host)
+
+        await _execute_service(SERVICE_PASTE_TEXT, service_logic)
 
     async def handle_reboot(call: ServiceCall) -> None:
         """Handle the reboot service."""
-        for entry_id, coordinator in hass.data[DOMAIN].items():
-            client = coordinator.client
-            try:
-                await client.reboot_system()
-                _LOGGER.debug("System reboot initiated")
-            except Exception as err:
-                _LOGGER.error("Failed to reboot system: %s", err)
+        async def service_logic(client: NanoKVMClient):
+            await client.reboot_system()
+            _LOGGER.debug("System reboot initiated on %s", client.host)
+
+        await _execute_service(SERVICE_REBOOT, service_logic)
 
     async def handle_reset_hdmi(call: ServiceCall) -> None:
         """Handle the reset HDMI service."""
-        for entry_id, coordinator in hass.data[DOMAIN].items():
-            client = coordinator.client
-            try:
-                await client.reset_hdmi()
-                _LOGGER.debug("HDMI reset initiated")
-            except Exception as err:
-                _LOGGER.error("Failed to reset HDMI: %s", err)
+        async def service_logic(client: NanoKVMClient):
+            await client.reset_hdmi()
+            _LOGGER.debug("HDMI reset initiated on %s", client.host)
+
+        await _execute_service(SERVICE_RESET_HDMI, service_logic)
 
     async def handle_reset_hid(call: ServiceCall) -> None:
         """Handle the reset HID service."""
-        for entry_id, coordinator in hass.data[DOMAIN].items():
-            client = coordinator.client
-            try:
-                await client.reset_hid()
-                _LOGGER.debug("HID reset initiated")
-            except Exception as err:
-                _LOGGER.error("Failed to reset HID: %s", err)
+        async def service_logic(client: NanoKVMClient):
+            await client.reset_hid()
+            _LOGGER.debug("HID reset initiated on %s", client.host)
+
+        await _execute_service(SERVICE_RESET_HID, service_logic)
 
     async def handle_wake_on_lan(call: ServiceCall) -> None:
         """Handle the wake on LAN service."""
         mac = call.data[ATTR_MAC]
 
-        for entry_id, coordinator in hass.data[DOMAIN].items():
-            client = coordinator.client
-            try:
-                await client.send_wake_on_lan(mac)
-                _LOGGER.debug("Wake on LAN packet sent to %s", mac)
-            except Exception as err:
-                _LOGGER.error("Failed to send Wake on LAN: %s", err)
+        async def service_logic(client: NanoKVMClient):
+            await client.send_wake_on_lan(mac)
+            _LOGGER.debug("Wake on LAN packet sent to %s via %s", mac, client.host)
+
+        await _execute_service(SERVICE_WAKE_ON_LAN, service_logic)
 
     async def handle_set_mouse_jiggler(call: ServiceCall) -> None:
         """Handle the set mouse jiggler service."""
@@ -211,13 +207,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         mode_str = call.data[ATTR_MODE]
         mode = MouseJigglerMode.ABSOLUTE if mode_str == "absolute" else MouseJigglerMode.RELATIVE
 
-        for entry_id, coordinator in hass.data[DOMAIN].items():
-            client = coordinator.client
-            try:
-                await client.set_mouse_jiggler_state(enabled, mode)
-                _LOGGER.debug("Mouse jiggler set to %s with mode %s", enabled, mode_str)
-            except Exception as err:
-                _LOGGER.error("Failed to set mouse jiggler: %s", err)
+        async def service_logic(client: NanoKVMClient):
+            await client.set_mouse_jiggler_state(enabled, mode)
+            _LOGGER.debug("Mouse jiggler on %s set to %s with mode %s", client.host, enabled, mode_str)
+
+        await _execute_service(SERVICE_SET_MOUSE_JIGGLER, service_logic)
 
     hass.services.async_register(
         DOMAIN, SERVICE_PUSH_BUTTON, handle_push_button, schema=PUSH_BUTTON_SCHEMA
@@ -294,11 +288,11 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from NanoKVM."""
         try:
-            # Re-authenticate if needed
-            if not self.client.token:
-                await self.client.authenticate(self.username, self.password)
+            async with self.client, async_timeout.timeout(10):
+                # Re-authenticate if needed
+                if not self.client.token:
+                    await self.client.authenticate(self.username, self.password)
 
-            async with async_timeout.timeout(10):
                 # Fetch all the data we need
                 self.device_info = await self.client.get_info()
                 self.hardware_info = await self.client.get_hardware()
@@ -354,11 +348,11 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
             if ((isinstance(err, NanoKVMAuthenticationFailure) or
                  (isinstance(err, aiohttp.ClientResponseError) and err.status == 401)) and
                 hasattr(self.device_info, 'application') and self.device_info.application != 'Unknown'):
-                session = async_get_clientsession(self.hass)
                 host = normalize_host(self.config_entry.data[CONF_HOST])
-                new_client = NanoKVMClient(host, session)
+                new_client = NanoKVMClient(host)
                 try:
-                    await new_client.authenticate(self.username, self.password)
+                    async with new_client:
+                        await new_client.authenticate(self.username, self.password)
                     self.client = new_client
                     return await self._async_update_data()
                 except Exception as auth_err:
