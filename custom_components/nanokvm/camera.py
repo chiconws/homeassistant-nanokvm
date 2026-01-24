@@ -97,10 +97,11 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
     ) -> bytes | None:
         """Return a still image response from the camera."""
         try:
-            async for image in self.coordinator.client.mjpeg_stream():
-                img_byte_arr = io.BytesIO()
-                image.save(img_byte_arr, format='JPEG')
-                return img_byte_arr.getvalue()
+            async with self.coordinator.client:
+                async for image in self.coordinator.client.mjpeg_stream():
+                    img_byte_arr = io.BytesIO()
+                    image.save(img_byte_arr, format='JPEG')
+                    return img_byte_arr.getvalue()
         except Exception as err:
             _LOGGER.error("Error fetching still image: %s", err)
             return None
