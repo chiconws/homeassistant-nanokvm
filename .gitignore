@@ -33,3 +33,7 @@ ENV/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Development container files
+.devcontainer.json
+docker-compose.yml
