@@ -18,6 +18,7 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -56,7 +57,9 @@ from .const import (
     SERVICE_RESET_HID,
     SERVICE_SET_MOUSE_JIGGLER,
     SERVICE_WAKE_ON_LAN,
+    SIGNAL_NEW_SSH_SENSORS,
 )
+from .ssh_metrics import SSHMetricsCollector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -242,7 +245,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        coordinator = hass.data[DOMAIN].pop(entry.entry_id)
+        if coordinator.ssh_metrics_collector:
+            await coordinator.ssh_metrics_collector.disconnect()
 
     return unload_ok
 
@@ -277,6 +282,13 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
         self.cdrom_status = None
         self.mouse_jiggler_state = None
         self.hdmi_state = None
+        self.uptime = None
+        self.memory_total = None
+        self.memory_used_percent = None
+        self.storage_total = None
+        self.storage_used_percent = None
+        self.ssh_sensors_created = False
+        self.ssh_metrics_collector = None
 
         super().__init__(
             hass,
@@ -329,6 +341,12 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
                     self.mounted_image = GetMountedImageRsp(file="")
                     self.cdrom_status = GetCdRomRsp(cdrom=0)
 
+                # Fetch SSH data if enabled
+                if self.ssh_state and self.ssh_state.enabled:
+                    await self._async_update_ssh_data()
+                else:
+                    await self._async_clear_ssh_data()
+
                 return {
                     "device_info": self.device_info,
                     "hardware_info": self.hardware_info,
@@ -368,6 +386,43 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
 
         except (NanoKVMError, aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise UpdateFailed(f"Error communicating with NanoKVM: {err}") from err
+
+    async def _async_update_ssh_data(self) -> None:
+        """Fetch data via SSH."""
+        if not self.ssh_metrics_collector:
+            host = self.config_entry.data[CONF_HOST].replace("/api/", "").replace("http://", "").replace("https://", "")
+            self.ssh_metrics_collector = SSHMetricsCollector(host=host, password=self.password)
+
+        try:
+            metrics = await self.ssh_metrics_collector.collect()
+            self.uptime = metrics.uptime
+            self.memory_total = metrics.memory_total
+            self.memory_used_percent = metrics.memory_used_percent
+            self.storage_total = metrics.storage_total
+            self.storage_used_percent = metrics.storage_used_percent
+
+            if not self.ssh_sensors_created:
+                _LOGGER.debug("SSH enabled, signaling to create SSH sensors")
+                async_dispatcher_send(self.hass, SIGNAL_NEW_SSH_SENSORS.format(self.config_entry.entry_id))
+                self.ssh_sensors_created = True
+
+        except Exception as err:
+            _LOGGER.debug("Failed to fetch data via SSH: %s", err)
+            self.uptime = None
+            if self.ssh_metrics_collector:
+                await self.ssh_metrics_collector.disconnect()
+
+    async def _async_clear_ssh_data(self) -> None:
+        """Clear SSH data and disconnect client."""
+        self.uptime = None
+        self.memory_total = None
+        self.memory_used_percent = None
+        self.storage_total = None
+        self.storage_used_percent = None
+        self.ssh_sensors_created = False
+        if self.ssh_metrics_collector:
+            await self.ssh_metrics_collector.disconnect()
+            self.ssh_metrics_collector = None
 
 
 class NanoKVMEntity(CoordinatorEntity):

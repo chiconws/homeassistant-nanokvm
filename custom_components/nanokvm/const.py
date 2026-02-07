@@ -52,3 +52,6 @@ ICON_IMAGE = "mdi:disc"
 ICON_CDROM = "mdi:disc"
 ICON_MOUSE_JIGGLER = "mdi:mouse"
 ICON_HDMI = "mdi:video-input-hdmi"
+
+# Signals
+SIGNAL_NEW_SSH_SENSORS = "nanokvm_new_ssh_sensors_{}"
