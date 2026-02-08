@@ -443,17 +443,20 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
 class NanoKVMEntity(CoordinatorEntity):
     """Base class for NanoKVM entities."""
 
+    _attr_has_entity_name = True
+
     def __init__(
         self,
         coordinator: NanoKVMDataUpdateCoordinator,
-        name: str,
         unique_id_suffix: str,
+        name: str | None = None,
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
-        self._attr_name = name
+        if name is not None:
+            self._attr_name = name
         self._attr_unique_id = f"{coordinator.device_info.device_key}_{unique_id_suffix}"
-        _LOGGER.debug("Setting unique_id for %s: %s", self._attr_name, self._attr_unique_id)
+        _LOGGER.debug("Setting unique_id for %s: %s", name, self._attr_unique_id)
 
     @property
     def device_info(self) -> dict[str, Any]:

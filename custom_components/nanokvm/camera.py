@@ -32,6 +32,7 @@ CAMERAS: tuple[NanoKVMCameraEntityDescription, ...] = (
     NanoKVMCameraEntityDescription(
         key="hdmi",
         name="HDMI Stream",
+        translation_key="hdmi",
         icon=ICON_HDMI,
     ),
 )
@@ -66,12 +67,11 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         description: NanoKVMCameraEntityDescription,
     ) -> None:
         """Initialize NanoKVM camera."""
+        self.entity_description = description
         super().__init__(
             coordinator=coordinator,
-            name=f"{description.name}",
             unique_id_suffix=f"camera_{description.key}",
         )
-        self.entity_description = description
         self.access_tokens: deque[str] = deque()
         self._webrtc_provider = None
         self._rtsp_provider = None

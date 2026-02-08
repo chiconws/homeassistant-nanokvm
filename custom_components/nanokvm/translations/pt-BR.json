@@ -61,9 +61,29 @@
       },
       "mouse_jiggler": {
         "name": "Mouse Jiggler"
+      },
+      "update_available": {
+        "name": "Atualização Disponível"
       }
     },
     "sensor": {
+      "firmware_version": {
+        "name": "Versão de Firmware",
+        "state_attributes": {
+          "image_version": {
+            "name": "Versão da Imagem"
+          },
+          "hardware_version": {
+            "name": "Versão de Hardware"
+          },
+          "wifi_supported": {
+            "name": "Wi-Fi Suportado"
+          },
+          "oled_present": {
+            "name": "OLED Presente"
+          }
+        }
+      },
       "hid_mode": {
         "name": "Modo HID"
       },
@@ -78,6 +98,39 @@
       },
       "mounted_image": {
         "name": "Imagem Montada"
+      },
+      "tailscale_state": {
+        "name": "Tailscale",
+        "state_attributes": {
+          "name": {
+            "name": "Nome do Dispositivo"
+          },
+          "ip": {
+            "name": "Endereço IP"
+          },
+          "account": {
+            "name": "Conta"
+          }
+        }
+      },
+      "uptime": {
+        "name": "Tempo de Atividade"
+      },
+      "memory_used_percent": {
+        "name": "Uso de Memória",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total em MB"
+          }
+        }
+      },
+      "storage_used_percent": {
+        "name": "Uso de Armazenamento",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total em MB"
+          }
+        }
       }
     },
     "switch": {
@@ -101,21 +154,52 @@
       }
     },
     "select": {
+      "hid_mode": {
+        "name": "Modo HID (Reinicialização Necessária)",
+        "state": {
+          "normal": "Normal",
+          "hid_only": "Somente HID"
+        }
+      },
       "mouse_jiggler_mode": {
         "name": "Modo Mouse Jiggler",
         "state": {
-          "disable": "Desabilitar",
-          "relative": "Modo Relativo",
-          "absolute": "Modo Absoluto"
+          "disable": "Desativar",
+          "relative_mode": "Modo Relativo",
+          "absolute_mode": "Modo Absoluto"
+        }
+      },
+      "oled_sleep_timeout": {
+        "name": "Tempo de Inatividade do OLED",
+        "state": {
+          "never": "Nunca",
+          "15_sec": "15 s",
+          "30_sec": "30 s",
+          "1_min": "1 min",
+          "3_min": "3 min",
+          "5_min": "5 min",
+          "10_min": "10 min",
+          "30_min": "30 min",
+          "1_hour": "1 hora"
+        }
+      },
+      "swap_size": {
+        "name": "Tamanho de Swap",
+        "state": {
+          "disable": "Desativar",
+          "64_mb": "64 MB",
+          "128_mb": "128 MB",
+          "256_mb": "256 MB",
+          "512_mb": "512 MB"
         }
       }
     },
     "button": {
       "power": {
-        "name": "Botão de Ligar"
+        "name": "Ligar"
       },
       "reset": {
-        "name": "Botão de Reiniciar"
+        "name": "Reiniciar"
       },
       "reboot": {
         "name": "Reiniciar Sistema"
@@ -128,6 +212,11 @@
       },
       "update_application": {
         "name": "Atualizar Aplicativo"
+      }
+    },
+    "camera": {
+      "hdmi": {
+        "name": "Stream HDMI"
       }
     }
   },
@@ -182,9 +271,13 @@
       "name": "Definir Mouse Jiggler",
       "description": "Define o modo do mouse jiggler.",
       "fields": {
+        "enabled": {
+          "name": "Ativado",
+          "description": "Ativa ou desativa o mouse jiggler."
+        },
         "mode": {
           "name": "Modo",
-          "description": "O modo do mouse jiggler (disable, relative, absolute)."
+          "description": "O modo do mouse jiggler (absoluto ou relativo)."
         }
       }
     }

@@ -61,9 +61,29 @@
       },
       "mouse_jiggler": {
         "name": "Agitateur de souris"
+      },
+      "update_available": {
+        "name": "Mise à jour disponible"
       }
     },
     "sensor": {
+      "firmware_version": {
+        "name": "Version du firmware",
+        "state_attributes": {
+          "image_version": {
+            "name": "Version de l'image"
+          },
+          "hardware_version": {
+            "name": "Version matérielle"
+          },
+          "wifi_supported": {
+            "name": "WiFi pris en charge"
+          },
+          "oled_present": {
+            "name": "OLED présent"
+          }
+        }
+      },
       "hid_mode": {
         "name": "Mode HID"
       },
@@ -78,6 +98,39 @@
       },
       "mounted_image": {
         "name": "Image montée"
+      },
+      "tailscale_state": {
+        "name": "Tailscale",
+        "state_attributes": {
+          "name": {
+            "name": "Nom de l'appareil"
+          },
+          "ip": {
+            "name": "Adresse IP"
+          },
+          "account": {
+            "name": "Compte"
+          }
+        }
+      },
+      "uptime": {
+        "name": "Temps de fonctionnement"
+      },
+      "memory_used_percent": {
+        "name": "Mémoire utilisée",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total en Mo"
+          }
+        }
+      },
+      "storage_used_percent": {
+        "name": "Stockage utilisé",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total en Mo"
+          }
+        }
       }
     },
     "switch": {
@@ -101,12 +154,43 @@
       }
     },
     "select": {
+      "hid_mode": {
+        "name": "Mode HID (Redémarrage requis)",
+        "state": {
+          "normal": "Normal",
+          "hid_only": "HID uniquement"
+        }
+      },
       "mouse_jiggler_mode": {
         "name": "Mode d'agitateur de souris",
         "state": {
           "disable": "Désactiver",
           "relative_mode": "Mode relatif",
           "absolute_mode": "Mode absolu"
+        }
+      },
+      "oled_sleep_timeout": {
+        "name": "Délai de veille OLED",
+        "state": {
+          "never": "Jamais",
+          "15_sec": "15 s",
+          "30_sec": "30 s",
+          "1_min": "1 min",
+          "3_min": "3 min",
+          "5_min": "5 min",
+          "10_min": "10 min",
+          "30_min": "30 min",
+          "1_hour": "1 heure"
+        }
+      },
+      "swap_size": {
+        "name": "Taille de swap",
+        "state": {
+          "disable": "Désactiver",
+          "64_mb": "64 Mo",
+          "128_mb": "128 Mo",
+          "256_mb": "256 Mo",
+          "512_mb": "512 Mo"
         }
       }
     },
@@ -128,6 +212,11 @@
       },
       "update_application": {
         "name": "Mettre à jour l'application"
+      }
+    },
+    "camera": {
+      "hdmi": {
+        "name": "Flux HDMI"
       }
     }
   },

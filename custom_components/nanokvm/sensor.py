@@ -46,6 +46,7 @@ SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
     NanoKVMSensorEntityDescription(
         key="firmware_version",
         name="Firmware Version",
+        translation_key="firmware_version",
         icon=ICON_KVM,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: coordinator.device_info.application,
@@ -59,6 +60,7 @@ SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
     NanoKVMSensorEntityDescription(
         key="mounted_image",
         name="Mounted Image",
+        translation_key="mounted_image",
         icon=ICON_IMAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: coordinator.mounted_image.file,
@@ -68,6 +70,7 @@ SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
     NanoKVMSensorEntityDescription(
         key="tailscale_state",
         name="Tailscale",
+        translation_key="tailscale_state",
         icon=ICON_NETWORK,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: coordinator.tailscale_status.state.value,
@@ -87,6 +90,7 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
     NanoKVMSensorEntityDescription(
         key="uptime",
         name="Uptime",
+        translation_key="uptime",
         icon=ICON_SSH,
         entity_category=EntityCategory.DIAGNOSTIC,
         device_class=SensorDeviceClass.TIMESTAMP,
@@ -96,6 +100,7 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
     NanoKVMSensorEntityDescription(
         key="memory_used_percent",
         name="Memory Used",
+        translation_key="memory_used_percent",
         icon="mdi:memory",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -111,6 +116,7 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
     NanoKVMSensorEntityDescription(
         key="storage_used_percent",
         name="Storage Used",
+        translation_key="storage_used_percent",
         icon=ICON_DISK,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -184,12 +190,11 @@ class NanoKVMSensor(NanoKVMEntity, SensorEntity):
         description: NanoKVMSensorEntityDescription,
     ) -> None:
         """Initialize NanoKVM sensor."""
+        self.entity_description = description
         super().__init__(
             coordinator=coordinator,
-            name=f"{description.name}",
             unique_id_suffix=f"sensor_{description.key}",
         )
-        self.entity_description = description
 
     @property
     def available(self) -> bool:
