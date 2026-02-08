@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
@@ -24,6 +25,7 @@ from .const import (
     ICON_DISK,
     ICON_IMAGE,
     ICON_KVM,
+    ICON_NETWORK,
     ICON_SSH,
     SIGNAL_NEW_SSH_SENSORS,
 )
@@ -62,6 +64,22 @@ SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         value_fn=lambda coordinator: coordinator.mounted_image.file,
         should_create_fn=lambda coordinator: coordinator.mounted_image.file != "",
         available_fn=lambda coordinator: coordinator.mounted_image.file != "",
+    ),
+    NanoKVMSensorEntityDescription(
+        key="tailscale_state",
+        name="Tailscale",
+        icon=ICON_NETWORK,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coordinator: coordinator.tailscale_status.state.value,
+        should_create_fn=lambda coordinator: coordinator.tailscale_status is not None,
+        available_fn=lambda coordinator: coordinator.tailscale_status is not None,
+        attributes_fn=lambda coordinator: {
+            "name": coordinator.tailscale_status.name,
+            "ip": coordinator.tailscale_status.ip,
+            "account": coordinator.tailscale_status.account,
+        }
+        if coordinator.tailscale_status is not None
+        else {},
     ),
 )
 

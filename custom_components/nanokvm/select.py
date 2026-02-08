@@ -16,6 +16,7 @@ from nanokvm.models import HidMode, MouseJigglerMode
 
 from .const import (
     DOMAIN,
+    ICON_DISK,
     ICON_HID,
     ICON_MOUSE_JIGGLER,
     ICON_OLED,
@@ -57,6 +58,15 @@ OLED_SLEEP_OPTIONS = {
     "1 hour": 3600,
 }
 OLED_SLEEP_VALUES = {v: k for k, v in OLED_SLEEP_OPTIONS.items()}
+
+SWAP_OPTIONS = {
+    "Disable": 0,
+    "64 MB": 64,
+    "128 MB": 128,
+    "256 MB": 256,
+    "512 MB": 512,
+}
+SWAP_VALUES = {v: k for k, v in SWAP_OPTIONS.items()}
 
 
 SELECTS: tuple[NanoKVMSelectEntityDescription, ...] = (
@@ -104,6 +114,22 @@ SELECTS: tuple[NanoKVMSelectEntityDescription, ...] = (
             OLED_SLEEP_OPTIONS.get(option, 0)
         ),
         available_fn=lambda coordinator: coordinator.oled_info.exist,
+    ),
+    NanoKVMSelectEntityDescription(
+        key="swap_size",
+        name="Swap Size",
+        icon=ICON_DISK,
+        entity_category=EntityCategory.CONFIG,
+        options=list(SWAP_OPTIONS.keys()),
+        value_fn=lambda coordinator: (
+            SWAP_VALUES.get(coordinator.swap_size, f"{coordinator.swap_size} MB")
+            if coordinator.swap_size is not None
+            else "Disable"
+        ),
+        select_option_fn=lambda coordinator, option: coordinator.client.set_swap_size(
+            SWAP_OPTIONS.get(option, 0)
+        ),
+        available_fn=lambda coordinator: coordinator.swap_size is not None,
     ),
 )
 
