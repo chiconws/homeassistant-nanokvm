@@ -101,6 +101,13 @@
       },
       "tailscale_state": {
         "name": "Tailscale",
+        "state": {
+          "notInstall": "Não instalado",
+          "notRunning": "Não em execução",
+          "notLogin": "Não autenticado",
+          "stopped": "Parado",
+          "running": "Em execução"
+        },
         "state_attributes": {
           "name": {
             "name": "Nome do Dispositivo"
