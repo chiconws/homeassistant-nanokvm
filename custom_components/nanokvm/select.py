@@ -12,11 +12,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from nanokvm.models import MouseJigglerMode
+from nanokvm.models import HidMode, MouseJigglerMode
 
 from .const import (
     DOMAIN,
+    ICON_DISK,
+    ICON_HID,
     ICON_MOUSE_JIGGLER,
+    ICON_OLED,
 )
 from . import NanoKVMDataUpdateCoordinator, NanoKVMEntity
 
@@ -29,16 +32,64 @@ class NanoKVMSelectEntityDescription(SelectEntityDescription):
 
     value_fn: Callable[[NanoKVMDataUpdateCoordinator], str] = None
     available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
-    select_option_fn: Callable[[NanoKVMDataUpdateCoordinator, str], None] = None
+    select_option_fn: Callable[[NanoKVMDataUpdateCoordinator, str], Any] = None
+
+
+MOUSE_JIGGLER_OPTIONS = [
+    "Disable",
+    "Relative Mode",
+    "Absolute Mode",
+]
+
+HID_MODE_OPTIONS = [
+    "Normal",
+    "HID Only",
+]
+
+OLED_SLEEP_OPTIONS = {
+    "Never": 0,
+    "15 sec": 15,
+    "30 sec": 30,
+    "1 min": 60,
+    "3 min": 180,
+    "5 min": 300,
+    "10 min": 600,
+    "30 min": 1800,
+    "1 hour": 3600,
+}
+OLED_SLEEP_VALUES = {v: k for k, v in OLED_SLEEP_OPTIONS.items()}
+
+SWAP_OPTIONS = {
+    "Disable": 0,
+    "64 MB": 64,
+    "128 MB": 128,
+    "256 MB": 256,
+    "512 MB": 512,
+}
+SWAP_VALUES = {v: k for k, v in SWAP_OPTIONS.items()}
 
 
 SELECTS: tuple[NanoKVMSelectEntityDescription, ...] = (
+    NanoKVMSelectEntityDescription(
+        key="hid_mode",
+        name="HID Mode (Reboot Required)",
+        icon=ICON_HID,
+        entity_category=EntityCategory.CONFIG,
+        options=HID_MODE_OPTIONS,
+        value_fn=lambda coordinator: (
+            "HID Only" if coordinator.hid_mode.mode == HidMode.HID_ONLY else "Normal"
+        ),
+        select_option_fn=lambda coordinator, option: coordinator.client.set_hid_mode(
+            HidMode.HID_ONLY if option == "HID Only" else HidMode.NORMAL
+        ),
+        available_fn=lambda coordinator: coordinator.hid_mode is not None,
+    ),
     NanoKVMSelectEntityDescription(
         key="mouse_jiggler_mode",
         name="Mouse Jiggler Mode",
         icon=ICON_MOUSE_JIGGLER,
         entity_category=EntityCategory.CONFIG,
-        options=["Disable", "Relative Mode", "Absolute Mode"],
+        options=MOUSE_JIGGLER_OPTIONS,
         value_fn=lambda coordinator: (
             "Disable" if not coordinator.mouse_jiggler_state or not coordinator.mouse_jiggler_state.enabled
             else "Relative Mode" if coordinator.mouse_jiggler_state.mode == MouseJigglerMode.RELATIVE
@@ -49,6 +100,36 @@ SELECTS: tuple[NanoKVMSelectEntityDescription, ...] = (
             MouseJigglerMode.RELATIVE if option == "Relative Mode" else MouseJigglerMode.ABSOLUTE
         ),
         available_fn=lambda coordinator: coordinator.mouse_jiggler_state is not None,
+    ),
+    NanoKVMSelectEntityDescription(
+        key="oled_sleep_timeout",
+        name="OLED Sleep Timeout",
+        icon=ICON_OLED,
+        entity_category=EntityCategory.CONFIG,
+        options=list(OLED_SLEEP_OPTIONS.keys()),
+        value_fn=lambda coordinator: OLED_SLEEP_VALUES.get(
+            coordinator.oled_info.sleep, f"{coordinator.oled_info.sleep} sec"
+        ),
+        select_option_fn=lambda coordinator, option: coordinator.client.set_oled_sleep(
+            OLED_SLEEP_OPTIONS.get(option, 0)
+        ),
+        available_fn=lambda coordinator: coordinator.oled_info.exist,
+    ),
+    NanoKVMSelectEntityDescription(
+        key="swap_size",
+        name="Swap Size",
+        icon=ICON_DISK,
+        entity_category=EntityCategory.CONFIG,
+        options=list(SWAP_OPTIONS.keys()),
+        value_fn=lambda coordinator: (
+            SWAP_VALUES.get(coordinator.swap_size, f"{coordinator.swap_size} MB")
+            if coordinator.swap_size is not None
+            else "Disable"
+        ),
+        select_option_fn=lambda coordinator, option: coordinator.client.set_swap_size(
+            SWAP_OPTIONS.get(option, 0)
+        ),
+        available_fn=lambda coordinator: coordinator.swap_size is not None,
     ),
 )
 

@@ -119,7 +119,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Authentication failed: %s", err)
         return False
     except (aiohttp.ClientError, NanoKVMError, asyncio.TimeoutError):
-        device_info = type('DeviceInfo', (), {'device_key': f"{host}_{username}", 'mdns': host, 'application': 'Unknown'})()
+        device_info = type('DeviceInfo', (), {'device_key': f"{host}_{username}", 'mdns': host, 'application': 'Unknown', 'image': 'Unknown'})()
 
     coordinator = NanoKVMDataUpdateCoordinator(
         hass,
@@ -278,10 +278,13 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
         self.hid_mode = None
         self.oled_info = None
         self.wifi_status = None
+        self.application_version_info = None
         self.mounted_image = None
         self.cdrom_status = None
         self.mouse_jiggler_state = None
         self.hdmi_state = None
+        self.swap_size = None
+        self.tailscale_status = None
         self.uptime = None
         self.memory_total = None
         self.memory_used_percent = None
@@ -315,8 +318,17 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
                 self.hid_mode = await self.client.get_hid_mode()
                 self.oled_info = await self.client.get_oled_info()
                 self.wifi_status = await self.client.get_wifi_status()
+                try:
+                    self.application_version_info = await self.client.get_application_version()
+                except (NanoKVMApiError, aiohttp.ClientResponseError):
+                    self.application_version_info = None
                 self.hdmi_state = await self.client.get_hdmi_state()
                 self.mouse_jiggler_state = await self.client.get_mouse_jiggler_state()
+                self.swap_size = await self.client.get_swap_size()
+                try:
+                    self.tailscale_status = await self.client.get_tailscale_status()
+                except (NanoKVMApiError, aiohttp.ClientResponseError):
+                    self.tailscale_status = None
 
                 # Only fetch mounted image and CD-ROM status if HID mode is NORMAL
                 # When HID mode is HID_ONLY, these features are automatically disabled
@@ -357,10 +369,13 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
                     "hid_mode": self.hid_mode,
                     "oled_info": self.oled_info,
                     "wifi_status": self.wifi_status,
+                    "application_version_info": self.application_version_info,
                     "mounted_image": self.mounted_image,
                     "cdrom_status": self.cdrom_status,
                     "mouse_jiggler_state": self.mouse_jiggler_state,
                     "hdmi_state": self.hdmi_state,
+                    "swap_size": self.swap_size,
+                    "tailscale_status": self.tailscale_status,
                 }
         except (aiohttp.ClientResponseError, NanoKVMAuthenticationFailure) as err:
             if ((isinstance(err, NanoKVMAuthenticationFailure) or
@@ -443,10 +458,15 @@ class NanoKVMEntity(CoordinatorEntity):
     @property
     def device_info(self) -> dict[str, Any]:
         """Return device information about this NanoKVM device."""
+        sw_version = self.coordinator.device_info.application
+        if hasattr(self.coordinator.device_info, "image") and self.coordinator.device_info.image:
+            sw_version += f" (Image: {self.coordinator.device_info.image})"
+
         return {
             "identifiers": {(DOMAIN, self.coordinator.device_info.device_key)},
             "name": f"NanoKVM ({self.coordinator.device_info.mdns}.)",
             "manufacturer": "Sipeed",
             "model": f"NanoKVM {self.coordinator.hardware_info.version.value}",
-            "sw_version": self.coordinator.device_info.application,
+            "sw_version": sw_version,
+            "hw_version": self.coordinator.hardware_info.version.value,
         }

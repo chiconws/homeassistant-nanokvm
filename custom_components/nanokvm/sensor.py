@@ -1,9 +1,9 @@
 """Sensor platform for Sipeed NanoKVM."""
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -13,23 +13,22 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfTime
+from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import NanoKVMDataUpdateCoordinator, NanoKVMEntity
 from .const import (
     DOMAIN,
     ICON_DISK,
-    ICON_HID,
     ICON_IMAGE,
     ICON_KVM,
-    ICON_OLED,
+    ICON_NETWORK,
     ICON_SSH,
     SIGNAL_NEW_SSH_SENSORS,
 )
-from . import NanoKVMDataUpdateCoordinator, NanoKVMEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,41 +38,23 @@ class NanoKVMSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[NanoKVMDataUpdateCoordinator], Any] = None
     available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
+    should_create_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
     attributes_fn: Callable[[NanoKVMDataUpdateCoordinator], dict[str, Any]] = lambda _: {}
 
 
 SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
     NanoKVMSensorEntityDescription(
-        key="hid_mode",
-        name="HID Mode",
-        icon=ICON_HID,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.hid_mode.mode.value,
-    ),
-    NanoKVMSensorEntityDescription(
-        key="oled_sleep",
-        name="OLED Sleep Timeout",
-        icon=ICON_OLED,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda coordinator: coordinator.oled_info.sleep,
-        available_fn=lambda coordinator: coordinator.oled_info.exist,
-    ),
-    NanoKVMSensorEntityDescription(
-        key="hardware_version",
-        name="Hardware Version",
-        icon=ICON_KVM,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.hardware_info.version.value,
-    ),
-    NanoKVMSensorEntityDescription(
-        key="application_version",
-        name="Application Version",
+        key="firmware_version",
+        name="Firmware Version",
         icon=ICON_KVM,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: coordinator.device_info.application,
+        attributes_fn=lambda coordinator: {
+            "image_version": coordinator.device_info.image,
+            "hardware_version": coordinator.hardware_info.version.value,
+            "wifi_supported": coordinator.wifi_status.supported,
+            "oled_present": coordinator.oled_info.exist,
+        },
     ),
     NanoKVMSensorEntityDescription(
         key="mounted_image",
@@ -81,7 +62,24 @@ SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         icon=ICON_IMAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: coordinator.mounted_image.file,
+        should_create_fn=lambda coordinator: coordinator.mounted_image.file != "",
         available_fn=lambda coordinator: coordinator.mounted_image.file != "",
+    ),
+    NanoKVMSensorEntityDescription(
+        key="tailscale_state",
+        name="Tailscale",
+        icon=ICON_NETWORK,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coordinator: coordinator.tailscale_status.state.value,
+        should_create_fn=lambda coordinator: coordinator.tailscale_status is not None,
+        available_fn=lambda coordinator: coordinator.tailscale_status is not None,
+        attributes_fn=lambda coordinator: {
+            "name": coordinator.tailscale_status.name,
+            "ip": coordinator.tailscale_status.ip,
+            "account": coordinator.tailscale_status.account,
+        }
+        if coordinator.tailscale_status is not None
+        else {},
     ),
 )
 
@@ -142,10 +140,9 @@ async def async_setup_entry(
             description=description,
         )
         for description in SENSORS
-        if description.available_fn(coordinator)
+        if description.should_create_fn(coordinator)
     )
 
-    # Add SSH sensors if SSH is already enabled
     if coordinator.ssh_state and coordinator.ssh_state.enabled:
         _LOGGER.debug("SSH already enabled, creating SSH sensors")
         async_add_entities(
@@ -157,7 +154,6 @@ async def async_setup_entry(
         )
         coordinator.ssh_sensors_created = True
 
-    # Listen for signal to add SSH sensors later
     @callback
     def async_add_ssh_sensors() -> None:
         """Add SSH sensors when SSH is enabled."""

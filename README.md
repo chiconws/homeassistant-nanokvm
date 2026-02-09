@@ -12,10 +12,14 @@ project was created by the use of a LLM (Google Gemini) using Cline, as an exper
 - Toggle system settings (SSH, mDNS)
 - Push hardware buttons (power, reset)
 - Paste text via HID keyboard simulation
-- Control OLED display settings
+- Control HID mode and OLED display settings
 - Monitor and control mounted images
-- **NEW**: Mouse jiggler control with multiple modes
-- **NEW**: HDMI output control for PCI-E versions
+- Monitor SSH-based diagnostics (uptime, memory, storage)
+- Monitor Tailscale status
+- Adjust swap size
+- Check if an application update is available
+- Mouse jiggler control with multiple modes
+- HDMI output control for PCI-E versions
 
 ## Installation
 
@@ -52,23 +56,25 @@ project was created by the use of a LLM (Google Gemini) using Cline, as an exper
 
 - **Power LED**: Shows the state of the power LED
 - **HDD LED**: Shows the state of the HDD LED (Alpha hardware only)
-- **Virtual Network Device**: Shows if the virtual network device is enabled
-- **Virtual Disk Device**: Shows if the virtual disk device is enabled
-- **SSH Enabled**: Shows if SSH is enabled
-- **mDNS Enabled**: Shows if mDNS is enabled
-- **OLED Present**: Shows if an OLED display is present
-- **WiFi Supported**: Shows if WiFi is supported
 - **WiFi Connected**: Shows if WiFi is connected
 - **CD-ROM Mode**: Shows if the mounted image is in CD-ROM mode
-- **Mouse Jiggler**: Shows if the mouse jiggler is currently active
+- **Update Available**: Shows if a newer application version is available
 
 ### Sensors
 
-- **HID Mode**: Shows the current HID mode
-- **OLED Sleep Timeout**: Shows the OLED sleep timeout in seconds
-- **Hardware Version**: Shows the hardware version
-- **Application Version**: Shows the application version
+- **Firmware Version**: Shows the current application version with attributes:
+  - `image_version`
+  - `hardware_version`
+  - `wifi_supported`
+  - `oled_present`
 - **Mounted Image**: Shows the currently mounted image
+- **Tailscale**: Shows Tailscale state with attributes:
+  - `name`
+  - `ip`
+  - `account`
+- **Uptime** (SSH): Device uptime
+- **Memory Used** (SSH): Memory usage percentage (includes `total_mb` attribute)
+- **Storage Used** (SSH): Storage usage percentage (includes `total_mb` attribute)
 
 ### Switches
 
@@ -81,10 +87,13 @@ project was created by the use of a LLM (Google Gemini) using Cline, as an exper
 
 ### Select Entities
 
+- **HID Mode (Reboot Required)**: Set HID mode (`Normal` or `HID Only`)
 - **Mouse Jiggler Mode**: Control mouse jiggler with three modes:
   - **Disable**: Turn off mouse jiggler
   - **Relative Mode**: Move mouse cursor in relative movements
   - **Absolute Mode**: Move mouse cursor to absolute positions
+- **OLED Sleep Timeout**: Set OLED sleep timeout
+- **Swap Size**: Configure swap size
 
 ### Buttons
 
@@ -191,6 +200,7 @@ automation:
 - If authentication fails, verify your username and password.
 - If entities are missing, try restarting Home Assistant.
 - HDMI control is only available on PCI-E versions of the NanoKVM and will automatically be hidden for other hardware versions.
+- SSH-based sensors (uptime, memory, storage) require SSH to be enabled on the NanoKVM.
 
 ## Supported Languages
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -18,12 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     DOMAIN,
     ICON_DISK,
-    ICON_MDNS,
-    ICON_MOUSE_JIGGLER,
-    ICON_NETWORK,
-    ICON_OLED,
     ICON_POWER,
-    ICON_SSH,
     ICON_WIFI,
 )
 from . import NanoKVMDataUpdateCoordinator, NanoKVMEntity
@@ -53,48 +47,6 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
         available_fn=lambda coordinator: coordinator.hardware_info.version.value == "Alpha",
     ),
     NanoKVMBinarySensorEntityDescription(
-        key="network_device",
-        name="Virtual Network Device",
-        icon=ICON_NETWORK,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.virtual_device_info.network,
-    ),
-    NanoKVMBinarySensorEntityDescription(
-        key="disk_device",
-        name="Virtual Disk Device",
-        icon=ICON_DISK,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.virtual_device_info.disk,
-    ),
-    NanoKVMBinarySensorEntityDescription(
-        key="ssh_enabled",
-        name="SSH Enabled",
-        icon=ICON_SSH,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.ssh_state.enabled,
-    ),
-    NanoKVMBinarySensorEntityDescription(
-        key="mdns_enabled",
-        name="mDNS Enabled",
-        icon=ICON_MDNS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.mdns_state.enabled,
-    ),
-    NanoKVMBinarySensorEntityDescription(
-        key="oled_present",
-        name="OLED Present",
-        icon=ICON_OLED,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.oled_info.exist,
-    ),
-    NanoKVMBinarySensorEntityDescription(
-        key="wifi_supported",
-        name="WiFi Supported",
-        icon=ICON_WIFI,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.wifi_status.supported,
-    ),
-    NanoKVMBinarySensorEntityDescription(
         key="wifi_connected",
         name="WiFi Connected",
         icon=ICON_WIFI,
@@ -112,12 +64,15 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
         available_fn=lambda coordinator: coordinator.mounted_image.file != "",
     ),
     NanoKVMBinarySensorEntityDescription(
-        key="mouse_jiggler",
-        name="Mouse Jiggler",
-        icon=ICON_MOUSE_JIGGLER,
+        key="update_available",
+        name="Update Available",
+        icon="mdi:update",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.mouse_jiggler_state.enabled if coordinator.mouse_jiggler_state else False,
-        available_fn=lambda coordinator: coordinator.mouse_jiggler_state is not None,
+        value_fn=lambda coordinator: (
+            coordinator.application_version_info.current
+            != coordinator.application_version_info.latest
+        ),
+        available_fn=lambda coordinator: coordinator.application_version_info is not None,
     ),
 )
 
