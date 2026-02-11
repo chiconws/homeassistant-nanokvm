@@ -35,12 +35,14 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
     NanoKVMBinarySensorEntityDescription(
         key="power_led",
         name="Power LED",
+        translation_key="power_led",
         icon=ICON_POWER,
         value_fn=lambda coordinator: coordinator.gpio_info.pwr,
     ),
     NanoKVMBinarySensorEntityDescription(
         key="hdd_led",
         name="HDD LED",
+        translation_key="hdd_led",
         icon=ICON_DISK,
         value_fn=lambda coordinator: coordinator.gpio_info.hdd,
         # HDD LED is only valid for Alpha hardware
@@ -49,6 +51,7 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
     NanoKVMBinarySensorEntityDescription(
         key="wifi_connected",
         name="WiFi Connected",
+        translation_key="wifi_connected",
         icon=ICON_WIFI,
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -58,6 +61,7 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
     NanoKVMBinarySensorEntityDescription(
         key="cdrom_mode",
         name="CD-ROM Mode",
+        translation_key="cdrom_mode",
         icon=ICON_DISK,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: coordinator.cdrom_status.cdrom == 1,
@@ -66,6 +70,7 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
     NanoKVMBinarySensorEntityDescription(
         key="update_available",
         name="Update Available",
+        translation_key="update_available",
         icon="mdi:update",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: (
@@ -106,12 +111,11 @@ class NanoKVMBinarySensor(NanoKVMEntity, BinarySensorEntity):
         description: NanoKVMBinarySensorEntityDescription,
     ) -> None:
         """Initialize NanoKVM binary sensor."""
+        self.entity_description = description
         super().__init__(
             coordinator=coordinator,
-            name=f"{description.name}",
             unique_id_suffix=f"binary_sensor_{description.key}",
         )
-        self.entity_description = description
 
     @property
     def is_on(self) -> bool:

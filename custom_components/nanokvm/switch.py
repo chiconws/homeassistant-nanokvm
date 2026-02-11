@@ -43,6 +43,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     NanoKVMSwitchEntityDescription(
         key="ssh",
         name="SSH",
+        translation_key="ssh",
         icon=ICON_SSH,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: coordinator.ssh_state.enabled,
@@ -52,6 +53,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     NanoKVMSwitchEntityDescription(
         key="mdns",
         name="mDNS",
+        translation_key="mdns",
         icon=ICON_MDNS,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: coordinator.mdns_state.enabled,
@@ -61,6 +63,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     NanoKVMSwitchEntityDescription(
         key="virtual_network",
         name="Virtual Network",
+        translation_key="virtual_network",
         icon=ICON_NETWORK,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: coordinator.virtual_device_info.network,
@@ -70,6 +73,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     NanoKVMSwitchEntityDescription(
         key="virtual_disk",
         name="Virtual Disk",
+        translation_key="virtual_disk",
         icon=ICON_DISK,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: coordinator.virtual_device_info.disk,
@@ -79,6 +83,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     NanoKVMSwitchEntityDescription(
         key="power",
         name="Power",
+        translation_key="power",
         icon=ICON_POWER,
         value_fn=lambda coordinator: coordinator.gpio_info.pwr,
         turn_on_fn=lambda coordinator: coordinator.client.push_button(GpioType.POWER, 200),
@@ -87,6 +92,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     NanoKVMSwitchEntityDescription(
         key="hdmi",
         name="HDMI Output",
+        translation_key="hdmi",
         icon=ICON_HDMI,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: coordinator.hdmi_state.enabled if coordinator.hdmi_state else False,
@@ -143,12 +149,11 @@ class NanoKVMSwitch(NanoKVMEntity, SwitchEntity):
         description: NanoKVMSwitchEntityDescription,
     ) -> None:
         """Initialize NanoKVM switch."""
+        self.entity_description = description
         super().__init__(
             coordinator=coordinator,
-            name=f"{description.name}",
             unique_id_suffix=f"switch_{description.key}",
         )
-        self.entity_description = description
 
     @property
     def is_on(self) -> bool:

@@ -61,9 +61,29 @@
       },
       "mouse_jiggler": {
         "name": "Mouse Jiggler"
+      },
+      "update_available": {
+        "name": "Update Available"
       }
     },
     "sensor": {
+      "firmware_version": {
+        "name": "Firmware Version",
+        "state_attributes": {
+          "image_version": {
+            "name": "Image Version"
+          },
+          "hardware_version": {
+            "name": "Hardware Version"
+          },
+          "wifi_supported": {
+            "name": "WiFi Supported"
+          },
+          "oled_present": {
+            "name": "OLED Present"
+          }
+        }
+      },
       "hid_mode": {
         "name": "HID Mode"
       },
@@ -78,6 +98,46 @@
       },
       "mounted_image": {
         "name": "Mounted Image"
+      },
+      "tailscale_state": {
+        "name": "Tailscale",
+        "state": {
+          "notInstall": "Not installed",
+          "notRunning": "Not running",
+          "notLogin": "Not logged in",
+          "stopped": "Stopped",
+          "running": "Running"
+        },
+        "state_attributes": {
+          "name": {
+            "name": "Device Name"
+          },
+          "ip": {
+            "name": "IP Address"
+          },
+          "account": {
+            "name": "Account"
+          }
+        }
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "memory_used_percent": {
+        "name": "Memory Used",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total MB"
+          }
+        }
+      },
+      "storage_used_percent": {
+        "name": "Storage Used",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total MB"
+          }
+        }
       }
     },
     "switch": {
@@ -101,12 +161,43 @@
       }
     },
     "select": {
+      "hid_mode": {
+        "name": "HID Mode (Reboot Required)",
+        "state": {
+          "normal": "Normal",
+          "hid_only": "HID Only"
+        }
+      },
       "mouse_jiggler_mode": {
         "name": "Mouse Jiggler Mode",
         "state": {
-          "disable": "Disable",
+          "disable": "Disabled",
           "relative_mode": "Relative Mode",
           "absolute_mode": "Absolute Mode"
+        }
+      },
+      "oled_sleep_timeout": {
+        "name": "OLED Sleep Timeout",
+        "state": {
+          "never": "Never",
+          "15_sec": "15 sec",
+          "30_sec": "30 sec",
+          "1_min": "1 min",
+          "3_min": "3 min",
+          "5_min": "5 min",
+          "10_min": "10 min",
+          "30_min": "30 min",
+          "1_hour": "1 hour"
+        }
+      },
+      "swap_size": {
+        "name": "Swap Size",
+        "state": {
+          "disable": "Disabled",
+          "64_mb": "64 MB",
+          "128_mb": "128 MB",
+          "256_mb": "256 MB",
+          "512_mb": "512 MB"
         }
       }
     },
@@ -128,6 +219,11 @@
       },
       "update_application": {
         "name": "Update Application"
+      }
+    },
+    "camera": {
+      "hdmi": {
+        "name": "HDMI Stream"
       }
     }
   },

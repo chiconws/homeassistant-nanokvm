@@ -35,24 +35,28 @@ BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
     NanoKVMButtonEntityDescription(
         key="power",
         name="Power Button",
+        translation_key="power",
         icon=ICON_POWER,
         press_fn=lambda coordinator: coordinator.client.push_button(GpioType.POWER, 100),
     ),
     NanoKVMButtonEntityDescription(
         key="reset",
         name="Reset Button",
+        translation_key="reset",
         icon=ICON_RESET,
         press_fn=lambda coordinator: coordinator.client.push_button(GpioType.RESET, 100),
     ),
     NanoKVMButtonEntityDescription(
         key="reboot",
         name="Reboot System",
+        translation_key="reboot",
         icon=ICON_RESET,
         press_fn=lambda coordinator: coordinator.client.reboot_system(),
     ),
     NanoKVMButtonEntityDescription(
         key="reset_hdmi",
         name="Reset HDMI",
+        translation_key="reset_hdmi",
         icon=ICON_KVM,
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda coordinator: coordinator.client.reset_hdmi(),
@@ -61,6 +65,7 @@ BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
     NanoKVMButtonEntityDescription(
         key="reset_hid",
         name="Reset HID",
+        translation_key="reset_hid",
         icon=ICON_HID,
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda coordinator: coordinator.client.reset_hid(),
@@ -68,6 +73,7 @@ BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
     NanoKVMButtonEntityDescription(
         key="update_application",
         name="Update Application",
+        translation_key="update_application",
         icon=ICON_KVM,
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda coordinator: coordinator.client.update_application(),
@@ -104,12 +110,11 @@ class NanoKVMButton(NanoKVMEntity, ButtonEntity):
         description: NanoKVMButtonEntityDescription,
     ) -> None:
         """Initialize NanoKVM button."""
+        self.entity_description = description
         super().__init__(
             coordinator=coordinator,
-            name=f"{description.name}",
             unique_id_suffix=f"button_{description.key}",
         )
-        self.entity_description = description
 
     async def async_press(self) -> None:
         """Press the button."""
