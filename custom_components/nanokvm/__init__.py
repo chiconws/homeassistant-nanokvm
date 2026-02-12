@@ -470,7 +470,7 @@ class NanoKVMEntity(CoordinatorEntity):
 
         return {
             "identifiers": {(DOMAIN, self.coordinator.device_info.device_key)},
-            "name": f"NanoKVM ({self.coordinator.device_info.mdns}.)",
+            "name": self.coordinator.hostname_info.hostname,
             "manufacturer": "Sipeed",
             "model": f"NanoKVM {self.coordinator.hardware_info.version.value}",
             "sw_version": sw_version,
