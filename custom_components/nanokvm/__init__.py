@@ -292,6 +292,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
         self.storage_used_percent = None
         self.ssh_sensors_created = False
         self.ssh_metrics_collector = None
+        self.hostname_info = None
 
         super().__init__(
             hass,
@@ -310,6 +311,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Fetch all the data we need
                 self.device_info = await self.client.get_info()
+                self.hostname_info = await self.client.get_hostname()
                 self.hardware_info = await self.client.get_hardware()
                 self.gpio_info = await self.client.get_gpio()
                 self.virtual_device_info = await self.client.get_virtual_device_status()
@@ -376,6 +378,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
                     "hdmi_state": self.hdmi_state,
                     "swap_size": self.swap_size,
                     "tailscale_status": self.tailscale_status,
+                    "hostname_info": self.hostname_info,
                 }
         except (aiohttp.ClientResponseError, NanoKVMAuthenticationFailure) as err:
             if ((isinstance(err, NanoKVMAuthenticationFailure) or
