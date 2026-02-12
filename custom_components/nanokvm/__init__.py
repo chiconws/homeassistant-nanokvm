@@ -50,6 +50,7 @@ from .const import (
     BUTTON_TYPE_RESET,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    INTEGRATION_TITLE,
     SERVICE_PASTE_TEXT,
     SERVICE_PUSH_BUTTON,
     SERVICE_REBOOT,
@@ -472,7 +473,7 @@ class NanoKVMEntity(CoordinatorEntity):
             "identifiers": {(DOMAIN, self.coordinator.device_info.device_key)},
             "name": self.coordinator.hostname_info.hostname,
             "manufacturer": "Sipeed",
-            "model": f"NanoKVM {self.coordinator.hardware_info.version.value}",
+            "model": f"{INTEGRATION_TITLE} {self.coordinator.hardware_info.version.value}",
             "sw_version": sw_version,
             "hw_version": self.coordinator.hardware_info.version.value,
         }
