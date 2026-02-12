@@ -50,6 +50,7 @@ from .const import (
     BUTTON_TYPE_RESET,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    INTEGRATION_TITLE,
     SERVICE_PASTE_TEXT,
     SERVICE_PUSH_BUTTON,
     SERVICE_REBOOT,
@@ -292,6 +293,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
         self.storage_used_percent = None
         self.ssh_sensors_created = False
         self.ssh_metrics_collector = None
+        self.hostname_info = None
 
         super().__init__(
             hass,
@@ -310,6 +312,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Fetch all the data we need
                 self.device_info = await self.client.get_info()
+                self.hostname_info = await self.client.get_hostname()
                 self.hardware_info = await self.client.get_hardware()
                 self.gpio_info = await self.client.get_gpio()
                 self.virtual_device_info = await self.client.get_virtual_device_status()
@@ -376,6 +379,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator):
                     "hdmi_state": self.hdmi_state,
                     "swap_size": self.swap_size,
                     "tailscale_status": self.tailscale_status,
+                    "hostname_info": self.hostname_info,
                 }
         except (aiohttp.ClientResponseError, NanoKVMAuthenticationFailure) as err:
             if ((isinstance(err, NanoKVMAuthenticationFailure) or
@@ -467,9 +471,9 @@ class NanoKVMEntity(CoordinatorEntity):
 
         return {
             "identifiers": {(DOMAIN, self.coordinator.device_info.device_key)},
-            "name": f"NanoKVM ({self.coordinator.device_info.mdns}.)",
+            "name": self.coordinator.hostname_info.hostname,
             "manufacturer": "Sipeed",
-            "model": f"NanoKVM {self.coordinator.hardware_info.version.value}",
+            "model": f"{INTEGRATION_TITLE} {self.coordinator.hardware_info.version.value}",
             "sw_version": sw_version,
             "hw_version": self.coordinator.hardware_info.version.value,
         }

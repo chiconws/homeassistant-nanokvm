@@ -18,7 +18,7 @@ from homeassistant.components import zeroconf
 
 from nanokvm.client import NanoKVMClient, NanoKVMAuthenticationFailure, NanoKVMError
 
-from .const import DEFAULT_USERNAME, DEFAULT_PASSWORD, DOMAIN
+from .const import DEFAULT_USERNAME, DEFAULT_PASSWORD, DOMAIN, INTEGRATION_TITLE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(mdns)
         self._abort_if_unique_id_configured()
         
-        return self.async_create_entry(title=f"NanoKVM ({mdns})", data=data)
+        return self.async_create_entry(title=INTEGRATION_TITLE, data=data)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

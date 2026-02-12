@@ -1,6 +1,7 @@
 """Constants for the Sipeed NanoKVM integration."""
 
 DOMAIN = "nanokvm"
+INTEGRATION_TITLE = "NanoKVM"
 
 # Configuration
 CONF_HOST = "host"
