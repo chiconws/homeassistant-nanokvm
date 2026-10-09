@@ -332,7 +332,7 @@ def test_flow_initial_state_and_fingerprint_formatting(flow: NanoKVMConfigFlow) 
     assert flow.data == {}
     assert flow._discovered_fingerprint is None
     assert flow._ssl_return_step is None
-    assert flow._format_fingerprint("AABB01") == "AA:BB:01"
+    assert config_flow_module._format_fingerprint("AABB01") == "AA:BB:01"
 
 
 def test_find_matching_entry_returns_first_match_or_none(

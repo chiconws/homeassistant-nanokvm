@@ -139,6 +139,11 @@ async def async_is_nanokvm_api(api_url: str, ssl_fingerprint: str) -> bool:
     return True
 
 
+def _format_fingerprint(fingerprint: str) -> str:
+    """Format a hex fingerprint with colons for display."""
+    return ":".join(fingerprint[i : i + 2] for i in range(0, len(fingerprint), 2))
+
+
 class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Sipeed NanoKVM."""
 
@@ -280,17 +285,11 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             return self.async_abort(reason="already_configured")
 
-        if current_host != discovery_host:
-            _LOGGER.debug(
-                "Updating discovered host for NanoKVM from %s to %s",
-                current_host,
-                discovery_host,
-            )
-        else:
-            _LOGGER.debug(
-                "Device %s is already configured with the current host, ignoring discovery",
-                discovery_host,
-            )
+        _LOGGER.debug(
+            "NanoKVM configured at %s was discovered at %s",
+            current_host,
+            discovery_host,
+        )
 
         data_updates: dict[str, Any] = {CONF_HOST: discovery_host}
         if preferred_host is not None:
@@ -329,15 +328,21 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         device_key: str | None,
     ) -> ConfigFlowResult:
         """Save discovery updates and migrate a legacy unique ID when verified."""
-        update_kwargs: dict[str, Any] = {
-            "data_updates": data_updates,
-            "reason": "already_configured",
-            "reload_even_if_entry_is_unchanged": False,
-        }
-        if device_key is not None and entry.unique_id != device_key:
-            update_kwargs["unique_id"] = device_key
+        return self._async_update_and_abort(
+            entry,
+            device_key,
+            data_updates=data_updates,
+            reason="already_configured",
+            reload_even_if_entry_is_unchanged=False,
+        )
 
-        return self.async_update_reload_and_abort(entry, **update_kwargs)
+    def _async_update_and_abort(
+        self, entry: ConfigEntry, device_key: str | None, **kwargs: Any
+    ) -> ConfigFlowResult:
+        """Update an entry, replacing its unique ID with a verified device key."""
+        if device_key is not None and entry.unique_id != device_key:
+            kwargs["unique_id"] = device_key
+        return self.async_update_reload_and_abort(entry, **kwargs)
 
     async def _async_reconfirm_ssh_host_key(
         self,
@@ -385,29 +390,10 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(device_key)
         self._abort_if_unique_id_configured()
 
-        if CONF_USE_STATIC_HOST not in data:
-            data[CONF_USE_STATIC_HOST] = False
+        data.setdefault(CONF_USE_STATIC_HOST, False)
         data.setdefault(CONF_PREFERRED_HOST, data[CONF_HOST])
 
-        if data[CONF_USE_STATIC_HOST]:
-            _LOGGER.debug(
-                "Device configured to use static host %s (mDNS discovery disabled)",
-                data[CONF_HOST]
-            )
-        else:
-            _LOGGER.debug(
-                "Device configured to allow mDNS discovery (host: %s, key: %s)",
-                data[CONF_HOST],
-                device_key
-            )
-
         return self.async_create_entry(title=INTEGRATION_TITLE, data=data)
-
-    def _format_fingerprint(self, fingerprint: str) -> str:
-        """Format a hex fingerprint with colons for display."""
-        return ":".join(
-            fingerprint[i : i + 2] for i in range(0, len(fingerprint), 2)
-        )
 
     async def _async_fetch_and_redirect_ssl(
         self, return_step: str
@@ -449,7 +435,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="ssl_fingerprint",
             description_placeholders={
                 "host": self.data[CONF_HOST],
-                "fingerprint": self._format_fingerprint(fingerprint),
+                "fingerprint": _format_fingerprint(fingerprint),
             },
         )
 
@@ -471,8 +457,8 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="ssl_fingerprint_changed",
             description_placeholders={
                 "host": self.data[CONF_HOST],
-                "old_fingerprint": self._format_fingerprint(old_fingerprint),
-                "new_fingerprint": self._format_fingerprint(fingerprint),
+                "old_fingerprint": _format_fingerprint(old_fingerprint),
+                "new_fingerprint": _format_fingerprint(fingerprint),
             },
         )
 
@@ -518,18 +504,13 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 data_updates[CONF_HOST] = self.data[CONF_HOST]
             if CONF_PREFERRED_HOST in self.data:
                 data_updates[CONF_PREFERRED_HOST] = self.data[CONF_PREFERRED_HOST]
-            update_kwargs: dict[str, Any] = {
-                "data_updates": data_updates,
-                "reason": "reconfigure_successful",
-            }
             device_key = self._pending_device_key
             self._pending_device_key = None
-            self._pending_ssh_host_key = None
-            if device_key is not None and entry.unique_id != device_key:
-                update_kwargs["unique_id"] = device_key
-            return self.async_update_reload_and_abort(
+            return self._async_update_and_abort(
                 entry,
-                **update_kwargs,
+                device_key,
+                data_updates=data_updates,
+                reason="reconfigure_successful",
             )
 
         device_key = self._pending_device_key
@@ -568,7 +549,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             await validate_input(self.data)
         except SSLCertificateChanged:
             return await self._async_fetch_and_redirect_ssl("reauth_finish")
-        except (InvalidAuth, CannotConnect, Exception):
+        except Exception:
             pass
 
         return await self.async_step_reauth_confirm()
@@ -626,7 +607,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             device_key = await validate_input(self.data)
         except InvalidAuth:
             return await self.async_step_reauth_confirm()
-        except (CannotConnect, SSLCertificateChanged, Exception) as err:
+        except Exception as err:
             _LOGGER.error(
                 "Reauth failed after SSL confirmation: %s: %s",
                 type(err).__name__,
@@ -649,20 +630,15 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         ):
             return self.async_abort(reason="already_configured")
 
-        update_kwargs: dict[str, Any] = {
-            "data_updates": {
+        return self._async_update_and_abort(
+            entry,
+            device_key,
+            data_updates={
                 CONF_USERNAME: self.data[CONF_USERNAME],
                 CONF_PASSWORD: self.data[CONF_PASSWORD],
                 CONF_SSL_FINGERPRINT: self.data.get(CONF_SSL_FINGERPRINT),
             },
-        }
-        if entry.unique_id != device_key:
-            update_kwargs["unique_id"] = device_key
-
-        return self.async_update_reload_and_abort(
-            entry,
             reason="reauth_successful",
-            **update_kwargs,
         )
 
     async def async_step_user(
