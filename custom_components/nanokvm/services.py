@@ -16,7 +16,7 @@ from homeassistant.core import (
 )
 from homeassistant.const import ATTR_DEVICE_ID, CONF_HOST
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 
 from nanokvm.client import NanoKVMClient
 from nanokvm.models import GpioType, MouseJigglerMode
@@ -97,31 +97,29 @@ SET_MOUSE_JIGGLER_SCHEMA = vol.Schema(
 
 HOST_ONLY_SCHEMA = vol.Schema(_OPTIONAL_HOST_FIELD)
 
-SET_LED_STRIP_SCHEMA = vol.Schema(
-    _OPTIONAL_HOST_FIELD
-    | {
-        vol.Optional(ATTR_ON): bool,
-        vol.Optional(ATTR_BRIGHTNESS): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=LED_BRIGHTNESS_MIN, max=LED_BRIGHTNESS_MAX),
-        ),
-        vol.Optional(ATTR_HORIZONTAL_COUNT): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
-        ),
-        vol.Optional(ATTR_VERTICAL_COUNT): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
-        ),
-    }
+SET_LED_STRIP_SCHEMA = vol.All(
+    vol.Schema(
+        _OPTIONAL_HOST_FIELD
+        | {
+            vol.Optional(ATTR_ON): bool,
+            vol.Optional(ATTR_BRIGHTNESS): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=LED_BRIGHTNESS_MIN, max=LED_BRIGHTNESS_MAX),
+            ),
+            vol.Optional(ATTR_HORIZONTAL_COUNT): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
+            ),
+            vol.Optional(ATTR_VERTICAL_COUNT): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
+            ),
+        }
+    ),
+    cv.has_at_least_one_key(
+        ATTR_ON, ATTR_BRIGHTNESS, ATTR_HORIZONTAL_COUNT, ATTR_VERTICAL_COUNT
+    ),
 )
-
-def _ensure_pro(coordinator: NanoKVMDataUpdateCoordinator, service_name: str) -> None:
-    """Raise when a service requires NanoKVM Pro hardware."""
-    if not coordinator.is_pro_hardware:
-        raise HomeAssistantError(
-            f"The {service_name} service is only available for NanoKVM Pro devices"
-        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -132,7 +130,7 @@ class _Service:
     call: Callable[
         [NanoKVMDataUpdateCoordinator, NanoKVMClient, ServiceCall], Awaitable[Any]
     ]
-    schema: vol.Schema = field(default_factory=lambda: HOST_ONLY_SCHEMA)
+    schema: vol.Schema | vol.All = field(default_factory=lambda: HOST_ONLY_SCHEMA)
     pro_only: bool = False
     returns_response: bool = False
     refresh: bool = False
@@ -283,23 +281,15 @@ def async_register_services(hass: HomeAssistant) -> None:
         service: _Service,
     ) -> Callable[[ServiceCall], Awaitable[ServiceResponse]]:
         async def handle(call: ServiceCall) -> ServiceResponse:
-            if service.name == SERVICE_SET_LED_STRIP and not any(
-                field in call.data
-                for field in (
-                    ATTR_ON,
-                    ATTR_BRIGHTNESS,
-                    ATTR_HORIZONTAL_COUNT,
-                    ATTR_VERTICAL_COUNT,
-                )
-            ):
-                raise HomeAssistantError("At least one LED strip field is required")
-
             coordinator = _resolve_target_coordinator(hass, call)
             host = coordinator.config_entry.data.get(CONF_HOST, "<unknown>")
             try:
                 async with coordinator.async_client() as client:
-                    if service.pro_only:
-                        _ensure_pro(coordinator, service.name)
+                    if service.pro_only and not coordinator.is_pro_hardware:
+                        raise HomeAssistantError(
+                            f"The {service.name} service is only available for "
+                            "NanoKVM Pro devices"
+                        )
                     result = await service.call(coordinator, client, call)
             except HomeAssistantError:
                 raise

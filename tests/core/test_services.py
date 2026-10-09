@@ -188,24 +188,6 @@ async def _call_service(
     return await service.handler(service_call)
 
 
-def test_pro_gate_accepts_pro_hardware() -> None:
-    """Pro services must accept coordinators reporting Pro hardware."""
-    services_module._ensure_pro(
-        SimpleNamespace(is_pro_hardware=True), SERVICE_SCAN_WIFI
-    )
-
-
-def test_pro_gate_rejects_other_hardware() -> None:
-    """Pro services must expose a user-facing hardware error."""
-    with pytest.raises(
-        HomeAssistantError,
-        match="The scan_wifi service is only available for NanoKVM Pro devices",
-    ):
-        services_module._ensure_pro(
-            SimpleNamespace(is_pro_hardware=False), SERVICE_SCAN_WIFI
-        )
-
-
 def test_service_schemas_apply_defaults_and_coercion() -> None:
     """Service schemas must apply documented defaults before handler execution."""
     assert services_module.PUSH_BUTTON_SCHEMA(
@@ -576,9 +558,7 @@ async def test_led_strip_requires_at_least_one_update_field(
     """An empty LED update must fail before resolving or contacting a device."""
     _install_coordinators(hass_mock, _coordinator(is_pro_hardware=True))
 
-    with pytest.raises(
-        HomeAssistantError, match="At least one LED strip field is required"
-    ):
+    with pytest.raises(vol.Invalid, match="must contain at least one of"):
         await _call_service(hass_mock, registered_services, SERVICE_SET_LED_STRIP)
 
 
