@@ -7,7 +7,6 @@ import logging
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import TypedDict
 
 import aiohttp
 from aiohttp import WSMsgType
@@ -62,13 +61,6 @@ class _NanoKVMWebRTCSession:
         default_factory=list
     )
     answer_sent: bool = False
-
-
-class _WebSocketTimeoutKwargs(TypedDict, total=False):
-    """Typed kwargs for aiohttp websocket timeout compatibility."""
-
-    timeout: aiohttp.ClientWSTimeout
-    receive_timeout: float
 
 
 StreamClientFactory = Callable[[], NanoKVMClient | None]
@@ -126,13 +118,6 @@ class NanoKVMWebRTCManager:
         stream_path = "stream/h264/webrtc" if pro else "stream/h264"
         return str(base_url.with_scheme(ws_scheme) / stream_path)
 
-    def _websocket_timeout_kwargs(self) -> _WebSocketTimeoutKwargs:
-        """Return websocket timeout kwargs compatible with installed aiohttp."""
-        ws_timeout_cls = getattr(aiohttp, "ClientWSTimeout", None)
-        if ws_timeout_cls is None:
-            return {"receive_timeout": float(self._login_timeout_seconds)}
-        return {"timeout": ws_timeout_cls(ws_close=self._login_timeout_seconds)}
-
     async def async_handle_async_webrtc_offer(
         self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
     ) -> None:
@@ -171,7 +156,7 @@ class NanoKVMWebRTCManager:
                 headers={"Cookie": f"nano-kvm-token={client.token}"},
                 heartbeat=None if is_pro else self._websocket_heartbeat_seconds,
                 ssl=client._ssl_config,
-                **self._websocket_timeout_kwargs(),
+                timeout=aiohttp.ClientWSTimeout(ws_close=self._login_timeout_seconds),
             )
 
             webrtc_session = _NanoKVMWebRTCSession(

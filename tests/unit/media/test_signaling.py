@@ -932,23 +932,6 @@ async def test_new_pro_session_keeps_other_active_session_alive(
     assert second.exit_calls == 0
 
 
-async def test_legacy_aiohttp_timeout_uses_receive_timeout(
-    harness_factory: Callable[..., WebRTCHarness], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Older aiohttp releases must receive their supported timeout keyword."""
-    client = FakeClient()
-    harness = harness_factory(clients=[client])
-    monkeypatch.delattr(webrtc_module.aiohttp, "ClientWSTimeout")
-
-    await harness.manager.async_handle_async_webrtc_offer(
-        VIDEO_ONLY_OFFER, "session", lambda value: None
-    )
-
-    kwargs = client.transport.calls[0][1]
-    assert kwargs["receive_timeout"] == 15.0
-    assert "timeout" not in kwargs
-
-
 async def test_invalid_device_candidate_is_ignored(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
