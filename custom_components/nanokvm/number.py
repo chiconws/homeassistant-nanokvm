@@ -13,7 +13,6 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, PERCENTAGE
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -188,10 +187,6 @@ class NanoKVMNumber(NanoKVMEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the number value."""
-        try:
-            async with self._async_device_action():
-                await self.entity_description.set_value_fn(self.coordinator, value)
-        except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
-
+        async with self._async_device_action():
+            await self.entity_description.set_value_fn(self.coordinator, value)
         await self.coordinator.async_request_refresh()

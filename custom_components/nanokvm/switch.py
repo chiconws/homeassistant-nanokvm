@@ -105,16 +105,6 @@ def _led_strip_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     return bool(coordinator.led_strip and coordinator.led_strip.on)
 
 
-async def _set_led_strip_on(
-    coordinator: NanoKVMDataUpdateCoordinator, enabled: bool
-) -> None:
-    """Set LED strip power while preserving other LED settings."""
-    try:
-        await async_set_led_strip(coordinator, on=enabled)
-    except ValueError as err:
-        raise HomeAssistantError(str(err)) from err
-
-
 SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     NanoKVMSwitchEntityDescription(
         key="ssh",
@@ -232,8 +222,8 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         translation_key="led_strip",
         entity_category=EntityCategory.CONFIG,
         value_fn=_led_strip_value,
-        turn_on_fn=lambda coordinator: _set_led_strip_on(coordinator, True),
-        turn_off_fn=lambda coordinator: _set_led_strip_on(coordinator, False),
+        turn_on_fn=lambda coordinator: async_set_led_strip(coordinator, on=True),
+        turn_off_fn=lambda coordinator: async_set_led_strip(coordinator, on=False),
         available_fn=_led_strip_available,
     ),
 )

@@ -112,6 +112,7 @@ def _coordinator(
         async_request_refresh=AsyncMock(),
         is_pro_hardware=is_pro_hardware,
         led_strip=led_strip,
+        led_brightness_request=None,
     )
 
 

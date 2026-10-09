@@ -53,6 +53,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "hostname_info": None,
         "is_pro_hardware": True,
         "last_update_success": True,
+        "led_brightness_request": None,
         "led_strip": SimpleNamespace(
             on=True,
             brightness=75,
@@ -328,7 +329,7 @@ async def test_led_switch_preserves_strip_values_and_translates_missing_state() 
     coordinator = _coordinator()
     coordinator.client.set_led_strip = AsyncMock()
 
-    await switch_module._set_led_strip_on(coordinator, False)
+    await _description(switch_module.SWITCHES, "led_strip").turn_off_fn(coordinator)
 
     coordinator.client.set_led_strip.assert_awaited_once_with(
         on=False,
@@ -339,7 +340,7 @@ async def test_led_switch_preserves_strip_values_and_translates_missing_state() 
 
     coordinator.led_strip = None
     with pytest.raises(HomeAssistantError, match="LED strip state is unavailable"):
-        await switch_module._set_led_strip_on(coordinator, True)
+        await _description(switch_module.SWITCHES, "led_strip").turn_on_fn(coordinator)
 
 
 @pytest.mark.asyncio

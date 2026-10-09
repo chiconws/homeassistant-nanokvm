@@ -142,16 +142,13 @@ async def _set_led_strip(
     coordinator: NanoKVMDataUpdateCoordinator, client: NanoKVMClient, call: ServiceCall
 ) -> None:
     """Apply the LED strip fields given in the service call."""
-    try:
-        await async_set_led_strip(
-            coordinator,
-            on=call.data.get(ATTR_ON),
-            brightness=call.data.get(ATTR_BRIGHTNESS),
-            horizontal_count=call.data.get(ATTR_HORIZONTAL_COUNT),
-            vertical_count=call.data.get(ATTR_VERTICAL_COUNT),
-        )
-    except ValueError as err:
-        raise HomeAssistantError(str(err)) from err
+    await async_set_led_strip(
+        coordinator,
+        on=call.data.get(ATTR_ON),
+        brightness=call.data.get(ATTR_BRIGHTNESS),
+        horizontal_count=call.data.get(ATTR_HORIZONTAL_COUNT),
+        vertical_count=call.data.get(ATTR_VERTICAL_COUNT),
+    )
 
 
 _SERVICES: tuple[_Service, ...] = (
