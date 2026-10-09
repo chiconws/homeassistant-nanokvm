@@ -222,7 +222,10 @@ def _resolve_target_coordinator(
     hass: HomeAssistant, call: ServiceCall
 ) -> NanoKVMDataUpdateCoordinator:
     """Resolve the single NanoKVM device targeted by a service call."""
-    domain_data = hass.data.get(DOMAIN, {})
+    domain_data: dict[str, NanoKVMDataUpdateCoordinator] = {
+        entry.entry_id: entry.runtime_data
+        for entry in hass.config_entries.async_loaded_entries(DOMAIN)
+    }
     coordinators = list(domain_data.values())
     if not coordinators:
         raise ServiceValidationError("No NanoKVM devices are configured")
@@ -274,8 +277,6 @@ def _resolve_target_coordinator(
 
 def async_register_services(hass: HomeAssistant) -> None:
     """Register integration services."""
-    if hass.services.has_service(DOMAIN, SERVICE_PUSH_BUTTON):
-        return
 
     def make_handler(
         service: _Service,
@@ -321,9 +322,3 @@ def async_register_services(hass: HomeAssistant) -> None:
             ),
         )
 
-
-def async_unregister_services(hass: HomeAssistant) -> None:
-    """Unregister integration services."""
-    for service in _SERVICES:
-        if hass.services.has_service(DOMAIN, service.name):
-            hass.services.async_remove(DOMAIN, service.name)

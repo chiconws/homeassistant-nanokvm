@@ -18,7 +18,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from webrtc_models import RTCIceCandidateInit
 
 from .coordinator import NanoKVMDataUpdateCoordinator
-from .const import DOMAIN
 from .entity import NanoKVMEntity
 from .media.client import NanoKVMStreamClientProvider
 from .media.signaling import NanoKVMWebRTCManager
@@ -37,7 +36,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM camera based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
     async_add_entities([NanoKVMCamera(coordinator)])
 

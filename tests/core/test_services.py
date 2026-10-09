@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.const import CONF_HOST
 from homeassistant.core import ServiceCall, SupportsResponse
@@ -130,7 +130,6 @@ def _service_registry(hass: MagicMock) -> SimpleNamespace:
 def _capture_registered_services(hass: MagicMock) -> dict[str, RegisteredService]:
     """Register services and return their captured handlers and schemas."""
     registry = _service_registry(hass)
-    registry.has_service.return_value = False
     services_module.async_register_services(hass)
 
     registered: dict[str, RegisteredService] = {}
@@ -162,11 +161,11 @@ def registered_services(hass_mock: MagicMock) -> dict[str, RegisteredService]:
 
 
 def _install_coordinators(hass: MagicMock, *coordinators: SimpleNamespace) -> None:
-    """Install coordinators into Home Assistant integration storage."""
-    hass.data[DOMAIN] = {
-        f"entry-{index}": coordinator
+    """Install coordinators as loaded NanoKVM config entries."""
+    hass.config_entries.async_loaded_entries.return_value = [
+        SimpleNamespace(entry_id=f"entry-{index}", runtime_data=coordinator)
         for index, coordinator in enumerate(coordinators, start=1)
-    }
+    ]
 
 
 async def _call_service(
@@ -262,18 +261,6 @@ def test_register_services_excludes_out_of_scope_recording_surface(
 
     assert "start_hdmi_recording" not in registered
     assert "stop_hdmi_recording" not in registered
-
-
-def test_register_services_is_idempotent_when_already_registered(
-    hass_mock: MagicMock,
-) -> None:
-    """Repeated setup must not replace existing service handlers."""
-    registry = _service_registry(hass_mock)
-    registry.has_service.return_value = True
-
-    services_module.async_register_services(hass_mock)
-
-    registry.async_register.assert_not_called()
 
 
 async def test_target_resolution_rejects_empty_configuration(
@@ -814,34 +801,3 @@ async def test_response_handler_translates_unexpected_errors(
         await _call_service(hass_mock, registered_services, SERVICE_LIST_IMAGES)
 
     assert isinstance(captured.value.__cause__, RuntimeError)
-
-
-def test_unregister_services_removes_only_registered_services(
-    hass_mock: MagicMock,
-) -> None:
-    """Unload must remove every currently registered integration service."""
-    registered_names = {SERVICE_REBOOT, SERVICE_SCAN_WIFI, SERVICE_LIST_IMAGES}
-    registry = _service_registry(hass_mock)
-    registry.has_service.side_effect = lambda domain, service_name: (
-        domain == DOMAIN and service_name in registered_names
-    )
-
-    services_module.async_unregister_services(hass_mock)
-
-    assert registry.async_remove.call_args_list == [
-        call(DOMAIN, service_name)
-        for service_name in (service.name for service in services_module._SERVICES)
-        if service_name in registered_names
-    ]
-
-
-def test_unregister_services_is_noop_when_none_are_registered(
-    hass_mock: MagicMock,
-) -> None:
-    """Unload must tolerate an already-empty service registry."""
-    registry = _service_registry(hass_mock)
-    registry.has_service.return_value = False
-
-    services_module.async_unregister_services(hass_mock)
-
-    registry.async_remove.assert_not_called()

@@ -27,11 +27,13 @@ The integration follows the standard structure for a Home Assistant
 ### Core Files
 
 - **`__init__.py`**: Main entry point.
+  - **`async_setup`**: Registers the integration services once.
   - **`async_setup_entry`**: Initializes the integration from a config entry.
     Creates/authenticates the client, fetches initial device info, creates the
-    coordinator, forwards setup to platform files, and registers services.
-  - **`async_unload_entry`**: Unloads platforms, disconnects SSH collector, and
-    unregisters services when the last entry is removed.
+    coordinator, stores it in `entry.runtime_data`, and forwards setup to
+    platform files.
+  - **`async_unload_entry`**: Unloads platforms. The config entry shuts the
+    coordinator down, which disconnects the SSH collector.
 
 - **`coordinator.py`**: Hosts `NanoKVMDataUpdateCoordinator`.
   - Central polling logic (`_async_update_data`) and API fetch helpers.
@@ -53,8 +55,7 @@ The integration follows the standard structure for a Home Assistant
     failures as `HomeAssistantError`.
 
 - **`services.py`**: Service schemas, registration, and handlers.
-  - Implements all `nanokvm.*` service behavior, response services, and
-    unregister logic.
+  - Implements all `nanokvm.*` service behavior and response services.
   - Targets a device by `device_id`, or by `host` matched against the entry's
     current and preferred hosts.
 

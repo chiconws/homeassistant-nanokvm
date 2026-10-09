@@ -18,7 +18,6 @@ from webrtc_models import RTCIceCandidateInit
 from yarl import URL
 
 import custom_components.nanokvm.camera as camera_module
-from custom_components.nanokvm.const import DOMAIN
 
 
 def _coordinator(**overrides: object) -> SimpleNamespace:
@@ -78,7 +77,7 @@ async def test_async_setup_entry_adds_the_hdmi_camera(
 ) -> None:
     """Setup adds the single HDMI stream camera for the entry's coordinator."""
     coordinator = _coordinator()
-    hass_mock.data = {DOMAIN: {config_entry_mock.entry_id: coordinator}}
+    config_entry_mock.runtime_data = coordinator
     entity_factory = MagicMock(return_value="camera")
     monkeypatch.setattr(camera_module, "NanoKVMCamera", entity_factory)
     batches: list[list[object]] = []

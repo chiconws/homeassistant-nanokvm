@@ -19,7 +19,6 @@ from nanokvm.client import NanoKVMError
 from nanokvm.models import GpioType, VirtualDevice
 
 from .const import (
-    DOMAIN,
     SIGNAL_NEW_SSH_SWITCHES,
 )
 from .coordinator import NanoKVMDataUpdateCoordinator
@@ -244,7 +243,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM switch based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
     entities: list[NanoKVMSwitch] = []
     for description in SWITCHES:

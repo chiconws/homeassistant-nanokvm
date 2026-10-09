@@ -137,14 +137,7 @@ def test_entry_setup_disconnect_tries_https(monkeypatch: MonkeyPatch) -> None:
             "NanoKVMDataUpdateCoordinator",
             coordinator_factory,
         )
-        register_services = MagicMock()
-        monkeypatch.setattr(
-            nanokvm_module,
-            "async_register_services",
-            register_services,
-        )
         hass = MagicMock()
-        hass.data = {}
         hass.config_entries.async_forward_entry_setups = AsyncMock()
         entry = MagicMock(spec=ConfigEntry)
         entry.entry_id = "test-entry"
@@ -159,7 +152,6 @@ def test_entry_setup_disconnect_tries_https(monkeypatch: MonkeyPatch) -> None:
         assert coordinator_factory.call_args.kwargs["client"].url.scheme == "https"
         coordinator.async_config_entry_first_refresh.assert_awaited_once_with()
         hass.config_entries.async_forward_entry_setups.assert_awaited_once()
-        register_services.assert_called_once_with(hass)
 
     asyncio.run(run_test())
 

@@ -18,7 +18,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from nanokvm.models import HWVersion
 
 from .const import (
-    DOMAIN,
     SIGNAL_NEW_MEDIA_ENTITIES,
     SIGNAL_NEW_NETWORK_ENTITIES,
 )
@@ -170,7 +169,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM binary sensor based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
     async_add_entities(
         NanoKVMBinarySensor(

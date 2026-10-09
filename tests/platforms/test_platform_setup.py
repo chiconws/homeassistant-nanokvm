@@ -14,7 +14,6 @@ from yarl import URL
 import custom_components.nanokvm.binary_sensor as binary_sensor_module
 import custom_components.nanokvm.button as button_module
 from custom_components.nanokvm.const import (
-    DOMAIN,
     SIGNAL_NEW_MEDIA_ENTITIES,
     SIGNAL_NEW_NETWORK_ENTITIES,
     SIGNAL_NEW_SSH_SENSORS,
@@ -77,7 +76,7 @@ def _configure_hass(
 ) -> None:
     """Store a coordinator under the entry like integration setup does."""
     config_entry_mock.data[CONF_HOST] = "nanokvm.local"
-    hass_mock.data = {DOMAIN: {config_entry_mock.entry_id: coordinator}}
+    config_entry_mock.runtime_data = coordinator
 
 
 def _entity_collector() -> tuple[Callable[[object], None], list[list[object]]]:

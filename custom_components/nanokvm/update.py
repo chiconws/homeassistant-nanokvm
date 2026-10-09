@@ -20,7 +20,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from nanokvm.client import NanoKVMError
 
-from .const import DOMAIN
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
 
@@ -42,7 +41,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM update based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
     async_add_entities([NanoKVMUpdate(coordinator)])
 
