@@ -79,6 +79,10 @@ The integration follows the standard structure for a Home Assistant
 - **`utils.py`**: Shared helpers for host normalization and SSH host extraction.
   - Resolves HTTP/HTTPS API candidates, HTTPS probe URLs, scheme-preserving
     verification URLs, and normalized host matching keys.
+  - `async_connect` is the one place that tries those candidates in order and
+    authenticates. Setup, the config flow, reauthentication, and transport
+    failover all call it and translate its three errors (`InvalidAuth`,
+    `SSLCertificateChanged`, `CannotConnect`).
 
 - **`ssh_metrics.py`**: SSH metrics collection implementation used by the
   coordinator.

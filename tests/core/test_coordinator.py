@@ -63,10 +63,10 @@ from custom_components.nanokvm.const import (
 from custom_components.nanokvm.coordinator import (
     NanoKVMDataUpdateCoordinator,
     _format_timeout_error,
-    _is_auth_failure,
     _is_invalid_file_content_error,
 )
 from custom_components.nanokvm.ssh_metrics import SSHMetricsSnapshot
+import custom_components.nanokvm.utils as utils_module
 
 
 @pytest.fixture
@@ -198,7 +198,7 @@ def _configure_required_client_responses(
 )
 def test_auth_failure_classification(error: Exception, expected: bool) -> None:
     """Only explicit authentication failures and HTTP 401 require reauth."""
-    assert _is_auth_failure(error) is expected
+    assert utils_module.is_auth_failure(error) is expected
 
 
 def test_invalid_file_content_error_requires_matching_code_and_message() -> None:
@@ -729,7 +729,7 @@ async def test_fetch_once_reauthenticates_then_returns_data(
     coordinator._async_reauthenticate_client = AsyncMock()
 
     assert await coordinator._async_fetch_once() == expected
-    coordinator._async_reauthenticate_client.assert_awaited_once_with(expired)
+    coordinator._async_reauthenticate_client.assert_awaited_once_with()
 
 
 @pytest.mark.parametrize(
@@ -816,12 +816,10 @@ async def test_reauthentication_rejects_invalid_stored_credentials(
         "http://nanokvm.local/api/",
         authenticate_error=NanoKVMAuthenticationFailure("invalid"),
     )
-    monkeypatch.setattr(
-        coordinator_module, "NanoKVMClient", MagicMock(return_value=candidate)
-    )
+    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
 
     with pytest.raises(ConfigEntryAuthFailed, match="Stored NanoKVM credentials"):
-        await coordinator._async_reauthenticate_client_locked(_response_error(401))
+        await coordinator._async_reauthenticate_client()
 
 
 async def test_reauthentication_maps_non_auth_http_error(
@@ -833,12 +831,10 @@ async def test_reauthentication_maps_non_auth_http_error(
         "http://nanokvm.local/api/",
         authenticate_error=_response_error(500),
     )
-    monkeypatch.setattr(
-        coordinator_module, "NanoKVMClient", MagicMock(return_value=candidate)
-    )
+    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
 
     with pytest.raises(UpdateFailed, match="Reauthentication failed"):
-        await coordinator._async_reauthenticate_client_locked(_response_error(401))
+        await coordinator._async_reauthenticate_client()
 
 
 async def test_reauthentication_fingerprint_redirect_tries_https(
@@ -853,9 +849,9 @@ async def test_reauthentication_fingerprint_redirect_tries_https(
     )
     https_candidate = _candidate_client("https://nanokvm.local/api/")
     factory = MagicMock(side_effect=[http_candidate, https_candidate])
-    monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
+    monkeypatch.setattr(utils_module, "NanoKVMClient", factory)
 
-    await coordinator._async_reauthenticate_client_locked(_response_error(401))
+    await coordinator._async_reauthenticate_client()
 
     assert coordinator.client is https_candidate
     assert factory.call_count == 2
@@ -874,59 +870,43 @@ async def test_reauthentication_https_fingerprint_failure_is_auth_failed(
         "https://nanokvm.local/api/",
         authenticate_error=mismatch,
     )
-    monkeypatch.setattr(
-        coordinator_module, "NanoKVMClient", MagicMock(return_value=candidate)
-    )
+    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
 
     with pytest.raises(ConfigEntryAuthFailed, match="SSL certificate changed"):
-        await coordinator._async_reauthenticate_client_locked(_response_error(401))
+        await coordinator._async_reauthenticate_client()
 
 
 @pytest.mark.parametrize(
-    ("original_error", "candidate_error", "message"),
+    ("candidate_error", "message"),
     [
-        (_response_error(401), asyncio.TimeoutError(), "Timed out reauthenticating"),
-        (RuntimeError("token"), asyncio.TimeoutError(), "Timed out authenticating"),
-        (_response_error(401), NanoKVMError("broken"), "Reauthentication failed"),
-        (RuntimeError("token"), NanoKVMError("broken"), "Authentication failed"),
+        (asyncio.TimeoutError(), "Timed out reauthenticating"),
+        (NanoKVMError("broken"), "Reauthentication failed: broken"),
     ],
 )
 async def test_reauthentication_maps_timeout_and_library_errors(
     coordinator: NanoKVMDataUpdateCoordinator,
     config_entry_mock: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
-    original_error: Exception,
     candidate_error: Exception,
     message: str,
 ) -> None:
-    """Reauthentication messages distinguish refresh from initial authentication."""
+    """A failed reauthentication is retryable and names what went wrong."""
     config_entry_mock.data[CONF_HOST] = "http://nanokvm.local"
     candidate = _candidate_client(
         "http://nanokvm.local/api/",
         authenticate_error=candidate_error,
     )
-    monkeypatch.setattr(
-        coordinator_module, "NanoKVMClient", MagicMock(return_value=candidate)
-    )
+    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
 
     with pytest.raises(UpdateFailed, match=message):
-        await coordinator._async_reauthenticate_client_locked(original_error)
+        await coordinator._async_reauthenticate_client()
 
 
-@pytest.mark.parametrize(
-    ("original_error", "message"),
-    [
-        (_response_error(401), "Reauthentication failed"),
-        (RuntimeError("token"), "Authentication failed"),
-    ],
-)
 async def test_reauthentication_exhausts_connection_candidates(
     coordinator: NanoKVMDataUpdateCoordinator,
     monkeypatch: pytest.MonkeyPatch,
-    original_error: Exception,
-    message: str,
 ) -> None:
-    """Connection failures across both transports retain the correct context."""
+    """Connection failures across both transports report the last one."""
     candidates = [
         _candidate_client(
             "http://nanokvm.local/api/",
@@ -937,14 +917,10 @@ async def test_reauthentication_exhausts_connection_candidates(
             authenticate_error=aiohttp.ServerDisconnectedError("https"),
         ),
     ]
-    monkeypatch.setattr(
-        coordinator_module,
-        "NanoKVMClient",
-        MagicMock(side_effect=candidates),
-    )
+    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(side_effect=candidates))
 
-    with pytest.raises(UpdateFailed, match=message):
-        await coordinator._async_reauthenticate_client_locked(original_error)
+    with pytest.raises(UpdateFailed, match="Reauthentication failed: https"):
+        await coordinator._async_reauthenticate_client()
 
 
 async def test_failover_replaces_client_after_authentication(
@@ -953,27 +929,14 @@ async def test_failover_replaces_client_after_authentication(
 ) -> None:
     """A working alternate transport becomes the shared client."""
     candidate = _candidate_client("https://nanokvm.local/api/")
-    monkeypatch.setattr(
-        coordinator_module, "NanoKVMClient", MagicMock(return_value=candidate)
-    )
+    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
 
     assert (
-        await coordinator._async_failover_client_locked(RuntimeError("disconnect"))
+        await coordinator._async_failover_client(RuntimeError("disconnect"))
         is True
     )
     assert coordinator.client is candidate
     candidate.authenticate.assert_awaited_once_with("admin", "password")
-
-
-async def test_failover_wrapper_delegates_to_serialized_implementation(
-    coordinator: NanoKVMDataUpdateCoordinator,
-) -> None:
-    """Public failover access delegates while owning the client lock."""
-    original_error = RuntimeError("disconnect")
-    coordinator._async_failover_client_locked = AsyncMock(return_value=True)
-
-    assert await coordinator._async_failover_client(original_error) is True
-    coordinator._async_failover_client_locked.assert_awaited_once_with(original_error)
 
 
 @pytest.mark.parametrize(
@@ -1009,12 +972,10 @@ async def test_failover_maps_candidate_errors(
         "https://nanokvm.local/api/",
         authenticate_error=candidate_error,
     )
-    monkeypatch.setattr(
-        coordinator_module, "NanoKVMClient", MagicMock(return_value=candidate)
-    )
+    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
 
     with pytest.raises(expected_exception, match=message):
-        await coordinator._async_failover_client_locked(RuntimeError("disconnect"))
+        await coordinator._async_failover_client(RuntimeError("disconnect"))
 
 
 async def test_failover_returns_false_when_connector_cannot_reach_alternate(
@@ -1027,12 +988,10 @@ async def test_failover_returns_false_when_connector_cannot_reach_alternate(
         "https://nanokvm.local/api/",
         authenticate_error=aiohttp.ClientConnectorError(None, OSError("refused")),
     )
-    monkeypatch.setattr(
-        coordinator_module, "NanoKVMClient", MagicMock(return_value=candidate)
-    )
+    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
 
     assert (
-        await coordinator._async_failover_client_locked(RuntimeError("disconnect"))
+        await coordinator._async_failover_client(RuntimeError("disconnect"))
         is False
     )
     assert coordinator.client is current
@@ -1046,7 +1005,7 @@ async def test_failover_explicit_scheme_has_no_alternate(
     config_entry_mock.data[CONF_HOST] = "http://nanokvm.local"
 
     assert (
-        await coordinator._async_failover_client_locked(RuntimeError("disconnect"))
+        await coordinator._async_failover_client(RuntimeError("disconnect"))
         is False
     )
 

@@ -21,6 +21,7 @@ from custom_components.nanokvm.const import (
     CONF_USE_STATIC_HOST,
     DOMAIN,
 )
+import custom_components.nanokvm.utils as utils_module
 
 
 @dataclass(slots=True)
@@ -86,7 +87,7 @@ def install_setup_client(monkeypatch: pytest.MonkeyPatch):
     def install(*scenarios: SetupScenario) -> type[SetupClient]:
         SetupClient.scenarios = list(scenarios)
         SetupClient.instances = []
-        monkeypatch.setattr(nanokvm_module, "NanoKVMClient", SetupClient)
+        monkeypatch.setattr(utils_module, "NanoKVMClient", SetupClient)
         return SetupClient
 
     return install

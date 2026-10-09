@@ -12,8 +12,8 @@ from homeassistant.const import CONF_HOST
 from pytest import MonkeyPatch
 from yarl import URL
 
-import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.coordinator import NanoKVMDataUpdateCoordinator
+import custom_components.nanokvm.utils as utils_module
 
 
 class TrackingClient:
@@ -162,13 +162,13 @@ def test_client_replacement_waits_for_active_user(monkeypatch: MonkeyPatch) -> N
             async def authenticate(self, _username: str, _password: str) -> None:
                 replacement_started.set()
 
-        monkeypatch.setattr(coordinator_module, "NanoKVMClient", ReplacementClient)
+        monkeypatch.setattr(utils_module, "NanoKVMClient", ReplacementClient)
         current_client = TrackingClient()
         coordinator = _coordinator(current_client)
 
         async with coordinator.async_client():
             replacement_task = asyncio.create_task(
-                coordinator._async_reauthenticate_client(RuntimeError("reauthenticate"))
+                coordinator._async_reauthenticate_client()
             )
             await asyncio.sleep(0)
             assert not replacement_started.is_set()

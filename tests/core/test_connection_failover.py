@@ -14,8 +14,8 @@ from yarl import URL
 
 import custom_components.nanokvm as nanokvm_module
 import custom_components.nanokvm.config_flow as config_flow_module
-import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.coordinator import NanoKVMDataUpdateCoordinator
+import custom_components.nanokvm.utils as utils_module
 
 
 def _coordinator() -> NanoKVMDataUpdateCoordinator:
@@ -81,6 +81,7 @@ def test_config_validation_disconnect_tries_https(
                 return SimpleNamespace(device_key="https-device")
 
         monkeypatch.setattr(config_flow_module, "NanoKVMClient", FakeClient)
+        monkeypatch.setattr(utils_module, "NanoKVMClient", FakeClient)
 
         assert (
             await config_flow_module.validate_input(
@@ -131,7 +132,7 @@ def test_entry_setup_disconnect_tries_https(monkeypatch: MonkeyPatch) -> None:
             is_pro_hardware=False,
         )
         coordinator_factory = MagicMock(return_value=coordinator)
-        monkeypatch.setattr(nanokvm_module, "NanoKVMClient", FakeClient)
+        monkeypatch.setattr(utils_module, "NanoKVMClient", FakeClient)
         monkeypatch.setattr(
             nanokvm_module,
             "NanoKVMDataUpdateCoordinator",
@@ -179,10 +180,10 @@ def test_reauthentication_disconnect_tries_https(monkeypatch: MonkeyPatch) -> No
                 if self.url.scheme == "http":
                     raise aiohttp.ServerDisconnectedError("HTTP probe disconnected")
 
-        monkeypatch.setattr(coordinator_module, "NanoKVMClient", FakeClient)
+        monkeypatch.setattr(utils_module, "NanoKVMClient", FakeClient)
         coordinator = _coordinator()
 
-        await coordinator._async_reauthenticate_client(RuntimeError("expired token"))
+        await coordinator._async_reauthenticate_client()
 
         assert [URL(url).scheme for url in attempted_urls] == ["http", "https"]
         assert coordinator.client.url.scheme == "https"

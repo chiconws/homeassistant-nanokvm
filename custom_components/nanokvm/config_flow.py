@@ -11,7 +11,6 @@ from yarl import URL
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
@@ -36,7 +35,11 @@ from .ssh_host_keys import (
     retarget_known_hosts_line,
 )
 from .utils import (
+    CannotConnect,
+    InvalidAuth,
+    SSLCertificateChanged,
     api_connection_options,
+    async_connect,
     extract_ssh_host,
     https_probe_url,
     normalize_host,
@@ -48,41 +51,13 @@ _LOGGER = logging.getLogger(__name__)
 
 async def validate_input(data: dict[str, Any]) -> str:
     """Validate the user input allows us to connect."""
-    options = api_connection_options(
-        data[CONF_HOST],
-        data.get(CONF_SSL_FINGERPRINT),
+    _, device_info = await async_connect(
+        api_connection_options(data[CONF_HOST], data.get(CONF_SSL_FINGERPRINT)),
+        data[CONF_USERNAME],
+        data[CONF_PASSWORD],
+        lambda client: client.get_info(),
     )
-    last_error: Exception | None = None
-
-    for index, option in enumerate(options):
-        async with NanoKVMClient(
-            option.base_url,
-            ssl_fingerprint=option.ssl_fingerprint,
-        ) as client:
-            try:
-                await client.authenticate(data[CONF_USERNAME], data[CONF_PASSWORD])
-                device_info = await client.get_info()
-                return str(device_info.device_key)
-            except NanoKVMAuthenticationFailure as err:
-                raise InvalidAuth from err
-            except (
-                aiohttp.ClientConnectorCertificateError,
-                aiohttp.ServerFingerprintMismatch,
-            ) as err:
-                if option.scheme == "http" and index < len(options) - 1:
-                    last_error = err
-                    continue
-                raise SSLCertificateChanged from err
-            except aiohttp.ClientConnectionError as err:
-                last_error = err
-                if index < len(options) - 1:
-                    continue
-            except (asyncio.TimeoutError, aiohttp.ClientError, NanoKVMError) as err:
-                last_error = err
-                break
-
-    assert last_error is not None
-    raise CannotConnect from last_error
+    return str(device_info.device_key)
 
 
 async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
@@ -936,14 +911,3 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return await self.async_step_user(user_input=self.data)
 
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class InvalidAuth(HomeAssistantError):
-    """Error to indicate there is invalid auth."""
-
-
-class SSLCertificateChanged(HomeAssistantError):
-    """Error to indicate the SSL certificate has changed."""

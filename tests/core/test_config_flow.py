@@ -39,6 +39,7 @@ from custom_components.nanokvm.const import (
     DOMAIN,
     INTEGRATION_TITLE,
 )
+import custom_components.nanokvm.utils as utils_module
 
 
 @dataclass(slots=True)
@@ -111,6 +112,7 @@ def install_client(monkeypatch: pytest.MonkeyPatch):
         ScriptedClient.scenarios = list(scenarios)
         ScriptedClient.instances = []
         monkeypatch.setattr(config_flow_module, "NanoKVMClient", ScriptedClient)
+        monkeypatch.setattr(utils_module, "NanoKVMClient", ScriptedClient)
         return ScriptedClient
 
     return install
