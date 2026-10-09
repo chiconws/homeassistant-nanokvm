@@ -102,7 +102,7 @@ def split_pro_webrtc_offer(offer_sdp: str) -> ProWebRTCOffer:
 
     for index, lines in enumerate(media_lines):
         kind = _media_kind(lines)
-        if kind not in _SUPPORTED_KINDS or kind in offers:
+        if kind is None or kind in offers:
             continue
 
         mid = _media_mid(lines, fallback=str(index))
@@ -140,8 +140,13 @@ def merge_pro_webrtc_answers(
             raise ValueError(f"Missing {section.kind} WebRTC answer")
 
         answer_session_lines, answer_media_sections = _split_sdp_sections(answer_sdp)
-        answer_media = _first_media_section_for_kind(
-            answer_media_sections, section.kind
+        answer_media = next(
+            (
+                media
+                for media in answer_media_sections
+                if _media_kind(media) == section.kind
+            ),
+            None,
         )
         if answer_media is None:
             raise ValueError(f"NanoKVM Pro {section.kind} answer has no media section")
@@ -228,25 +233,11 @@ def _single_media_session_lines(session_lines: tuple[str, ...]) -> tuple[str, ..
 
 def _merged_session_lines(session_lines: tuple[str, ...]) -> tuple[str, ...]:
     """Return session lines safe for answers built from separate peer connections."""
-    merged: list[str] = []
-    for line in session_lines:
-        if line.startswith("a=group:BUNDLE"):
-            continue
-        if _is_transport_session_line(line):
-            continue
-        merged.append(line)
-    return tuple(merged)
-
-
-def _first_media_section_for_kind(
-    media_sections: tuple[tuple[str, ...], ...],
-    kind: MediaKind,
-) -> tuple[str, ...] | None:
-    """Return the first answer media section for the requested kind."""
-    for section in media_sections:
-        if _media_kind(section) == kind:
-            return section
-    return None
+    return tuple(
+        line
+        for line in session_lines
+        if not line.startswith(("a=group:BUNDLE", *_TRANSPORT_SESSION_PREFIXES))
+    )
 
 
 def _replace_mid(lines: tuple[str, ...], mid: str) -> tuple[str, ...]:
@@ -271,27 +262,20 @@ def _with_media_transport_lines(
     session_lines: tuple[str, ...],
 ) -> tuple[str, ...]:
     """Move per-answer transport attributes into the merged media section."""
-    existing_prefixes = {
-        prefix for prefix in _TRANSPORT_SESSION_PREFIXES if _has_prefix(media_lines, prefix)
+    seen = {
+        prefix
+        for prefix in _TRANSPORT_SESSION_PREFIXES
+        if any(line.startswith(prefix) for line in media_lines)
     }
     result = list(media_lines)
 
     for line in session_lines:
-        for prefix in _TRANSPORT_SESSION_PREFIXES:
-            if prefix in existing_prefixes or not line.startswith(prefix):
-                continue
+        prefix = next(
+            (p for p in _TRANSPORT_SESSION_PREFIXES if line.startswith(p)), None
+        )
+        if prefix is not None and prefix not in seen:
             result.append(line)
-            existing_prefixes.add(prefix)
-            break
+            seen.add(prefix)
 
     return tuple(result)
 
-
-def _has_prefix(lines: tuple[str, ...], prefix: str) -> bool:
-    """Return whether any SDP line starts with prefix."""
-    return any(line.startswith(prefix) for line in lines)
-
-
-def _is_transport_session_line(line: str) -> bool:
-    """Return whether a session line carries transport data for one peer connection."""
-    return any(line.startswith(prefix) for prefix in _TRANSPORT_SESSION_PREFIXES)

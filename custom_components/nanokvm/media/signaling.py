@@ -228,16 +228,10 @@ class NanoKVMWebRTCManager:
             )
 
         for kind in _PRO_OFFER_ORDER:
-            section = pro_offer.section_for_kind(kind)
-            if section is None:
-                continue
-            offer_sdp = pro_offer.offers.get(section.kind)
-            if offer_sdp is None:
+            if (offer_sdp := pro_offer.offers.get(kind)) is None:
                 continue
             offer_data = json.dumps({"type": "offer", "sdp": offer_sdp})
-            await websocket.send_json(
-                {"event": f"{section.kind}-offer", "data": offer_data}
-            )
+            await websocket.send_json({"event": f"{kind}-offer", "data": offer_data})
 
     async def _async_webrtc_reader(
         self, session_id: str, send_message: WebRTCSendMessage

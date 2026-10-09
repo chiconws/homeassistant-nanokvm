@@ -8,8 +8,7 @@ import pytest
 from custom_components.nanokvm.media.pro_sdp import (
     ProMediaSection,
     ProWebRTCOffer,
-    _first_media_section_for_kind,
-    _is_transport_session_line,
+    _TRANSPORT_SESSION_PREFIXES,
     _media_kind,
     _split_sdp_sections,
     merge_pro_webrtc_answers,
@@ -240,7 +239,9 @@ def test_merge_answers_restores_mids_and_per_media_transport() -> None:
     session_lines, media_sections = _split_sdp_sections(merged)
 
     assert not any(line.startswith("a=group:BUNDLE") for line in session_lines)
-    assert not any(_is_transport_session_line(line) for line in session_lines)
+    assert not any(
+        line.startswith(_TRANSPORT_SESSION_PREFIXES) for line in session_lines
+    )
     assert [section[0].split()[0] for section in media_sections] == [
         "m=video",
         "m=audio",
@@ -300,26 +301,3 @@ def test_media_kind_recognizes_only_supported_media(
 ) -> None:
     """Media kind detection must reject malformed and unsupported sections."""
     assert _media_kind(lines) == expected
-
-
-def test_first_media_section_returns_none_without_requested_kind() -> None:
-    """Answer lookup must report when no section has the requested media kind."""
-    sections = (("m=application 9 UDP/DTLS/SCTP 5000",),)
-
-    assert _first_media_section_for_kind(sections, "video") is None
-
-
-@pytest.mark.parametrize(
-    ("line", "expected"),
-    [
-        ("a=ice-ufrag:value", True),
-        ("a=ice-pwd:value", True),
-        ("a=ice-options:trickle", True),
-        ("a=fingerprint:sha-256 VALUE", True),
-        ("a=setup:active", True),
-        ("a=mid:0", False),
-    ],
-)
-def test_transport_session_line_detection(line: str, expected: bool) -> None:
-    """Only split-peer transport attributes must be moved into media sections."""
-    assert _is_transport_session_line(line) is expected
