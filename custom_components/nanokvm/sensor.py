@@ -156,12 +156,14 @@ def _tailscale_attributes(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str
 
 def _memory_total_attribute(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str, Any]:
     """Return memory total attribute when available."""
-    return {"total_mb": coordinator.memory_total} if coordinator.memory_total is not None else {}
+    total = coordinator.ssh_metrics.memory_total
+    return {"total_mb": total} if total is not None else {}
 
 
 def _storage_total_attribute(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str, Any]:
     """Return storage total attribute when available."""
-    return {"total_mb": coordinator.storage_total} if coordinator.storage_total is not None else {}
+    total = coordinator.ssh_metrics.storage_total
+    return {"total_mb": total} if total is not None else {}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -241,8 +243,10 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         translation_key="uptime",
         entity_category=EntityCategory.DIAGNOSTIC,
         device_class=SensorDeviceClass.TIMESTAMP,
-        value_fn=lambda coordinator: coordinator.uptime,
-        available_fn=lambda coordinator: coordinator.uptime is not None,
+        value_fn=lambda coordinator: coordinator.ssh_metrics.uptime,
+        available_fn=lambda coordinator: (
+            coordinator.ssh_metrics.uptime is not None
+        ),
     ),
     NanoKVMSensorEntityDescription(
         key="cpu_temperature",
@@ -251,8 +255,10 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.cpu_temperature,
-        available_fn=lambda coordinator: coordinator.cpu_temperature is not None,
+        value_fn=lambda coordinator: coordinator.ssh_metrics.cpu_temperature,
+        available_fn=lambda coordinator: (
+            coordinator.ssh_metrics.cpu_temperature is not None
+        ),
     ),
     NanoKVMSensorEntityDescription(
         key="memory_used_percent",
@@ -260,8 +266,10 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.memory_used_percent,
-        available_fn=lambda coordinator: coordinator.memory_used_percent is not None,
+        value_fn=lambda coordinator: coordinator.ssh_metrics.memory_used_percent,
+        available_fn=lambda coordinator: (
+            coordinator.ssh_metrics.memory_used_percent is not None
+        ),
         attributes_fn=_memory_total_attribute,
     ),
     NanoKVMSensorEntityDescription(
@@ -270,8 +278,10 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.storage_used_percent,
-        available_fn=lambda coordinator: coordinator.storage_used_percent is not None,
+        value_fn=lambda coordinator: coordinator.ssh_metrics.storage_used_percent,
+        available_fn=lambda coordinator: (
+            coordinator.ssh_metrics.storage_used_percent is not None
+        ),
         attributes_fn=_storage_total_attribute,
     ),
 )

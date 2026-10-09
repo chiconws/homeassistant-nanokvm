@@ -75,7 +75,7 @@ from .const import (
     SIGNAL_NEW_SSH_SWITCHES,
 )
 from .led import LedBrightnessRequest, note_reported_led_strip
-from .ssh_metrics import SSHMetricsCollector
+from .ssh_metrics import SSHMetricsCollector, SSHMetricsSnapshot
 from .ssh_host_keys import retarget_known_hosts_line
 from .utils import (
     api_connection_options,
@@ -161,13 +161,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
     static_ip: GetStaticIPRsp | None = None
     swap_size: int | None = None
     tailscale_status: GetTailscaleStatusRsp | None = None
-    uptime: datetime.datetime | None = None
-    cpu_temperature: float | None = None
-    memory_total: float | None = None
-    memory_used_percent: float | None = None
-    storage_total: float | None = None
-    storage_used_percent: float | None = None
-    watchdog_enabled: bool | None = None
+    ssh_metrics: SSHMetricsSnapshot = SSHMetricsSnapshot()
     ssh_metrics_collector: SSHMetricsCollector | None = None
 
     def __init__(
@@ -769,16 +763,6 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         else:
             await self._async_clear_ssh_data()
 
-    def _clear_ssh_runtime_state(self) -> None:
-        """Clear SSH-derived runtime state from the coordinator."""
-        self.uptime = None
-        self.cpu_temperature = None
-        self.memory_total = None
-        self.memory_used_percent = None
-        self.storage_total = None
-        self.storage_used_percent = None
-        self.watchdog_enabled = None
-
     @property
     def supports_watchdog(self) -> bool:
         """Return whether NanoKVM watchdog support is available."""
@@ -868,20 +852,8 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             collector = self.async_ensure_ssh_metrics_collector()
             metrics = await collector.collect(include_watchdog=self.supports_watchdog)
             self._ssh_connection_warning_logged = False
-            self.uptime = metrics.uptime
-            self.cpu_temperature = metrics.cpu_temperature
-            self.memory_total = metrics.memory_total
-            self.memory_used_percent = metrics.memory_used_percent
-            self.storage_total = metrics.storage_total
-            self.storage_used_percent = metrics.storage_used_percent
-            self.watchdog_enabled = metrics.watchdog_enabled
-            _LOGGER.debug(
-                "SSH coordinator metrics updated: uptime=%s cpu_temperature=%s memory_used_percent=%s storage_used_percent=%s",
-                self.uptime,
-                self.cpu_temperature,
-                self.memory_used_percent,
-                self.storage_used_percent,
-            )
+            self.ssh_metrics = metrics
+            _LOGGER.debug("SSH coordinator metrics updated: %s", metrics)
 
             if not self.ssh_sensors_created:
                 _LOGGER.debug("SSH enabled, signaling to create SSH sensors")
@@ -913,18 +885,18 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
                     err,
                 )
                 self._ssh_connection_warning_logged = True
-            self._clear_ssh_runtime_state()
+            self.ssh_metrics = SSHMetricsSnapshot()
             if self.ssh_metrics_collector:
                 await self.ssh_metrics_collector.disconnect()
         except Exception as err:
             _LOGGER.debug("Failed to fetch data via SSH: %s", err)
-            self._clear_ssh_runtime_state()
+            self.ssh_metrics = SSHMetricsSnapshot()
             if self.ssh_metrics_collector:
                 await self.ssh_metrics_collector.disconnect()
 
     async def _async_clear_ssh_data(self) -> None:
         """Clear SSH data and disconnect client."""
-        self._clear_ssh_runtime_state()
+        self.ssh_metrics = SSHMetricsSnapshot()
         if self.ssh_metrics_collector:
             await self.ssh_metrics_collector.disconnect()
             self.ssh_metrics_collector = None

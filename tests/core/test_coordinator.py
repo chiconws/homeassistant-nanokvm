@@ -1530,13 +1530,7 @@ async def test_successful_ssh_update_assigns_metrics_and_signals_once(
     await coordinator._async_update_ssh_data()
     await coordinator._async_update_ssh_data()
 
-    assert coordinator.uptime == metrics.uptime
-    assert coordinator.cpu_temperature == metrics.cpu_temperature
-    assert coordinator.memory_total == metrics.memory_total
-    assert coordinator.memory_used_percent == metrics.memory_used_percent
-    assert coordinator.storage_total == metrics.storage_total
-    assert coordinator.storage_used_percent == metrics.storage_used_percent
-    assert coordinator.watchdog_enabled is False
+    assert coordinator.ssh_metrics is metrics
     assert dispatcher.call_args_list == [
         call(
             coordinator.hass,
@@ -1559,13 +1553,11 @@ async def test_failed_ssh_update_clears_metrics_and_disconnects(
         disconnect=AsyncMock(),
     )
     coordinator.ssh_metrics_collector = collector
-    coordinator.uptime = datetime.datetime.now(datetime.UTC)
-    coordinator.watchdog_enabled = True
+    coordinator.ssh_metrics = SSHMetricsSnapshot(watchdog_enabled=True)
 
     await coordinator._async_update_ssh_data()
 
-    assert coordinator.uptime is None
-    assert coordinator.watchdog_enabled is None
+    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
     collector.disconnect.assert_awaited_once_with()
 
 
@@ -1626,11 +1618,11 @@ async def test_disabled_ssh_refresh_clears_collector_and_metrics(
     collector = SimpleNamespace(disconnect=AsyncMock())
     coordinator.ssh_metrics_collector = collector
     coordinator.ssh_state = GetSSHStateRsp(enabled=False)
-    coordinator.cpu_temperature = 50.0
+    coordinator.ssh_metrics = SSHMetricsSnapshot(cpu_temperature=50.0)
 
     await coordinator._async_refresh_ssh_data()
 
-    assert coordinator.cpu_temperature is None
+    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
     assert coordinator.ssh_metrics_collector is None
     collector.disconnect.assert_awaited_once_with()
 

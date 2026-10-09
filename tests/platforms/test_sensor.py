@@ -277,8 +277,10 @@ def test_total_attributes_preserve_zero_and_omit_missing_values(
     result_key: str,
 ) -> None:
     """A measured zero is retained while an unavailable total is omitted."""
-    missing = coordinator_state_factory(**{attribute_name: None})
-    zero = coordinator_state_factory(**{attribute_name: 0})
+    missing = coordinator_state_factory(
+        ssh_metrics=SimpleNamespace(**{attribute_name: None})
+    )
+    zero = coordinator_state_factory(ssh_metrics=SimpleNamespace(**{attribute_name: 0}))
 
     assert helper(missing) == {}
     assert helper(zero) == {result_key: 0}
@@ -317,6 +319,6 @@ def test_ssh_sensor_descriptions_treat_zero_as_available(
     }
 
     for description in SSH_SENSORS:
-        coordinator = coordinator_state_factory(**values)
+        coordinator = coordinator_state_factory(ssh_metrics=SimpleNamespace(**values))
         assert description.available_fn(coordinator) is True
         assert description.value_fn(coordinator) == values[description.key]

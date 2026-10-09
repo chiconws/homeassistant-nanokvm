@@ -64,7 +64,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "tailscale_status": None,
         "time_status": None,
         "virtual_device_info": None,
-        "watchdog_enabled": None,
+        "ssh_metrics": SimpleNamespace(watchdog_enabled=None),
         "wifi_status": None,
     }
     values.update(overrides)
@@ -375,7 +375,7 @@ async def test_switch_setup_uses_specialized_entities_and_dynamic_watchdog(
     assert len(batches) == 1
 
     coordinator.supports_watchdog = True
-    coordinator.watchdog_enabled = False
+    coordinator.ssh_metrics = SimpleNamespace(watchdog_enabled=False)
     callbacks[signal]()
     assert [entity.entity_description.key for entity in batches[1]] == ["watchdog"]
     assert isinstance(batches[1][0], switch_module.NanoKVMWatchdogSwitch)
@@ -390,7 +390,9 @@ async def test_switch_setup_handles_initial_watchdog_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An already available watchdog must be registered during setup."""
-    coordinator = _coordinator(supports_watchdog=True, watchdog_enabled=True)
+    coordinator = _coordinator(
+        supports_watchdog=True, ssh_metrics=SimpleNamespace(watchdog_enabled=True)
+    )
     _configure_hass(hass_mock, config_entry_mock, coordinator)
     add_entities, batches = _entity_collector()
     _capture_dispatchers(monkeypatch, switch_module)

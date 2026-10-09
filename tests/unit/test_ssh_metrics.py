@@ -449,19 +449,19 @@ async def test_fetch_uptime_propagates_an_invalid_boot_timestamp(
 @pytest.mark.parametrize(
     ("output", "expected"),
     [
-        ("malformed\nMemAvailable: 512", {"total": None, "used_percent": None}),
-        ("MemTotal: 0\nMemAvailable: 512", {"total": 0.0, "used_percent": None}),
-        ("MemTotal: 1024", {"total": 1.0, "used_percent": None}),
+        ("malformed\nMemAvailable: 512", (None, None)),
+        ("MemTotal: 0\nMemAvailable: 512", (0.0, None)),
+        ("MemTotal: 1024", (1.0, None)),
         (
             "MemTotal: 1024\nMemAvailable: 256",
-            {"total": 1.0, "used_percent": 75.0},
+            (1.0, 75.0),
         ),
     ],
 )
 async def test_fetch_memory_handles_partial_and_complete_meminfo(
     monkeypatch: pytest.MonkeyPatch,
     output: str,
-    expected: dict[str, float | None],
+    expected: tuple[float | None, float | None],
 ) -> None:
     """Memory parsing returns only values supported by complete device records."""
     collector, client, _ = _collector(monkeypatch)
@@ -511,22 +511,22 @@ async def test_fetch_cpu_temperature_propagates_invalid_output(
 @pytest.mark.parametrize(
     ("output", "expected"),
     [
-        ("Filesystem 1K-blocks Used", {"total": None, "used_percent": None}),
+        ("Filesystem 1K-blocks Used", (None, None)),
         (
             "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/root 100",
-            {"total": None, "used_percent": None},
+            (None, None),
         ),
         (
             "Filesystem 1K-blocks Used Available Use% Mounted on\n"
             "/dev/root 1048576 524288 524288 50% /",
-            {"total": 1024.0, "used_percent": 50.0},
+            (1024.0, 50.0),
         ),
     ],
 )
 async def test_fetch_storage_handles_partial_and_complete_df_output(
     monkeypatch: pytest.MonkeyPatch,
     output: str,
-    expected: dict[str, float | None],
+    expected: tuple[float | None, float | None],
 ) -> None:
     """Storage parsing returns values only for a complete data row."""
     collector, client, _ = _collector(monkeypatch)

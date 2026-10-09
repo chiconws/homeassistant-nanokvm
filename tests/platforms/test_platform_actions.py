@@ -61,7 +61,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
             vertical_count=20,
         ),
         "virtual_device_info": SimpleNamespace(network=False, disk=False, mic=False),
-        "watchdog_enabled": False,
+        "ssh_metrics": SimpleNamespace(watchdog_enabled=False),
     }
     values.update(overrides)
     return SimpleNamespace(**values)

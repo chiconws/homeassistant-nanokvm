@@ -134,7 +134,11 @@ def test_watchdog_value_normalizes_optional_state(
 ) -> None:
     """Unknown watchdog state must not be presented as enabled."""
     assert (
-        _watchdog_value(coordinator_state_factory(watchdog_enabled=watchdog_enabled))
+        _watchdog_value(
+            coordinator_state_factory(
+                ssh_metrics=SimpleNamespace(watchdog_enabled=watchdog_enabled)
+            )
+        )
         is expected
     )
 
@@ -157,7 +161,7 @@ def test_watchdog_availability_requires_support_and_known_state(
     """A known false watchdog value must remain available when supported."""
     coordinator = coordinator_state_factory(
         supports_watchdog=supports_watchdog,
-        watchdog_enabled=watchdog_enabled,
+        ssh_metrics=SimpleNamespace(watchdog_enabled=watchdog_enabled),
     )
 
     assert _watchdog_available(coordinator) is expected
@@ -265,7 +269,7 @@ def test_all_switch_value_functions_read_their_reported_state(
         hdmi_passthrough=SimpleNamespace(enabled=True),
         low_power=SimpleNamespace(enabled=True),
         led_strip=SimpleNamespace(on=True),
-        watchdog_enabled=True,
+        ssh_metrics=SimpleNamespace(watchdog_enabled=True),
     )
 
     assert all(
@@ -287,7 +291,7 @@ def test_all_switch_value_functions_handle_missing_state(
         hdmi_passthrough=None,
         low_power=None,
         led_strip=None,
-        watchdog_enabled=None,
+        ssh_metrics=SimpleNamespace(watchdog_enabled=None),
     )
 
     assert not any(

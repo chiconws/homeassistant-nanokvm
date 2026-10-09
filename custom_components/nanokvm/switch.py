@@ -53,12 +53,15 @@ def _hdmi_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
 
 def _watchdog_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return watchdog switch state."""
-    return bool(coordinator.watchdog_enabled)
+    return bool(coordinator.ssh_metrics.watchdog_enabled)
 
 
 def _watchdog_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether the watchdog switch should be available."""
-    return coordinator.supports_watchdog and coordinator.watchdog_enabled is not None
+    return (
+        coordinator.supports_watchdog
+        and coordinator.ssh_metrics.watchdog_enabled is not None
+    )
 
 
 def _non_pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
