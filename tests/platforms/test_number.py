@@ -129,7 +129,6 @@ def test_brightness_description_contract() -> None:
     assert description.native_unit_of_measurement == PERCENTAGE
     assert description.mode is NumberMode.SLIDER
     assert description.value_fn is _led_brightness_value
-    assert description.min_value_fn(SimpleNamespace()) == LED_BRIGHTNESS_MIN
     assert description.max_value_fn(SimpleNamespace()) == LED_BRIGHTNESS_MAX
 
 

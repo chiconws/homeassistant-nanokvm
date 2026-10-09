@@ -34,12 +34,7 @@ class NanoKVMNumberEntityDescription(NumberEntityDescription):
 
     value_fn: Callable[[NanoKVMDataUpdateCoordinator], float | None] = lambda _: None
     available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
-    min_value_fn: Callable[[NanoKVMDataUpdateCoordinator], float] = (
-        lambda _: LED_BEAD_MIN
-    )
-    max_value_fn: Callable[[NanoKVMDataUpdateCoordinator], float] = (
-        lambda _: LED_BEAD_TOTAL_LIMIT
-    )
+    max_value_fn: Callable[[NanoKVMDataUpdateCoordinator], float]
     set_value_fn: Callable[[NanoKVMDataUpdateCoordinator, float], Awaitable[Any]]
 
 
@@ -89,27 +84,6 @@ def _led_vertical_max(coordinator: NanoKVMDataUpdateCoordinator) -> float:
     return max_vertical_count(horizontal_count)
 
 
-async def _set_led_brightness(
-    coordinator: NanoKVMDataUpdateCoordinator, value: float
-) -> None:
-    """Set LED strip brightness while preserving other LED settings."""
-    await async_set_led_strip(coordinator, brightness=int(value))
-
-
-async def _set_led_horizontal_count(
-    coordinator: NanoKVMDataUpdateCoordinator, value: float
-) -> None:
-    """Set horizontal LED bead count while preserving other LED settings."""
-    await async_set_led_strip(coordinator, horizontal_count=int(value))
-
-
-async def _set_led_vertical_count(
-    coordinator: NanoKVMDataUpdateCoordinator, value: float
-) -> None:
-    """Set vertical LED bead count while preserving other LED settings."""
-    await async_set_led_strip(coordinator, vertical_count=int(value))
-
-
 NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
     NanoKVMNumberEntityDescription(
         key="led_brightness",
@@ -122,9 +96,10 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         mode=NumberMode.SLIDER,
         value_fn=_led_brightness_value,
         available_fn=_has_led_strip,
-        min_value_fn=lambda _: LED_BRIGHTNESS_MIN,
         max_value_fn=lambda _: LED_BRIGHTNESS_MAX,
-        set_value_fn=_set_led_brightness,
+        set_value_fn=lambda coordinator, value: async_set_led_strip(
+            coordinator, brightness=int(value)
+        ),
     ),
     NanoKVMNumberEntityDescription(
         key="led_horizontal_beads",
@@ -136,9 +111,10 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         mode=NumberMode.BOX,
         value_fn=_led_horizontal_value,
         available_fn=_has_led_strip,
-        min_value_fn=lambda _: LED_BEAD_MIN,
         max_value_fn=_led_horizontal_max,
-        set_value_fn=_set_led_horizontal_count,
+        set_value_fn=lambda coordinator, value: async_set_led_strip(
+            coordinator, horizontal_count=int(value)
+        ),
     ),
     NanoKVMNumberEntityDescription(
         key="led_vertical_beads",
@@ -150,9 +126,10 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         mode=NumberMode.BOX,
         value_fn=_led_vertical_value,
         available_fn=_has_led_strip,
-        min_value_fn=lambda _: LED_BEAD_MIN,
         max_value_fn=_led_vertical_max,
-        set_value_fn=_set_led_vertical_count,
+        set_value_fn=lambda coordinator, value: async_set_led_strip(
+            coordinator, vertical_count=int(value)
+        ),
     ),
 )
 
@@ -203,11 +180,6 @@ class NanoKVMNumber(NanoKVMEntity, NumberEntity):
     def native_value(self) -> float | None:
         """Return the number value."""
         return self.entity_description.value_fn(self.coordinator)
-
-    @property
-    def native_min_value(self) -> float:
-        """Return the dynamic minimum value."""
-        return self.entity_description.min_value_fn(self.coordinator)
 
     @property
     def native_max_value(self) -> float:
