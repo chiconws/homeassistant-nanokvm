@@ -223,6 +223,24 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             async with self.client as client:
                 yield client
 
+    def clone_client(self, **kwargs: Any) -> NanoKVMClient:
+        """Return a separate client on the active transport, sharing its token."""
+        return NanoKVMClient(
+            str(self.client.url),
+            token=self.client.token,
+            ssl_fingerprint=(
+                self.config_entry.data.get(CONF_SSL_FINGERPRINT)
+                if self.client.url.scheme == "https"
+                else None
+            ),
+            **kwargs,
+        )
+
+    async def async_ensure_authenticated(self, client: NanoKVMClient) -> None:
+        """Log a client in with the entry credentials when it has no token."""
+        if not client.token:
+            await client.authenticate(self.username, self.password)
+
     async def _async_update_data(self) -> None:
         """Fetch data from NanoKVM."""
         if await self._async_restore_preferred_host():
@@ -393,9 +411,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         """Fetch data using the current client instance."""
         async with self.async_client() as client:
             async with asyncio.timeout(_UPDATE_TIMEOUT_SECONDS):
-                if not client.token:
-                    await client.authenticate(self.username, self.password)
-
+                await self.async_ensure_authenticated(client)
                 await self._async_fetch_core_data()
                 self._async_maybe_create_network_entities()
                 await self._async_fetch_storage_data()
@@ -708,11 +724,8 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
     async def _async_fetch_app_version(self) -> GetVersionRsp | None:
         """Fetch application version using a dedicated client and timeout."""
-        version_client = NanoKVMClient(
-            str(self.client.url),
-            token=self.client.token,
-            ssl_fingerprint=self.config_entry.data.get(CONF_SSL_FINGERPRINT),
-            request_timeout=_APP_VERSION_REQUEST_TIMEOUT_SECONDS,
+        version_client = self.clone_client(
+            request_timeout=_APP_VERSION_REQUEST_TIMEOUT_SECONDS
         )
         try:
             async with version_client:

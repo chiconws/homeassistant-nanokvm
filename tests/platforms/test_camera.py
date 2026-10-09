@@ -33,6 +33,8 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "device_info": SimpleNamespace(device_key="test-device"),
         "is_pro_hardware": False,
         "last_update_success": True,
+        "clone_client": MagicMock(return_value=None),
+        "async_ensure_authenticated": AsyncMock(),
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -54,18 +56,7 @@ def _camera(
     manager_factory = MagicMock(return_value=manager)
     monkeypatch.setattr(camera_module, "NanoKVMWebRTCManager", manager_factory)
 
-    active_coordinator = coordinator or _coordinator()
-    provider = SimpleNamespace(
-        create_client=MagicMock(return_value=None),
-        async_authenticate=AsyncMock(),
-    )
-    monkeypatch.setattr(
-        camera_module,
-        "NanoKVMStreamClientProvider",
-        MagicMock(return_value=provider),
-    )
-
-    entity = camera_module.NanoKVMCamera(active_coordinator)
+    entity = camera_module.NanoKVMCamera(coordinator or _coordinator())
     return entity, manager, manager_factory
 
 
@@ -116,10 +107,10 @@ async def test_camera_initializes_native_webrtc_stream(
     manager_options = manager_factory.call_args.kwargs
     assert manager_options["logger"] is camera_module._LOGGER
     assert manager_options["hass_provider"]() is hass_mock
-    assert manager_options["client_factory"] == entity._client_provider.create_client
+    assert manager_options["client_factory"] == coordinator.clone_client
     assert (
         manager_options["authenticate_client"]
-        == entity._client_provider.async_authenticate
+        == coordinator.async_ensure_authenticated
     )
     assert manager_options["is_pro_hardware"]() is True
     assert manager_options["session_state_callback"] == entity._handle_streaming_state
@@ -158,10 +149,8 @@ async def test_snapshot_is_suppressed_on_pro_hardware(
     entity, _manager, _manager_factory = _camera(
         monkeypatch, _coordinator(is_pro_hardware=True)
     )
-    create_client = entity._client_provider.create_client
-
     assert await entity._async_read_snapshot_frame() is None
-    create_client.assert_not_called()
+    entity.coordinator.clone_client.assert_not_called()
 
 
 class _RequestContext(AbstractAsyncContextManager[object]):
@@ -232,10 +221,9 @@ async def test_snapshot_scans_multipart_response_for_nonempty_frame(
     entity, _manager, _manager_factory = _camera(monkeypatch)
     upstream = object()
     client = _StreamClient(upstream)
-    authenticate = AsyncMock()
+    authenticate = entity.coordinator.async_ensure_authenticated
     reader = _Reader(parts)
-    entity._client_provider.create_client.return_value = client
-    entity._client_provider.async_authenticate = authenticate
+    entity.coordinator.clone_client.return_value = client
     monkeypatch.setattr(camera_module, "BodyPartReader", _BodyPart)
     from_response = MagicMock(return_value=reader)
     monkeypatch.setattr(camera_module.MultipartReader, "from_response", from_response)

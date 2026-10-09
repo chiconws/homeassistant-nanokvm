@@ -1717,16 +1717,56 @@ async def test_app_version_client_returns_value_and_suppresses_device_failure(
         call(
             "http://nanokvm.local/api/",
             token="token",
-            ssl_fingerprint=fingerprint,
+            ssl_fingerprint=None,
             request_timeout=45,
         ),
         call(
             "http://nanokvm.local/api/",
             token="token",
-            ssl_fingerprint=fingerprint,
+            ssl_fingerprint=None,
             request_timeout=45,
         ),
     ]
+
+
+@pytest.mark.parametrize(
+    ("url", "ssl_fingerprint"),
+    [
+        ("https://nanokvm.local/api/", "AABB"),
+        ("http://nanokvm.local/api/", None),
+    ],
+)
+def test_clone_client_follows_active_transport_and_token(
+    coordinator: NanoKVMDataUpdateCoordinator,
+    config_entry_mock: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    url: str,
+    ssl_fingerprint: str | None,
+) -> None:
+    """Cloned clients follow coordinator failover and stored TLS identity."""
+    config_entry_mock.data[CONF_SSL_FINGERPRINT] = "AABB"
+    coordinator.client.url = URL(url)
+    factory = MagicMock()
+    monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
+
+    assert coordinator.clone_client() is factory.return_value
+    factory.assert_called_once_with(
+        url, token="token", ssl_fingerprint=ssl_fingerprint
+    )
+
+
+async def test_ensure_authenticated_logs_in_only_without_a_token(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> None:
+    """Existing session tokens avoid login while empty clients authenticate once."""
+    authenticated = SimpleNamespace(token="token", authenticate=AsyncMock())
+    unauthenticated = SimpleNamespace(token=None, authenticate=AsyncMock())
+
+    await coordinator.async_ensure_authenticated(authenticated)
+    await coordinator.async_ensure_authenticated(unauthenticated)
+
+    authenticated.authenticate.assert_not_awaited()
+    unauthenticated.authenticate.assert_awaited_once_with("admin", "password")
 
 
 async def test_shutdown_cleans_owned_resources_when_base_shutdown_fails(
