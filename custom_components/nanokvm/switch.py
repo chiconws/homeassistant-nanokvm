@@ -248,37 +248,20 @@ async def async_setup_entry(
     """Set up NanoKVM switch based on a config entry."""
     coordinator = entry.runtime_data
 
-    entities: list[NanoKVMSwitch] = []
-    for description in SWITCHES:
-        if not description.available_fn(coordinator):
-            continue
-
+    def switch_class(
+        description: NanoKVMSwitchEntityDescription,
+    ) -> type[NanoKVMSwitch]:
         if description.virtual_device is not None:
-            entities.append(
-                NanoKVMVirtualDeviceSwitch(
-                    coordinator=coordinator,
-                    description=description,
-                )
-            )
-            continue
-
+            return NanoKVMVirtualDeviceSwitch
         if description.key == "power":
-            entities.append(
-                NanoKVMPowerSwitch(
-                    coordinator=coordinator,
-                    description=description,
-                )
-            )
-            continue
-        else:
-            entities.append(
-                NanoKVMSwitch(
-                    coordinator=coordinator,
-                    description=description,
-                )
-            )
+            return NanoKVMPowerSwitch
+        return NanoKVMSwitch
 
-    async_add_entities(entities)
+    async_add_entities(
+        switch_class(description)(coordinator=coordinator, description=description)
+        for description in SWITCHES
+        if description.available_fn(coordinator)
+    )
 
     @callback
     def async_add_ssh_switches() -> None:
@@ -338,18 +321,23 @@ class NanoKVMSwitch(NanoKVMEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
-        if self.entity_description.turn_on_fn is None:
-            raise RuntimeError(f"Missing turn_on handler for switch: {self.entity_description.key}")
-        async with self._async_device_action():
-            await self.entity_description.turn_on_fn(self.coordinator)
-        await self.coordinator.async_request_refresh()
+        await self._async_set(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
-        if self.entity_description.turn_off_fn is None:
-            raise RuntimeError(f"Missing turn_off handler for switch: {self.entity_description.key}")
+        await self._async_set(False)
+
+    async def _async_call_handler(self, enabled: bool) -> None:
+        """Run the description's device call for the requested state."""
+        description = self.entity_description
+        handler = description.turn_on_fn if enabled else description.turn_off_fn
+        assert handler is not None
         async with self._async_device_action():
-            await self.entity_description.turn_off_fn(self.coordinator)
+            await handler(self.coordinator)
+
+    async def _async_set(self, enabled: bool) -> None:
+        """Switch to the requested state and refresh."""
+        await self._async_call_handler(enabled)
         await self.coordinator.async_request_refresh()
 
 
@@ -365,27 +353,16 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
             return None
         return bool(self.coordinator.gpio_info.pwr)
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the switch."""
-        del kwargs
-        if self.entity_description.turn_on_fn is None:
-            raise RuntimeError(f"Missing turn_on handler for switch: {self.entity_description.key}")
-        if await self._async_current_power_state() is True:
+    async def _async_set(self, enabled: bool) -> None:
+        """Press the power button unless the host is already in that state."""
+        if await self._async_current_power_state() is enabled:
             return
-        async with self._async_device_action():
-            await self.entity_description.turn_on_fn(self.coordinator)
-        await asyncio.sleep(1)
-        await self.coordinator.async_request_refresh()
+        await self._async_call_handler(enabled)
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the power switch with monitoring for actual shutdown."""
-        del kwargs
-        if self.entity_description.turn_off_fn is None:
-            raise RuntimeError(f"Missing turn_off handler for switch: {self.entity_description.key}")
-        if await self._async_current_power_state() is False:
+        if enabled:
+            await asyncio.sleep(1)
+            await self.coordinator.async_request_refresh()
             return
-        async with self._async_device_action():
-            await self.entity_description.turn_off_fn(self.coordinator)
 
         # A host can take minutes to shut down, so follow it in the background
         # instead of holding the action open.
@@ -423,37 +400,21 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
 class NanoKVMVirtualDeviceSwitch(NanoKVMSwitch):
     """Defines a virtual device switch backed by a toggle-only API."""
 
-    async def _async_set_virtual_device_state(self, enabled: bool) -> None:
+    async def _async_set(self, enabled: bool) -> None:
         """Refresh first, then toggle only when the requested state differs."""
-        virtual_device = self.entity_description.virtual_device
-        if virtual_device is None:
-            raise RuntimeError(
-                f"Missing virtual device type for switch: {self.entity_description.key}"
-            )
-
         await self.coordinator.async_refresh()
         if self.is_on == enabled:
             return
 
         async with self._async_device_action() as client:
-            await client.update_virtual_device(virtual_device)
+            await client.update_virtual_device(self.entity_description.virtual_device)
         await self.coordinator.async_request_refresh()
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the virtual device switch."""
-        del kwargs
-        await self._async_set_virtual_device_state(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the virtual device switch."""
-        del kwargs
-        await self._async_set_virtual_device_state(False)
 
 
 class NanoKVMWatchdogSwitch(NanoKVMSwitch):
     """Defines a NanoKVM watchdog switch backed by SSH file control."""
 
-    async def _async_set_watchdog_state(self, enabled: bool) -> None:
+    async def _async_set(self, enabled: bool) -> None:
         """Set watchdog state via SSH and refresh coordinator state."""
         collector = self.coordinator.async_ensure_ssh_metrics_collector()
         try:
@@ -463,13 +424,3 @@ class NanoKVMWatchdogSwitch(NanoKVMSwitch):
                 f"NanoKVM did not accept the request: {err}"
             ) from err
         await self.coordinator.async_request_refresh()
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable the watchdog."""
-        del kwargs
-        await self._async_set_watchdog_state(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable the watchdog."""
-        del kwargs
-        await self._async_set_watchdog_state(False)

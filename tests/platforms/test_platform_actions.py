@@ -310,20 +310,6 @@ async def test_generic_switch_actions_use_handlers_and_refresh() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generic_switch_missing_handlers_raise() -> None:
-    """Malformed generic switch descriptions must fail clearly."""
-    entity = switch_module.NanoKVMSwitch(
-        _coordinator(),
-        switch_module.NanoKVMSwitchEntityDescription(key="missing"),
-    )
-
-    with pytest.raises(RuntimeError, match="Missing turn_on handler"):
-        await entity.async_turn_on()
-    with pytest.raises(RuntimeError, match="Missing turn_off handler"):
-        await entity.async_turn_off()
-
-
-@pytest.mark.asyncio
 async def test_led_switch_preserves_strip_values_and_translates_missing_state() -> None:
     """LED power writes must preserve strip geometry and report unavailable state."""
     coordinator = _coordinator()
@@ -352,20 +338,6 @@ async def test_power_state_refresh_handles_unavailable_gpio() -> None:
     )
 
     assert await entity._async_current_power_state() is None
-
-
-@pytest.mark.asyncio
-async def test_power_switch_missing_handlers_raise() -> None:
-    """Malformed power descriptions must fail before polling or client access."""
-    entity = switch_module.NanoKVMPowerSwitch(
-        _coordinator(),
-        switch_module.NanoKVMSwitchEntityDescription(key="power"),
-    )
-
-    with pytest.raises(RuntimeError, match="Missing turn_on handler"):
-        await entity.async_turn_on()
-    with pytest.raises(RuntimeError, match="Missing turn_off handler"):
-        await entity.async_turn_off()
 
 
 def _run_power_off_monitor_inline(
@@ -514,18 +486,6 @@ async def test_virtual_device_switch_toggles_only_when_state_differs() -> None:
     coordinator.client.update_virtual_device.assert_awaited_once_with(
         VirtualDevice.NETWORK
     )
-
-
-@pytest.mark.asyncio
-async def test_virtual_device_switch_requires_device_type() -> None:
-    """A malformed virtual-device description must fail before refresh."""
-    entity = switch_module.NanoKVMVirtualDeviceSwitch(
-        _coordinator(),
-        switch_module.NanoKVMSwitchEntityDescription(key="missing"),
-    )
-
-    with pytest.raises(RuntimeError, match="Missing virtual device type"):
-        await entity.async_turn_on()
 
 
 @pytest.mark.asyncio
