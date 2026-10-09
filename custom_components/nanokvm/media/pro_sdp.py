@@ -124,8 +124,6 @@ def split_pro_webrtc_offer(offer_sdp: str) -> ProWebRTCOffer:
 def merge_pro_webrtc_answers(
     offer: ProWebRTCOffer,
     answers: dict[MediaKind, str],
-    *,
-    reject_missing: bool = False,
 ) -> str:
     """Merge separate Pro video/audio answers into one HA-compatible answer."""
     if not answers:
@@ -139,10 +137,7 @@ def merge_pro_webrtc_answers(
     for section in offer.media_sections:
         answer_sdp = answers.get(section.kind)
         if answer_sdp is None:
-            if not reject_missing:
-                raise ValueError(f"Missing {section.kind} WebRTC answer")
-            merged_media_lines.append(_rejected_media_section(section))
-            continue
+            raise ValueError(f"Missing {section.kind} WebRTC answer")
 
         answer_session_lines, answer_media_sections = _split_sdp_sections(answer_sdp)
         answer_media = _first_media_section_for_kind(
@@ -288,23 +283,6 @@ def _with_media_transport_lines(
             result.append(line)
             existing_prefixes.add(prefix)
             break
-
-    return tuple(result)
-
-
-def _rejected_media_section(section: ProMediaSection) -> tuple[str, ...]:
-    """Build a rejected answer media section for a missing optional answer."""
-    media_line_parts = section.lines[0].split()
-    if len(media_line_parts) >= 2:
-        media_line_parts[1] = "0"
-    result = [" ".join(media_line_parts), f"a=mid:{section.mid}", "a=inactive"]
-
-    for line in section.lines:
-        if line.startswith("c="):
-            result.insert(1, line)
-            break
-    else:
-        result.insert(1, "c=IN IP4 0.0.0.0")
 
     return tuple(result)
 

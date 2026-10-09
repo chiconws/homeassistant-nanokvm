@@ -263,50 +263,10 @@ def test_merge_requires_at_least_one_answer() -> None:
         merge_pro_webrtc_answers(_split_offer(), {})
 
 
-def test_merge_requires_each_expected_answer_by_default() -> None:
-    """Missing expected media must fail unless explicit rejection is requested."""
+def test_merge_requires_each_expected_answer() -> None:
+    """Missing expected media must fail."""
     with pytest.raises(ValueError, match="Missing audio WebRTC answer"):
         merge_pro_webrtc_answers(_split_offer(), {"video": VIDEO_ANSWER})
-
-
-def test_merge_rejects_missing_media_with_original_connection_line() -> None:
-    """Optional missing media must be rejected while retaining its connection line."""
-    merged = merge_pro_webrtc_answers(
-        _split_offer(),
-        {"video": VIDEO_ANSWER},
-        reject_missing=True,
-    )
-    _, media_sections = _split_sdp_sections(merged)
-
-    assert media_sections[1][0] == "m=audio 0 UDP/TLS/RTP/SAVPF 111"
-    assert media_sections[1][1] == "c=IN IP4 0.0.0.0"
-    assert "a=mid:audio-main" in media_sections[1]
-    assert "a=inactive" in media_sections[1]
-
-
-def test_merge_rejected_media_adds_fallback_connection_line() -> None:
-    """Rejected malformed media must receive a safe zero-address connection line."""
-    offer = ProWebRTCOffer(
-        offers={"video": VIDEO_ANSWER, "audio": "m=audio\r\n"},
-        media_sections=(
-            ProMediaSection("video", "video-main", 0, ("m=video 9 RTP/AVP 96",)),
-            ProMediaSection("audio", "audio-main", 1, ("m=audio",)),
-        ),
-    )
-
-    merged = merge_pro_webrtc_answers(
-        offer,
-        {"video": VIDEO_ANSWER},
-        reject_missing=True,
-    )
-    _, media_sections = _split_sdp_sections(merged)
-
-    assert media_sections[1] == (
-        "m=audio",
-        "c=IN IP4 0.0.0.0",
-        "a=mid:audio-main",
-        "a=inactive",
-    )
 
 
 def test_merge_rejects_answer_without_requested_media_section() -> None:
