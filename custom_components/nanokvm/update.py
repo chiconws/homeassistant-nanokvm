@@ -104,22 +104,18 @@ class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
     ) -> None:
         """Trigger NanoKVM application update."""
         del version, backup, kwargs
-        should_refresh = True
         try:
             async with self.coordinator.async_client() as client:
                 await client.update_application()
         except aiohttp.ServerDisconnectedError:
-            should_refresh = False
             _LOGGER.debug(
                 "NanoKVM disconnected while starting the application update; "
                 "assuming the update is continuing"
             )
+            return
         except (NanoKVMError, aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise HomeAssistantError(
                 f"Failed to start NanoKVM application update: {err}"
             ) from err
-
-        if not should_refresh:
-            return
 
         await self.coordinator.async_request_refresh()

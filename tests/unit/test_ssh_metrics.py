@@ -67,7 +67,6 @@ def _collector(
     collector = SSHMetricsCollector(
         host="nanokvm.local",
         password="secret",
-        username="operator",
         known_hosts=known_hosts,
     )
     return collector, client, client_factory
@@ -157,7 +156,7 @@ def test_constructor_configures_the_library_ssh_client(
 
     client_factory.assert_called_once_with(
         host="nanokvm.local",
-        username="operator",
+        username="root",
         known_hosts=None,
         allow_unknown_host_key=False,
     )
@@ -172,7 +171,7 @@ def test_constructor_forwards_approved_known_hosts_path(
 
     ssh_metrics_module.NanoKVMSSH.assert_called_once_with(
         host="nanokvm.local",
-        username="operator",
+        username="root",
         allow_unknown_host_key=False,
         known_hosts="/config/nanokvm/ssh/entry.known_hosts",
     )

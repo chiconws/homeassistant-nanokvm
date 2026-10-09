@@ -14,7 +14,7 @@ from awesomeversion import AwesomeVersion, AwesomeVersionException
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -825,7 +825,8 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             if address.addr
         }
 
-    async def async_ensure_ssh_metrics_collector(self) -> SSHMetricsCollector:
+    @callback
+    def async_ensure_ssh_metrics_collector(self) -> SSHMetricsCollector:
         """Return the active SSH collector, creating it when needed."""
         if not self.ssh_metrics_collector:
             self.ssh_metrics_collector = SSHMetricsCollector(
@@ -867,7 +868,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
     async def _async_update_ssh_data(self) -> None:
         """Fetch data via SSH."""
         try:
-            collector = await self.async_ensure_ssh_metrics_collector()
+            collector = self.async_ensure_ssh_metrics_collector()
             metrics = await collector.collect(include_watchdog=self.supports_watchdog)
             self._ssh_connection_warning_logged = False
             self.uptime = metrics.uptime

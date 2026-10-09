@@ -43,7 +43,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
     values: dict[str, object] = {
         "application_version_info": SimpleNamespace(current="1.0.0", latest="1.1.0"),
         "async_client": MagicMock(side_effect=async_client),
-        "async_ensure_ssh_metrics_collector": AsyncMock(),
+        "async_ensure_ssh_metrics_collector": MagicMock(),
         "async_refresh": AsyncMock(),
         "async_request_refresh": AsyncMock(),
         "client": client,

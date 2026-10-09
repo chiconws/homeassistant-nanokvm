@@ -50,10 +50,6 @@ ATTR_VERTICAL_COUNT = "vertical_count"
 BUTTON_TYPE_POWER = "power"
 BUTTON_TYPE_RESET = "reset"
 
-# Entity categories
-ENTITY_CATEGORY_CONFIG = "config"
-ENTITY_CATEGORY_DIAGNOSTIC = "diagnostic"
-
 # Signals
 SIGNAL_NEW_SSH_SENSORS = "nanokvm_new_ssh_sensors_{}"
 SIGNAL_NEW_SSH_SWITCHES = "nanokvm_new_ssh_switches_{}"

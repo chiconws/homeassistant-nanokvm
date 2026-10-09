@@ -46,18 +46,16 @@ def _coordinator(
     )
 
 
-def test_entity_initialization_sets_name_and_stable_unique_id(
+def test_entity_initialization_sets_stable_unique_id(
     coordinator_state_factory: Callable[..., SimpleNamespace],
 ) -> None:
     """Base entities must namespace their IDs by device and platform suffix."""
     entity = NanoKVMEntity(
         _coordinator(coordinator_state_factory),
         unique_id_suffix="sensor_temperature",
-        name="Temperature",
     )
 
     assert entity.unique_id == "device-key_sensor_temperature"
-    assert entity.name == "Temperature"
     assert entity.has_entity_name is True
     assert entity.should_poll is False
 

@@ -31,12 +31,9 @@ class NanoKVMEntity(CoordinatorEntity[NanoKVMDataUpdateCoordinator]):
         self,
         coordinator: NanoKVMDataUpdateCoordinator,
         unique_id_suffix: str,
-        name: str | None = None,
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
-        if name is not None:
-            self._attr_name = name
         self._attr_unique_id = f"{coordinator.device_info.device_key}_{unique_id_suffix}"
         _LOGGER.debug(
             "Created entity %s with unique_id: %s", unique_id_suffix, self._attr_unique_id

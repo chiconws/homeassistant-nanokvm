@@ -76,7 +76,6 @@ def _pro_virtual_mic_available(coordinator: NanoKVMDataUpdateCoordinator) -> boo
     """Return whether Pro virtual microphone control is available."""
     return (
         _pro_virtual_device_available(coordinator)
-        and coordinator.virtual_device_info is not None
         and coordinator.virtual_device_info.mic is not None
     )
 
@@ -464,7 +463,7 @@ class NanoKVMWatchdogSwitch(NanoKVMSwitch):
 
     async def _async_set_watchdog_state(self, enabled: bool) -> None:
         """Set watchdog state via SSH and refresh coordinator state."""
-        collector = await self.coordinator.async_ensure_ssh_metrics_collector()
+        collector = self.coordinator.async_ensure_ssh_metrics_collector()
         try:
             await collector.set_watchdog_enabled(enabled)
         except NanoKVMError as err:

@@ -1408,8 +1408,8 @@ async def test_ensure_ssh_collector_creates_once_and_reuses(
     factory = MagicMock(return_value=collector)
     monkeypatch.setattr(coordinator_module, "SSHMetricsCollector", factory)
 
-    assert await coordinator.async_ensure_ssh_metrics_collector() is collector
-    assert await coordinator.async_ensure_ssh_metrics_collector() is collector
+    assert coordinator.async_ensure_ssh_metrics_collector() is collector
+    assert coordinator.async_ensure_ssh_metrics_collector() is collector
     factory.assert_called_once_with(
         host="nanokvm.local", password="password", known_hosts=None
     )
@@ -1425,7 +1425,7 @@ async def test_ensure_ssh_collector_forwards_known_hosts_path(
     monkeypatch.setattr(coordinator_module, "SSHMetricsCollector", factory)
     coordinator.ssh_known_hosts = "/config/nanokvm/ssh/test-entry.known_hosts"
 
-    assert await coordinator.async_ensure_ssh_metrics_collector() is collector
+    assert coordinator.async_ensure_ssh_metrics_collector() is collector
 
     factory.assert_called_once_with(
         host="nanokvm.local",

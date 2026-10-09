@@ -29,14 +29,13 @@ class SSHMetricsCollector:
         self,
         host: str,
         password: str,
-        username: str = "root",
         known_hosts: str | None = None,
     ) -> None:
         """Initialize the SSH collector."""
         self._password = password
         self._client = NanoKVMSSH(
             host=host,
-            username=username,
+            username="root",
             known_hosts=known_hosts,
             allow_unknown_host_key=False,
         )
