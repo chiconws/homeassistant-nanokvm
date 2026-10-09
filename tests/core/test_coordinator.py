@@ -59,10 +59,6 @@ from nanokvm.ssh_client import NanoKVMSSHConnectionError
 import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.const import (
     CONF_SSL_FINGERPRINT,
-    SIGNAL_NEW_MEDIA_ENTITIES,
-    SIGNAL_NEW_NETWORK_ENTITIES,
-    SIGNAL_NEW_SSH_SENSORS,
-    SIGNAL_NEW_SSH_SWITCHES,
 )
 from custom_components.nanokvm.coordinator import (
     NanoKVMDataUpdateCoordinator,
@@ -801,8 +797,6 @@ async def test_fetch_with_client_authenticates_and_runs_fetch_groups(
     coordinator._async_fetch_core_data = AsyncMock()
     coordinator._async_fetch_storage_data = AsyncMock()
     coordinator._async_refresh_ssh_data = AsyncMock()
-    coordinator._async_maybe_create_network_entities = MagicMock()
-    coordinator._async_maybe_create_media_entities = MagicMock()
     coordinator._async_schedule_app_version_refresh = MagicMock()
 
     await coordinator._async_fetch_with_client()
@@ -810,8 +804,6 @@ async def test_fetch_with_client_authenticates_and_runs_fetch_groups(
     coordinator._async_fetch_core_data.assert_awaited_once_with()
     coordinator._async_fetch_storage_data.assert_awaited_once_with()
     coordinator._async_refresh_ssh_data.assert_awaited_once_with()
-    coordinator._async_maybe_create_network_entities.assert_called_once_with()
-    coordinator._async_maybe_create_media_entities.assert_called_once_with()
     coordinator._async_schedule_app_version_refresh.assert_called_once_with()
 
 
@@ -1384,20 +1376,6 @@ def test_hardware_capability_properties(
     assert coordinator.is_non_pro_hardware is cdrom
 
 
-def test_active_network_connection_types_are_normalized_and_deduplicated(
-    coordinator: NanoKVMDataUpdateCoordinator,
-) -> None:
-    """Only addressed connection types contribute dynamic entities."""
-    coordinator.device_info = _device_info(
-        ips=[
-            IPInfo(name="eth0", addr="192.0.2.10", version="IPv4", type="WiReD"),
-            IPInfo(name="eth1", addr="192.0.2.11", version="IPv4", type="wired"),
-            IPInfo(name="wlan0", addr="", version="IPv4", type="wireless"),
-        ]
-    )
-
-    assert coordinator._active_network_connection_types() == {"wired"}
-
 
 async def test_ensure_ssh_collector_creates_once_and_reuses(
     coordinator: NanoKVMDataUpdateCoordinator,
@@ -1452,63 +1430,10 @@ async def test_ssh_host_key_failure_disconnects_collector(
     assert "host-key verification" in caplog.text
 
 
-def test_media_entity_signal_is_sent_once_after_mount(
+async def test_successful_ssh_update_assigns_metrics(
     coordinator: NanoKVMDataUpdateCoordinator,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The first mounted image emits one entry-scoped media signal."""
-    dispatcher = MagicMock()
-    monkeypatch.setattr(coordinator_module, "async_dispatcher_send", dispatcher)
-
-    coordinator.mounted_image = None
-    coordinator._async_maybe_create_media_entities()
-    coordinator.mounted_image = GetMountedImageRsp(file="images/rescue.iso")
-    coordinator._async_maybe_create_media_entities()
-    coordinator._async_maybe_create_media_entities()
-
-    dispatcher.assert_called_once_with(
-        coordinator.hass,
-        SIGNAL_NEW_MEDIA_ENTITIES.format(coordinator.config_entry.entry_id),
-    )
-    assert coordinator.media_entities_created is True
-
-
-def test_network_entity_signals_are_sent_once_per_connection_type(
-    coordinator: NanoKVMDataUpdateCoordinator,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Dynamic network signals are normalized and idempotent by type."""
-    dispatcher = MagicMock()
-    monkeypatch.setattr(coordinator_module, "async_dispatcher_send", dispatcher)
-    coordinator.device_info = _device_info(
-        ips=[
-            IPInfo(name="eth0", addr="192.0.2.10", version="IPv4", type="wired"),
-            IPInfo(
-                name="wlan0",
-                addr="192.0.2.20",
-                version="IPv4",
-                type="WIRELESS",
-            ),
-        ]
-    )
-
-    coordinator._async_maybe_create_network_entities()
-    coordinator._async_maybe_create_network_entities()
-
-    assert dispatcher.call_count == 2
-    signal = SIGNAL_NEW_NETWORK_ENTITIES.format(coordinator.config_entry.entry_id)
-    assert {(args.args[1], args.args[2]) for args in dispatcher.call_args_list} == {
-        (signal, "wired"),
-        (signal, "wireless"),
-    }
-    assert coordinator.network_entities_created == {"wired", "wireless"}
-
-
-async def test_successful_ssh_update_assigns_metrics_and_signals_once(
-    coordinator: NanoKVMDataUpdateCoordinator,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Successful SSH collection stores metrics and creates supported entities."""
+    """Successful SSH collection stores the collected metrics snapshot."""
     metrics = SSHMetricsSnapshot(
         uptime=datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
         cpu_temperature=51.5,
@@ -1524,23 +1449,11 @@ async def test_successful_ssh_update_assigns_metrics_and_signals_once(
     )
     coordinator.ssh_metrics_collector = collector
     coordinator.device_info = _device_info(application="2.2.2")
-    dispatcher = MagicMock()
-    monkeypatch.setattr(coordinator_module, "async_dispatcher_send", dispatcher)
 
     await coordinator._async_update_ssh_data()
     await coordinator._async_update_ssh_data()
 
     assert coordinator.ssh_metrics is metrics
-    assert dispatcher.call_args_list == [
-        call(
-            coordinator.hass,
-            SIGNAL_NEW_SSH_SENSORS.format(coordinator.config_entry.entry_id),
-        ),
-        call(
-            coordinator.hass,
-            SIGNAL_NEW_SSH_SWITCHES.format(coordinator.config_entry.entry_id),
-        ),
-    ]
     assert collector.collect.await_count == 2
 
 
@@ -1583,8 +1496,6 @@ async def test_ssh_connection_warning_logs_once_per_failure_streak(
         disconnect=AsyncMock(),
     )
     coordinator.ssh_metrics_collector = collector
-    coordinator.ssh_sensors_created = True
-    coordinator.ssh_switches_created = True
 
     with caplog.at_level("DEBUG", logger=coordinator_module.__name__):
         await coordinator._async_update_ssh_data()

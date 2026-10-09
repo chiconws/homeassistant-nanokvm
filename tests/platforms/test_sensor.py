@@ -296,12 +296,10 @@ def test_sensor_description_inventory_contracts() -> None:
     assert all(callable(description.available_fn) for description in descriptions)
     assert all(callable(description.should_create_fn) for description in descriptions)
     assert all(callable(description.attributes_fn) for description in descriptions)
-    assert {
-        description.key: description.connection_type for description in NETWORK_SENSORS
-    } == {
-        "wired_ip_address": "wired",
-        "wireless_ip_address": "wireless",
-    }
+    assert [description.key for description in NETWORK_SENSORS] == [
+        "wired_ip_address",
+        "wireless_ip_address",
+    ]
 
 
 def test_ssh_sensor_descriptions_treat_zero_as_available(

@@ -261,7 +261,7 @@ def test_cdrom_description_contract(
     expected_available: bool,
     expected_value: bool,
 ) -> None:
-    """CD-ROM state is created by capability and available only while mounted."""
+    """CD-ROM state is created and available only while an image is mounted."""
     coordinator = coordinator_state_factory(
         is_non_pro_hardware=True,
         mounted_image=SimpleNamespace(file=mounted_file),
@@ -269,7 +269,7 @@ def test_cdrom_description_contract(
     )
     description = MEDIA_BINARY_SENSORS[0]
 
-    assert description.should_create_fn(coordinator) is True
+    assert description.should_create_fn(coordinator) is expected_available
     assert description.available_fn(coordinator) is expected_available
     assert description.value_fn(coordinator) is expected_value
 

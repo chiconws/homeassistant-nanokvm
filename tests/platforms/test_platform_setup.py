@@ -12,12 +12,6 @@ from yarl import URL
 
 import custom_components.nanokvm.binary_sensor as binary_sensor_module
 import custom_components.nanokvm.button as button_module
-from custom_components.nanokvm.const import (
-    SIGNAL_NEW_MEDIA_ENTITIES,
-    SIGNAL_NEW_NETWORK_ENTITIES,
-    SIGNAL_NEW_SSH_SENSORS,
-    SIGNAL_NEW_SSH_SWITCHES,
-)
 import custom_components.nanokvm.number as number_module
 import custom_components.nanokvm.select as select_module
 import custom_components.nanokvm.sensor as sensor_module
@@ -52,9 +46,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "mounted_image": None,
         "mouse_jiggler_state": None,
         "oled_info": None,
-        "ssh_sensors_created": False,
         "ssh_state": SimpleNamespace(enabled=False),
-        "ssh_switches_created": False,
         "static_ip": None,
         "is_non_pro_hardware": False,
         "supports_hdmi_endpoint": False,
@@ -67,7 +59,17 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "wifi_status": None,
     }
     values.update(overrides)
-    return SimpleNamespace(**values)
+    coordinator = SimpleNamespace(**values, listeners=[])
+    coordinator.async_add_listener = lambda listener: (
+        coordinator.listeners.append(listener) or MagicMock()
+    )
+    return coordinator
+
+
+def _notify(coordinator: SimpleNamespace) -> None:
+    """Deliver one coordinator update to every registered listener."""
+    for listener in coordinator.listeners:
+        listener()
 
 
 def _configure_hass(
@@ -88,34 +90,15 @@ def _entity_collector() -> tuple[Callable[[object], None], list[list[object]]]:
     return add_entities, batches
 
 
-def _capture_dispatchers(
-    monkeypatch: pytest.MonkeyPatch,
-    module: object,
-) -> dict[str, Callable[..., None]]:
-    """Capture dispatcher callbacks registered by a platform setup function."""
-    callbacks: dict[str, Callable[..., None]] = {}
-
-    def connect(
-        _hass: object, signal: str, callback: Callable[..., None]
-    ) -> Callable[[], None]:
-        callbacks[signal] = callback
-        return MagicMock()
-
-    monkeypatch.setattr(module, "async_dispatcher_connect", connect)
-    return callbacks
-
-
 @pytest.mark.asyncio
 async def test_binary_sensor_setup_adds_dynamic_media_and_network_entities(
     hass_mock: MagicMock,
     config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Binary sensor setup must register initial and one-shot dynamic entities."""
+    """Binary sensor setup must add each dynamic entity once it is supported."""
     coordinator = _coordinator()
     _configure_hass(hass_mock, config_entry_mock, coordinator)
     add_entities, batches = _entity_collector()
-    callbacks = _capture_dispatchers(monkeypatch, binary_sensor_module)
 
     await binary_sensor_module.async_setup_entry(
         hass_mock, config_entry_mock, add_entities
@@ -124,25 +107,21 @@ async def test_binary_sensor_setup_adds_dynamic_media_and_network_entities(
     assert [
         [entity.entity_description.key for entity in batch] for batch in batches
     ] == [["power_led"]]
-    media_signal = SIGNAL_NEW_MEDIA_ENTITIES.format(config_entry_mock.entry_id)
-    network_signal = SIGNAL_NEW_NETWORK_ENTITIES.format(config_entry_mock.entry_id)
-    assert set(callbacks) == {media_signal, network_signal}
-    assert config_entry_mock.async_on_unload.call_count == 2
+    assert config_entry_mock.async_on_unload.call_count == 1
 
-    callbacks[media_signal]()
-    callbacks[network_signal]("wireless")
+    _notify(coordinator)
     assert len(batches) == 1
 
     coordinator.mounted_image = SimpleNamespace(file="/data/image.iso")
     coordinator.is_non_pro_hardware = True
-    callbacks[media_signal]()
+    _notify(coordinator)
     assert [entity.entity_description.key for entity in batches[1]] == ["cdrom_mode"]
 
     coordinator.device_info.ips = [
         SimpleNamespace(addr="192.0.2.10", type="wired", version="IPv4", name="eth0")
     ]
-    callbacks[network_signal]("wired")
-    callbacks[network_signal]("wired")
+    _notify(coordinator)
+    _notify(coordinator)
     assert [entity.entity_description.key for entity in batches[2]] == [
         "wired_connected"
     ]
@@ -153,7 +132,6 @@ async def test_binary_sensor_setup_adds_dynamic_media_and_network_entities(
 async def test_binary_sensor_setup_handles_media_already_mounted(
     hass_mock: MagicMock,
     config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Mounted media present during setup must create its entity immediately."""
     coordinator = _coordinator(
@@ -162,26 +140,26 @@ async def test_binary_sensor_setup_handles_media_already_mounted(
     )
     _configure_hass(hass_mock, config_entry_mock, coordinator)
     add_entities, batches = _entity_collector()
-    _capture_dispatchers(monkeypatch, binary_sensor_module)
 
     await binary_sensor_module.async_setup_entry(
         hass_mock, config_entry_mock, add_entities
     )
 
-    assert [entity.entity_description.key for entity in batches[1]] == ["cdrom_mode"]
+    assert [entity.entity_description.key for entity in batches[0]] == [
+        "power_led",
+        "cdrom_mode",
+    ]
 
 
 @pytest.mark.asyncio
 async def test_sensor_setup_adds_dynamic_network_media_and_ssh_entities(
     hass_mock: MagicMock,
     config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Sensor setup must deduplicate each dynamically signaled entity group."""
+    """Sensor setup must add each dynamic entity group once it is supported."""
     coordinator = _coordinator()
     _configure_hass(hass_mock, config_entry_mock, coordinator)
     add_entities, batches = _entity_collector()
-    callbacks = _capture_dispatchers(monkeypatch, sensor_module)
 
     await sensor_module.async_setup_entry(hass_mock, config_entry_mock, add_entities)
 
@@ -189,37 +167,33 @@ async def test_sensor_setup_adds_dynamic_network_media_and_ssh_entities(
         "ip_address",
         "tailscale_state",
     ]
-    media_signal = SIGNAL_NEW_MEDIA_ENTITIES.format(config_entry_mock.entry_id)
-    network_signal = SIGNAL_NEW_NETWORK_ENTITIES.format(config_entry_mock.entry_id)
-    ssh_signal = SIGNAL_NEW_SSH_SENSORS.format(config_entry_mock.entry_id)
-    assert set(callbacks) == {media_signal, network_signal, ssh_signal}
-    assert config_entry_mock.async_on_unload.call_count == 3
+    assert config_entry_mock.async_on_unload.call_count == 1
 
-    callbacks[network_signal]("wired")
-    callbacks[media_signal]()
+    _notify(coordinator)
     assert len(batches) == 1
 
     coordinator.device_info.ips = [
         SimpleNamespace(addr="192.0.2.10", type="wired", version="IPv4", name="eth0")
     ]
-    callbacks[network_signal]("wired")
-    callbacks[network_signal]("wired")
+    _notify(coordinator)
+    _notify(coordinator)
     assert [entity.entity_description.key for entity in batches[1]] == [
         "wired_ip_address"
     ]
 
     coordinator.mounted_image = SimpleNamespace(file="/data/image.iso")
-    callbacks[media_signal]()
+    _notify(coordinator)
     assert [entity.entity_description.key for entity in batches[2]] == ["mounted_image"]
 
-    callbacks[ssh_signal]()
+    coordinator.ssh_state = SimpleNamespace(enabled=True)
+    _notify(coordinator)
     assert [entity.entity_description.key for entity in batches[3]] == [
         "uptime",
         "cpu_temperature",
         "memory_used_percent",
         "storage_used_percent",
     ]
-    assert coordinator.ssh_sensors_created is True
+    _notify(coordinator)
     assert len(batches) == 4
 
 
@@ -227,7 +201,6 @@ async def test_sensor_setup_adds_dynamic_network_media_and_ssh_entities(
 async def test_sensor_setup_handles_initial_media_and_ssh_state(
     hass_mock: MagicMock,
     config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Initial mounted media and enabled SSH must create dynamic entities at setup."""
     coordinator = _coordinator(
@@ -236,15 +209,17 @@ async def test_sensor_setup_handles_initial_media_and_ssh_state(
     )
     _configure_hass(hass_mock, config_entry_mock, coordinator)
     add_entities, batches = _entity_collector()
-    _capture_dispatchers(monkeypatch, sensor_module)
 
     await sensor_module.async_setup_entry(hass_mock, config_entry_mock, add_entities)
 
-    assert [
-        [entity.entity_description.key for entity in batch] for batch in batches[1:]
-    ] == [
-        ["mounted_image"],
-        ["uptime", "cpu_temperature", "memory_used_percent", "storage_used_percent"],
+    assert [entity.entity_description.key for entity in batches[0]] == [
+        "ip_address",
+        "tailscale_state",
+        "mounted_image",
+        "uptime",
+        "cpu_temperature",
+        "memory_used_percent",
+        "storage_used_percent",
     ]
 
 
@@ -344,7 +319,6 @@ async def test_select_setup_filters_on_available_state(
 async def test_switch_setup_uses_specialized_entities_and_dynamic_watchdog(
     hass_mock: MagicMock,
     config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Switch setup must select specialized entity classes and add watchdog once."""
     coordinator = _coordinator(
@@ -353,7 +327,6 @@ async def test_switch_setup_uses_specialized_entities_and_dynamic_watchdog(
     )
     _configure_hass(hass_mock, config_entry_mock, coordinator)
     add_entities, batches = _entity_collector()
-    callbacks = _capture_dispatchers(monkeypatch, switch_module)
 
     await switch_module.async_setup_entry(hass_mock, config_entry_mock, add_entities)
 
@@ -368,17 +341,15 @@ async def test_switch_setup_uses_specialized_entities_and_dynamic_watchdog(
     assert isinstance(batches[0][3], switch_module.NanoKVMVirtualDeviceSwitch)
     assert isinstance(batches[0][4], switch_module.NanoKVMPowerSwitch)
 
-    signal = SIGNAL_NEW_SSH_SWITCHES.format(config_entry_mock.entry_id)
-    assert set(callbacks) == {signal}
-    callbacks[signal]()
+    _notify(coordinator)
     assert len(batches) == 1
 
     coordinator.supports_watchdog = True
     coordinator.ssh_metrics = SimpleNamespace(watchdog_enabled=False)
-    callbacks[signal]()
+    _notify(coordinator)
+    _notify(coordinator)
     assert [entity.entity_description.key for entity in batches[1]] == ["watchdog"]
     assert isinstance(batches[1][0], switch_module.NanoKVMWatchdogSwitch)
-    assert coordinator.ssh_switches_created is True
     assert len(batches) == 2
 
 
@@ -386,7 +357,6 @@ async def test_switch_setup_uses_specialized_entities_and_dynamic_watchdog(
 async def test_switch_setup_handles_initial_watchdog_state(
     hass_mock: MagicMock,
     config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An already available watchdog must be registered during setup."""
     coordinator = _coordinator(
@@ -394,7 +364,6 @@ async def test_switch_setup_handles_initial_watchdog_state(
     )
     _configure_hass(hass_mock, config_entry_mock, coordinator)
     add_entities, batches = _entity_collector()
-    _capture_dispatchers(monkeypatch, switch_module)
 
     await switch_module.async_setup_entry(hass_mock, config_entry_mock, add_entities)
 

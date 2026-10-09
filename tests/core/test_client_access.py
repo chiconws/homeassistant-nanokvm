@@ -139,8 +139,6 @@ def test_coordinator_poll_uses_serialized_client_access() -> None:
         coordinator._async_fetch_core_data = AsyncMock()
         coordinator._async_fetch_storage_data = AsyncMock()
         coordinator._async_refresh_ssh_data = AsyncMock()
-        coordinator._async_maybe_create_network_entities = MagicMock()
-        coordinator._async_maybe_create_media_entities = MagicMock()
         coordinator._async_schedule_app_version_refresh = MagicMock()
 
         await coordinator._async_fetch_with_client()

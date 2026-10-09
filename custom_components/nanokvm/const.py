@@ -50,12 +50,6 @@ ATTR_VERTICAL_COUNT = "vertical_count"
 BUTTON_TYPE_POWER = "power"
 BUTTON_TYPE_RESET = "reset"
 
-# Signals
-SIGNAL_NEW_SSH_SENSORS = "nanokvm_new_ssh_sensors_{}"
-SIGNAL_NEW_SSH_SWITCHES = "nanokvm_new_ssh_switches_{}"
-SIGNAL_NEW_MEDIA_ENTITIES = "nanokvm_new_media_entities_{}"
-SIGNAL_NEW_NETWORK_ENTITIES = "nanokvm_new_network_entities_{}"
-
 # NanoKVM Pro LED strip limits
 LED_BRIGHTNESS_MIN = 0
 LED_BRIGHTNESS_MAX = 100

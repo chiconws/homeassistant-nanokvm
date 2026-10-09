@@ -10,19 +10,15 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from nanokvm.client import NanoKVMError
 from nanokvm.models import GpioType, VirtualDevice
 
-from .const import (
-    SIGNAL_NEW_SSH_SWITCHES,
-)
 from .coordinator import NanoKVMDataUpdateCoordinator
-from .entity import NanoKVMEntity
+from .entity import NanoKVMEntity, async_add_entities_as_supported
 from .led import async_set_led_strip, led_strip_available
 
 _LOGGER = logging.getLogger(__name__)
@@ -253,32 +249,15 @@ async def async_setup_entry(
         if description.available_fn(coordinator)
     )
 
-    @callback
-    def async_add_ssh_switches() -> None:
-        """Add SSH-backed switches when they become available."""
-        entities = [
-            NanoKVMWatchdogSwitch(
-                coordinator=coordinator,
-                description=description,
-            )
-            for description in SSH_SWITCHES
-            if description.available_fn(coordinator)
-        ]
-        if not entities:
-            return
-
-        async_add_entities(entities)
-        coordinator.ssh_switches_created = True
-
-    if any(description.available_fn(coordinator) for description in SSH_SWITCHES):
-        async_add_ssh_switches()
-
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            SIGNAL_NEW_SSH_SWITCHES.format(entry.entry_id),
-            async_add_ssh_switches,
-        )
+    async_add_entities_as_supported(
+        entry,
+        coordinator,
+        async_add_entities,
+        SSH_SWITCHES,
+        lambda description: description.available_fn(coordinator),
+        lambda description: NanoKVMWatchdogSwitch(
+            coordinator=coordinator, description=description
+        ),
     )
 
 

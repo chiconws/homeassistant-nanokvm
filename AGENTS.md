@@ -51,6 +51,8 @@ The integration follows the standard structure for a Home Assistant
 
 - **`entity.py`**: Defines `NanoKVMEntity` base class.
   - Shared entity behavior (`unique_id`, `device_info`) for all platforms.
+  - `async_add_entities_as_supported` adds each described entity once, at
+    setup or on a later coordinator update, when the device supports it.
   - `_async_device_action` wraps client access for actions and reports device
     failures as `HomeAssistantError`.
 
@@ -72,7 +74,7 @@ The integration follows the standard structure for a Home Assistant
     NanoKVM, and treats a different device at a saved address as its own device.
 
 - **`const.py`**: Central repository for shared constants (domain, service
-  names, attributes, defaults, icons, and signal names).
+  names, attributes, and defaults).
 
 - **`utils.py`**: Shared helpers for host normalization and SSH host extraction.
   - Resolves HTTP/HTTPS API candidates, HTTPS probe URLs, scheme-preserving
@@ -147,7 +149,8 @@ Each platform follows a similar pattern:
   entities.
 - **Optional and dynamic entities**:
   Some entities are created only after the coordinator sees supporting state,
-  such as mounted media, active wired/wireless connections, or SSH metrics.
+  such as mounted media, active wired/wireless connections, or enabled SSH.
+  Platforms re-check their descriptions on every coordinator update.
 - **NanoKVM Pro compatibility**:
   Pro devices expose several APIs with different schemas from non-Pro models.
   Keep Pro-specific polling optional and keep non-Pro-only entities gated by

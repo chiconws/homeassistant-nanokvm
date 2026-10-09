@@ -17,7 +17,6 @@ from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.debounce import Debouncer
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
@@ -69,10 +68,6 @@ from .const import (
     PREFERRED_HOST_CHECK_INTERVAL_SECONDS,
     PREFERRED_HOST_MAX_CHECK_INTERVAL_SECONDS,
     PREFERRED_HOST_TIMEOUT_SECONDS,
-    SIGNAL_NEW_MEDIA_ENTITIES,
-    SIGNAL_NEW_NETWORK_ENTITIES,
-    SIGNAL_NEW_SSH_SENSORS,
-    SIGNAL_NEW_SSH_SWITCHES,
 )
 from .led import LedBrightnessRequest, note_reported_led_strip
 from .ssh_metrics import SSHMetricsCollector, SSHMetricsSnapshot
@@ -187,11 +182,6 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             if isinstance(stored_brightness, list) and len(stored_brightness) == 2
             else None
         )
-        # Each creation signal is sent once; the platforms rely on that.
-        self.media_entities_created = False
-        self.network_entities_created: set[str] = set()
-        self.ssh_sensors_created = False
-        self.ssh_switches_created = False
         self._ssh_connection_warning_logged = False
         self._app_version_last_fetched: datetime.datetime | None = None
         self._app_version_fetch_task: asyncio.Task[None] | None = None
@@ -413,9 +403,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             async with asyncio.timeout(_UPDATE_TIMEOUT_SECONDS):
                 await self.async_ensure_authenticated(client)
                 await self._async_fetch_core_data()
-                self._async_maybe_create_network_entities()
                 await self._async_fetch_storage_data()
-                self._async_maybe_create_media_entities()
 
         self._async_sync_device_registry()
         await self._async_refresh_ssh_data()
@@ -811,14 +799,6 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             self.hardware_info and self.hardware_info.version == HWVersion.PCIE
         )
 
-    def _active_network_connection_types(self) -> set[str]:
-        """Return active network connection types reported by the NanoKVM."""
-        return {
-            address.type.casefold()
-            for address in self.device_info.ips
-            if address.addr
-        }
-
     @callback
     def async_ensure_ssh_metrics_collector(self) -> SSHMetricsCollector:
         """Return the active SSH collector, creating it when needed."""
@@ -830,35 +810,6 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             )
         return self.ssh_metrics_collector
 
-    def _async_maybe_create_media_entities(self) -> None:
-        """Signal when media-backed entities should be created."""
-        if self.media_entities_created:
-            return
-
-        if self.mounted_image and self.mounted_image.file != "":
-            _LOGGER.debug("Mounted image present, signaling to create media entities")
-            async_dispatcher_send(
-                self.hass, SIGNAL_NEW_MEDIA_ENTITIES.format(self.config_entry.entry_id)
-            )
-            self.media_entities_created = True
-
-    def _async_maybe_create_network_entities(self) -> None:
-        """Signal when per-connection network entities should be created."""
-        for connection_type in self._active_network_connection_types():
-            if connection_type in self.network_entities_created:
-                continue
-
-            _LOGGER.debug(
-                "Network connection type %s present, signaling to create entities",
-                connection_type,
-            )
-            async_dispatcher_send(
-                self.hass,
-                SIGNAL_NEW_NETWORK_ENTITIES.format(self.config_entry.entry_id),
-                connection_type,
-            )
-            self.network_entities_created.add(connection_type)
-
     async def _async_update_ssh_data(self) -> None:
         """Fetch data via SSH."""
         try:
@@ -867,21 +818,6 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             self._ssh_connection_warning_logged = False
             self.ssh_metrics = metrics
             _LOGGER.debug("SSH coordinator metrics updated: %s", metrics)
-
-            if not self.ssh_sensors_created:
-                _LOGGER.debug("SSH enabled, signaling to create SSH sensors")
-                async_dispatcher_send(
-                    self.hass, SIGNAL_NEW_SSH_SENSORS.format(self.config_entry.entry_id)
-                )
-                self.ssh_sensors_created = True
-
-            if self.supports_watchdog and not self.ssh_switches_created:
-                _LOGGER.debug("Watchdog supported, signaling to create SSH-backed switches")
-                async_dispatcher_send(
-                    self.hass, SIGNAL_NEW_SSH_SWITCHES.format(self.config_entry.entry_id)
-                )
-                self.ssh_switches_created = True
-
         except NanoKVMSSHConnectionError as err:
             if self._ssh_connection_warning_logged:
                 _LOGGER.debug(
