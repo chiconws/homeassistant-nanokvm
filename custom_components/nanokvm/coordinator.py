@@ -415,10 +415,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         """Keep the registered device name and firmware current between reloads."""
         details = (
             self.hostname_info.hostname if self.hostname_info else INTEGRATION_TITLE,
-            device_sw_version(
-                self.device_info.application,
-                getattr(self.device_info, "image", None),
-            ),
+            device_sw_version(self.device_info.application, self.device_info.image),
         )
         if self._registered_device_details in (None, details):
             # Entities register the device with these values themselves.

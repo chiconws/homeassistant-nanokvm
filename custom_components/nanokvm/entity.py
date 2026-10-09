@@ -65,9 +65,7 @@ class NanoKVMEntity(CoordinatorEntity[NanoKVMDataUpdateCoordinator]):
             else "Unknown"
         )
 
-        sw_version = device_sw_version(
-            device_data.application, getattr(device_data, "image", None)
-        )
+        sw_version = device_sw_version(device_data.application, device_data.image)
 
         return DeviceInfo(
             identifiers={(DOMAIN, device_data.device_key)},

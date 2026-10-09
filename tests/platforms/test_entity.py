@@ -28,8 +28,7 @@ def _coordinator(
         "device_key": "device-key",
         "application": application,
     }
-    if image is not None:
-        device_values["image"] = image
+    device_values["image"] = image
 
     return coordinator_state_factory(
         device_info=SimpleNamespace(**device_values),

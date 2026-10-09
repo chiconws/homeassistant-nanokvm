@@ -173,16 +173,6 @@ async def test_prepare_ssh_host_key_probes_enabled_service(
 
 
 @pytest.mark.asyncio
-async def test_prepare_ssh_host_key_skips_clients_without_ssh_endpoint(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Test doubles and older clients without SSH state remain optional."""
-    monkeypatch.setattr(config_flow_module, "NanoKVMClient", ScriptedClient)
-
-    assert await async_prepare_ssh_host_key(_connection_data()) is None
-
-
-@pytest.mark.asyncio
 async def test_prepare_ssh_host_key_skips_disabled_service(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

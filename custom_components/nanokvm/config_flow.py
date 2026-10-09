@@ -92,9 +92,6 @@ async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
     therefore leaves the integration usable while an enabled service gets a
     strict, user-confirmed host key before metrics collection can authenticate.
     """
-    if not hasattr(NanoKVMClient, "get_ssh_state"):
-        return None
-
     options = api_connection_options(
         data[CONF_HOST],
         data.get(CONF_SSL_FINGERPRINT),
@@ -110,7 +107,7 @@ async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
         except (asyncio.TimeoutError, aiohttp.ClientError, NanoKVMError):
             continue
 
-        if not getattr(ssh_state, "enabled", False):
+        if not ssh_state.enabled:
             return None
 
         try:

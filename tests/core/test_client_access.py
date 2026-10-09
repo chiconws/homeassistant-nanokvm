@@ -58,7 +58,9 @@ def _coordinator(client: TrackingClient) -> NanoKVMDataUpdateCoordinator:
         client=client,
         username="admin",
         password="password",
-        device_info=SimpleNamespace(device_key="test-device", application="1.0.0"),
+        device_info=SimpleNamespace(
+            device_key="test-device", application="1.0.0", image=None
+        ),
     )
 
 
