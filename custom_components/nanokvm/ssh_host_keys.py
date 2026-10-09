@@ -2,16 +2,13 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 from dataclasses import dataclass
-import hashlib
-import os
 from pathlib import Path
 import re
 import socket
-import tempfile
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util.file import write_utf8_file_atomic
 import paramiko
 
 
@@ -29,13 +26,6 @@ class SSHHostKey:
     fingerprint: str
 
 
-def _fingerprint(key: paramiko.PKey) -> str:
-    """Return the OpenSSH SHA-256 fingerprint for a public key."""
-    digest = hashlib.sha256(key.asbytes()).digest()
-    encoded = base64.b64encode(digest).decode("ascii").rstrip("=")
-    return f"SHA256:{encoded}"
-
-
 def retarget_known_hosts_line(known_hosts_line: str, host: str) -> str:
     """Return a trusted key line scoped to a newly verified host."""
     fields = known_hosts_line.split()
@@ -46,10 +36,10 @@ def retarget_known_hosts_line(known_hosts_line: str, host: str) -> str:
     return f"{host} {key_type} {key_data}"
 
 
-def _probe_host_key(host: str, port: int = _SSH_PORT) -> SSHHostKey:
+def _probe_host_key(host: str) -> SSHHostKey:
     """Perform an SSH handshake without authenticating a user."""
     sock = socket.create_connection(
-        (host, port),
+        (host, _SSH_PORT),
         timeout=_SSH_PROBE_TIMEOUT_SECONDS,
     )
     transport: paramiko.Transport | None = None
@@ -60,7 +50,7 @@ def _probe_host_key(host: str, port: int = _SSH_PORT) -> SSHHostKey:
         return SSHHostKey(
             host=host,
             known_hosts_line=f"{host} {key.get_name()} {key.get_base64()}",
-            fingerprint=_fingerprint(key),
+            fingerprint=key.fingerprint,
         )
     finally:
         if transport is not None:
@@ -69,9 +59,9 @@ def _probe_host_key(host: str, port: int = _SSH_PORT) -> SSHHostKey:
             sock.close()
 
 
-async def async_probe_host_key(host: str, port: int = _SSH_PORT) -> SSHHostKey:
+async def async_probe_host_key(host: str) -> SSHHostKey:
     """Probe a server key off the Home Assistant event loop."""
-    return await asyncio.to_thread(_probe_host_key, host, port)
+    return await asyncio.to_thread(_probe_host_key, host)
 
 
 def known_hosts_path(config_dir: str | Path, entry_id: str) -> Path:
@@ -87,26 +77,7 @@ def _write_known_hosts(path: Path, known_hosts_line: str) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.parent.chmod(0o700)
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            mode="w",
-            encoding="utf-8",
-            delete=False,
-        ) as temporary_file:
-            temporary_path = Path(temporary_file.name)
-            temporary_file.write(f"{known_hosts_line}\n")
-            temporary_file.flush()
-            os.fsync(temporary_file.fileno())
-        temporary_path.chmod(0o600)
-        temporary_path.replace(path)
-        path.chmod(0o600)
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+    write_utf8_file_atomic(str(path), f"{known_hosts_line}\n", private=True)
 
 
 async def async_write_known_hosts(
