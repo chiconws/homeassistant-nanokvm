@@ -103,20 +103,9 @@ async def test_camera_initializes_native_webrtc_stream(
     assert await entity.stream_source() is None
     assert entity.camera_capabilities.frontend_stream_types == {StreamType.WEB_RTC}
 
-    manager_factory.assert_called_once()
-    manager_options = manager_factory.call_args.kwargs
-    assert manager_options["logger"] is camera_module._LOGGER
-    assert manager_options["hass_provider"]() is hass_mock
-    assert manager_options["client_factory"] == coordinator.clone_client
-    assert (
-        manager_options["authenticate_client"]
-        == coordinator.async_ensure_authenticated
+    manager_factory.assert_called_once_with(
+        coordinator, entity._handle_streaming_state
     )
-    assert manager_options["is_pro_hardware"]() is True
-    assert manager_options["session_state_callback"] == entity._handle_streaming_state
-    assert manager_options["login_timeout_seconds"] == 15
-    assert manager_options["websocket_heartbeat_seconds"] == 30.0
-    assert manager_options["max_pending_ice_candidates"] == 64
 
 def test_camera_streaming_state_tracks_native_webrtc_sessions(
     hass_mock: MagicMock,
@@ -127,7 +116,7 @@ def test_camera_streaming_state_tracks_native_webrtc_sessions(
     entity.hass = hass_mock
     write_state = MagicMock()
     monkeypatch.setattr(entity, "async_write_ha_state", write_state)
-    state_callback = manager_factory.call_args.kwargs["session_state_callback"]
+    state_callback = manager_factory.call_args.args[1]
 
     state_callback(True)
 

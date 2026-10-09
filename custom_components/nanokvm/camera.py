@@ -23,9 +23,6 @@ from .media.signaling import NanoKVMWebRTCManager
 
 _LOGGER = logging.getLogger(__name__)
 
-LOGIN_TIMEOUT_SECONDS = 15
-WEBSOCKET_HEARTBEAT_SECONDS = 30.0
-MAX_PENDING_ICE_CANDIDATES = 64
 SNAPSHOT_TIMEOUT_SECONDS = 20
 
 
@@ -55,15 +52,7 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         self._attr_supported_features = CameraEntityFeature.STREAM
         self._attr_is_streaming = False
         self._webrtc = NanoKVMWebRTCManager(
-            logger=_LOGGER,
-            hass_provider=lambda: self.hass,
-            client_factory=self.coordinator.clone_client,
-            authenticate_client=self.coordinator.async_ensure_authenticated,
-            is_pro_hardware=lambda: self.coordinator.is_pro_hardware,
-            session_state_callback=self._handle_streaming_state,
-            login_timeout_seconds=LOGIN_TIMEOUT_SECONDS,
-            websocket_heartbeat_seconds=WEBSOCKET_HEARTBEAT_SECONDS,
-            max_pending_ice_candidates=MAX_PENDING_ICE_CANDIDATES,
+            coordinator, self._handle_streaming_state
         )
 
     @callback
