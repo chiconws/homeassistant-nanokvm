@@ -9,6 +9,7 @@ from homeassistant.const import EntityCategory
 from nanokvm.models import VirtualDevice
 import pytest
 
+from custom_components.nanokvm.led import led_strip_available
 from custom_components.nanokvm.switch import (
     SSH_SWITCHES,
     SWITCHES,
@@ -18,10 +19,8 @@ from custom_components.nanokvm.switch import (
     _hdmi_capture_available,
     _hdmi_passthrough_available,
     _hdmi_value,
-    _led_strip_available,
     _led_strip_value,
     _low_power_available,
-    _non_pro_virtual_device_available,
     _pro_virtual_device_available,
     _pro_virtual_mic_available,
     _watchdog_available,
@@ -182,11 +181,9 @@ def test_virtual_device_availability_separates_hardware_families(
         virtual_device_info=SimpleNamespace(mic=False),
     )
 
-    assert _non_pro_virtual_device_available(non_pro)
     assert not _pro_virtual_device_available(non_pro)
     assert not _pro_virtual_mic_available(non_pro)
 
-    assert not _non_pro_virtual_device_available(pro)
     assert _pro_virtual_device_available(pro)
     assert _pro_virtual_mic_available(pro)
 
@@ -218,7 +215,7 @@ def test_pro_virtual_mic_requires_reported_mic_state(
         (_hdmi_capture_available, "hdmi_capture"),
         (_hdmi_passthrough_available, "hdmi_passthrough"),
         (_low_power_available, "low_power"),
-        (_led_strip_available, "led_strip"),
+        (led_strip_available, "led_strip"),
     ],
 )
 def test_pro_feature_availability_requires_pro_hardware_and_reported_state(

@@ -24,7 +24,7 @@ from .const import (
     SIGNAL_NEW_NETWORK_ENTITIES,
     SIGNAL_NEW_SSH_SENSORS,
 )
-from .entity import NanoKVMEntity
+from .entity import NanoKVMEntity, has_connection_type, has_mounted_image
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,69 +42,26 @@ def _normalize_tailscale_state(raw_state: str | None) -> str | None:
     return _TAILSCALE_STATE_MAP.get(raw_state, raw_state)
 
 
-def _has_mounted_image(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether there is a mounted image."""
-    return bool(coordinator.mounted_image and coordinator.mounted_image.file != "")
-
-
 def _mounted_image_value(coordinator: NanoKVMDataUpdateCoordinator) -> str:
     """Return mounted image path."""
     return coordinator.mounted_image.file if coordinator.mounted_image else ""
 
 
-def _primary_ip_address(coordinator: NanoKVMDataUpdateCoordinator) -> str | None:
-    """Return the preferred local IP address for the NanoKVM."""
-    addresses = coordinator.device_info.ips
-    if not addresses:
-        return None
-
-    for address in addresses:
-        if address.version == "IPv4":
-            return address.addr
-
-    return addresses[0].addr
-
-
-def _ip_address_attributes(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str, Any]:
-    """Return all NanoKVM-reported addresses as sensor attributes."""
-    return {
-        "addresses": [
-            {
-                "name": address.name,
-                "addr": address.addr,
-                "version": address.version,
-                "type": address.type,
-            }
-            for address in coordinator.device_info.ips
-        ]
-    }
-
-
 def _addresses_for_connection_type(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
+    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str | None
 ) -> list[Any]:
-    """Return NanoKVM addresses for a connection type."""
+    """Return NanoKVM addresses for a connection type, or all of them for None."""
     return [
         address
         for address in coordinator.device_info.ips
-        if address.type.casefold() == connection_type
+        if connection_type in (None, address.type.casefold())
     ]
 
 
-def _has_connection_type(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
-) -> bool:
-    """Return whether an IP connection type is active."""
-    return any(
-        address.addr
-        for address in _addresses_for_connection_type(coordinator, connection_type)
-    )
-
-
 def _connection_ip_value(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
+    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str | None = None
 ) -> str | None:
-    """Return preferred IP address for a connection type."""
+    """Return the preferred IP address, optionally for one connection type."""
     addresses = _addresses_for_connection_type(coordinator, connection_type)
     if not addresses:
         return None
@@ -117,9 +74,9 @@ def _connection_ip_value(
 
 
 def _connection_ip_attributes(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
+    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str | None = None
 ) -> dict[str, Any]:
-    """Return reported addresses for a connection type."""
+    """Return reported addresses, optionally for one connection type."""
     return {
         "addresses": [
             {
@@ -183,8 +140,8 @@ MEDIA_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         translation_key="mounted_image",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_mounted_image_value,
-        should_create_fn=_has_mounted_image,
-        available_fn=_has_mounted_image,
+        should_create_fn=has_mounted_image,
+        available_fn=has_mounted_image,
     ),
 )
 
@@ -193,9 +150,9 @@ SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         key="ip_address",
         translation_key="ip_address",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_primary_ip_address,
-        available_fn=lambda coordinator: _primary_ip_address(coordinator) is not None,
-        attributes_fn=_ip_address_attributes,
+        value_fn=_connection_ip_value,
+        available_fn=lambda coordinator: _connection_ip_value(coordinator) is not None,
+        attributes_fn=_connection_ip_attributes,
     ),
     NanoKVMSensorEntityDescription(
         key="tailscale_state",
@@ -213,8 +170,8 @@ NETWORK_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         connection_type="wired",
         value_fn=lambda coordinator: _connection_ip_value(coordinator, "wired"),
-        available_fn=lambda coordinator: _has_connection_type(coordinator, "wired"),
-        should_create_fn=lambda coordinator: _has_connection_type(
+        available_fn=lambda coordinator: has_connection_type(coordinator, "wired"),
+        should_create_fn=lambda coordinator: has_connection_type(
             coordinator, "wired"
         ),
         attributes_fn=lambda coordinator: _connection_ip_attributes(
@@ -227,8 +184,8 @@ NETWORK_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         connection_type="wireless",
         value_fn=lambda coordinator: _connection_ip_value(coordinator, "wireless"),
-        available_fn=lambda coordinator: _has_connection_type(coordinator, "wireless"),
-        should_create_fn=lambda coordinator: _has_connection_type(
+        available_fn=lambda coordinator: has_connection_type(coordinator, "wireless"),
+        should_create_fn=lambda coordinator: has_connection_type(
             coordinator, "wireless"
         ),
         attributes_fn=lambda coordinator: _connection_ip_attributes(
@@ -332,7 +289,7 @@ async def async_setup_entry(
     @callback
     def async_add_media_sensors() -> None:
         """Add media-backed sensors when media is first mounted."""
-        if not _has_mounted_image(coordinator):
+        if not has_mounted_image(coordinator):
             return
 
         _LOGGER.debug("Creating media sensors")
@@ -344,7 +301,7 @@ async def async_setup_entry(
             for description in MEDIA_SENSORS
         )
 
-    if _has_mounted_image(coordinator):
+    if has_mounted_image(coordinator):
         _LOGGER.debug("Mounted image already present during setup, creating media sensors")
         async_add_media_sensors()
 

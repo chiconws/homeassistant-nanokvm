@@ -18,17 +18,14 @@ from custom_components.nanokvm.sensor import (
     _addresses_for_connection_type,
     _connection_ip_attributes,
     _connection_ip_value,
-    _has_connection_type,
-    _has_mounted_image,
-    _ip_address_attributes,
     _memory_total_attribute,
     _mounted_image_value,
     _normalize_tailscale_state,
-    _primary_ip_address,
     _storage_total_attribute,
     _tailscale_attributes,
     _tailscale_state_value,
 )
+from custom_components.nanokvm.entity import has_connection_type, has_mounted_image
 
 CoordinatorStateFactory = Callable[..., SimpleNamespace]
 
@@ -85,7 +82,7 @@ def test_mounted_image_helpers_and_description_contract(
     coordinator = coordinator_state_factory(mounted_image=mounted_image)
     description = MEDIA_SENSORS[0]
 
-    assert _has_mounted_image(coordinator) is expected_available
+    assert has_mounted_image(coordinator) is expected_available
     assert _mounted_image_value(coordinator) == expected_value
     assert description.should_create_fn(coordinator) is expected_available
     assert description.available_fn(coordinator) is expected_available
@@ -114,7 +111,7 @@ def test_primary_ip_address_prefers_ipv4(
     """The primary address prefers IPv4 and otherwise uses the first address."""
     coordinator = coordinator_state_factory(device_info=SimpleNamespace(ips=addresses))
 
-    assert _primary_ip_address(coordinator) == expected
+    assert _connection_ip_value(coordinator) == expected
 
 
 def test_ip_address_attributes_preserve_reported_address_data(
@@ -132,7 +129,7 @@ def test_ip_address_attributes_preserve_reported_address_data(
     ]
     coordinator = coordinator_state_factory(device_info=SimpleNamespace(ips=addresses))
 
-    assert _ip_address_attributes(coordinator) == {
+    assert _connection_ip_attributes(coordinator) == {
         "addresses": [
             {
                 "name": "eth0",
@@ -169,7 +166,7 @@ def test_connection_helpers_filter_case_insensitively_and_prefer_ipv4(
         wired_ipv6,
         wired_ipv4,
     ]
-    assert _has_connection_type(coordinator, "wired") is True
+    assert has_connection_type(coordinator, "wired") is True
     assert _connection_ip_value(coordinator, "wired") == "192.0.2.10"
     assert _connection_ip_attributes(coordinator, "wired") == {
         "addresses": [
@@ -200,7 +197,7 @@ def test_connection_helpers_return_empty_state_when_type_is_absent(
     )
 
     assert _addresses_for_connection_type(coordinator, "wired") == []
-    assert _has_connection_type(coordinator, "wired") is False
+    assert has_connection_type(coordinator, "wired") is False
     assert _connection_ip_value(coordinator, "wired") is None
     assert _connection_ip_attributes(coordinator, "wired") == {"addresses": []}
 
@@ -229,7 +226,7 @@ def test_connection_type_requires_a_nonempty_address(
         device_info=SimpleNamespace(ips=[_address("")])
     )
 
-    assert _has_connection_type(coordinator, "wired") is False
+    assert has_connection_type(coordinator, "wired") is False
 
 
 def test_tailscale_helpers_return_empty_state_when_status_is_missing(

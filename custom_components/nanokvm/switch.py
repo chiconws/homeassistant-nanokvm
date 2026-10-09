@@ -23,7 +23,7 @@ from .const import (
 )
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
-from .led import async_set_led_strip
+from .led import async_set_led_strip, led_strip_available
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,11 +64,6 @@ def _watchdog_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     )
 
 
-def _non_pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether the non-Pro virtual-device switches apply to this device."""
-    return coordinator.is_non_pro_hardware
-
-
 def _pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether Pro virtual-device controls are available."""
     return coordinator.is_pro_hardware and coordinator.virtual_device_info is not None
@@ -95,11 +90,6 @@ def _hdmi_passthrough_available(coordinator: NanoKVMDataUpdateCoordinator) -> bo
 def _low_power_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether Pro low-power mode control is available."""
     return coordinator.is_pro_hardware and coordinator.low_power is not None
-
-
-def _led_strip_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether Pro LED strip control is available."""
-    return coordinator.is_pro_hardware and coordinator.led_strip is not None
 
 
 def _led_strip_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -135,7 +125,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.network
         ),
-        available_fn=_non_pro_virtual_device_available,
+        available_fn=lambda coordinator: coordinator.is_non_pro_hardware,
         virtual_device=VirtualDevice.NETWORK,
     ),
     NanoKVMSwitchEntityDescription(
@@ -145,7 +135,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.disk
         ),
-        available_fn=_non_pro_virtual_device_available,
+        available_fn=lambda coordinator: coordinator.is_non_pro_hardware,
         virtual_device=VirtualDevice.DISK,
     ),
     NanoKVMSwitchEntityDescription(
@@ -226,7 +216,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         value_fn=_led_strip_value,
         turn_on_fn=lambda coordinator: async_set_led_strip(coordinator, on=True),
         turn_off_fn=lambda coordinator: async_set_led_strip(coordinator, on=False),
-        available_fn=_led_strip_available,
+        available_fn=led_strip_available,
     ),
 )
 

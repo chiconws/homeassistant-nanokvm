@@ -22,6 +22,21 @@ from .utils import api_base_url_to_web_url, device_sw_version
 _LOGGER = logging.getLogger(__name__)
 
 
+def has_mounted_image(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether there is a mounted image."""
+    return bool(coordinator.mounted_image and coordinator.mounted_image.file != "")
+
+
+def has_connection_type(
+    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
+) -> bool:
+    """Return whether an IP connection type is active."""
+    return any(
+        address.addr and address.type.casefold() == connection_type
+        for address in coordinator.device_info.ips
+    )
+
+
 class NanoKVMEntity(CoordinatorEntity[NanoKVMDataUpdateCoordinator]):
     """Base class for NanoKVM entities."""
 

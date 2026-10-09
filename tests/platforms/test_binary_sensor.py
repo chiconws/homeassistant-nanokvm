@@ -12,15 +12,13 @@ from nanokvm.models import HWVersion, IPInfo
 from custom_components.nanokvm.binary_sensor import (
     BINARY_SENSORS,
     MEDIA_BINARY_SENSORS,
-    _cdrom_supported,
-    _has_connection_type,
-    _has_mounted_image,
     _is_alpha_hardware,
     _static_ip_available,
     _time_status_available,
     _wifi_supported,
     _wired_active,
 )
+from custom_components.nanokvm.entity import has_connection_type, has_mounted_image
 
 CoordinatorStateFactory = Callable[..., SimpleNamespace]
 
@@ -94,7 +92,7 @@ def test_wifi_supported(
         (SimpleNamespace(file="images/rescue.iso"), True),
     ],
 )
-def test_has_mounted_image(
+def testhas_mounted_image(
     coordinator_state_factory: CoordinatorStateFactory,
     mounted_image: SimpleNamespace | None,
     expected: bool,
@@ -102,18 +100,7 @@ def test_has_mounted_image(
     """Only a non-empty mounted image path is considered mounted."""
     coordinator = coordinator_state_factory(mounted_image=mounted_image)
 
-    assert _has_mounted_image(coordinator) is expected
-
-
-@pytest.mark.parametrize("supported", [False, True])
-def test_cdrom_supported_uses_coordinator_capability(
-    coordinator_state_factory: CoordinatorStateFactory,
-    supported: bool,
-) -> None:
-    """CD-ROM entity creation follows the coordinator capability."""
-    coordinator = coordinator_state_factory(is_non_pro_hardware=supported)
-
-    assert _cdrom_supported(coordinator) is supported
+    assert has_mounted_image(coordinator) is expected
 
 
 def test_connection_type_is_case_insensitive_and_requires_an_address(
@@ -134,9 +121,9 @@ def test_connection_type_is_case_insensitive_and_requires_an_address(
         )
     )
 
-    assert _has_connection_type(active, "wired") is True
+    assert has_connection_type(active, "wired") is True
     assert _wired_active(active) is True
-    assert _has_connection_type(empty, "wired") is False
+    assert has_connection_type(empty, "wired") is False
     assert _wired_active(wireless) is False
 
 

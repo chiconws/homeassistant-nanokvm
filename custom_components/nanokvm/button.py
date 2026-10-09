@@ -10,7 +10,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from nanokvm.models import GpioType, HWVersion
+from nanokvm.models import GpioType
 
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
@@ -22,19 +22,6 @@ class NanoKVMButtonEntityDescription(ButtonEntityDescription):
 
     press_fn: Callable[[NanoKVMDataUpdateCoordinator], Awaitable[None]]
     available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
-
-
-def _is_pcie_hardware(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether the device is PCIe hardware."""
-    return bool(
-        coordinator.hardware_info
-        and coordinator.hardware_info.version == HWVersion.PCIE
-    )
-
-
-def _is_pro_hardware(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether the device is Pro hardware."""
-    return coordinator.is_pro_hardware
 
 
 BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
@@ -58,7 +45,7 @@ BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
         translation_key="reset_hdmi",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda coordinator: coordinator.client.reset_hdmi(),
-        available_fn=_is_pcie_hardware,
+        available_fn=lambda coordinator: coordinator.supports_hdmi_endpoint,
     ),
     NanoKVMButtonEntityDescription(
         key="reset_hid",
@@ -71,7 +58,7 @@ BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
         translation_key="sync_time",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda coordinator: coordinator.client.sync_time(),
-        available_fn=_is_pro_hardware,
+        available_fn=lambda coordinator: coordinator.is_pro_hardware,
     ),
 )
 

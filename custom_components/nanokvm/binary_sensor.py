@@ -22,7 +22,7 @@ from .const import (
     SIGNAL_NEW_NETWORK_ENTITIES,
 )
 from .coordinator import NanoKVMDataUpdateCoordinator
-from .entity import NanoKVMEntity
+from .entity import NanoKVMEntity, has_connection_type, has_mounted_image
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -53,29 +53,9 @@ def _wifi_supported(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     return bool(coordinator.wifi_status and coordinator.wifi_status.supported)
 
 
-def _has_mounted_image(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether there is a mounted image."""
-    return bool(coordinator.mounted_image and coordinator.mounted_image.file != "")
-
-
-def _cdrom_supported(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether the dedicated /storage/cdrom endpoint exists on this device."""
-    return coordinator.is_non_pro_hardware
-
-
-def _has_connection_type(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
-) -> bool:
-    """Return whether an IP connection type is active."""
-    return any(
-        address.addr and address.type.casefold() == connection_type
-        for address in coordinator.device_info.ips
-    )
-
-
 def _wired_active(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether a wired network connection is active."""
-    return _has_connection_type(coordinator, "wired")
+    return has_connection_type(coordinator, "wired")
 
 
 def _static_ip_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -96,9 +76,10 @@ MEDIA_BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.cdrom_status and coordinator.cdrom_status.cdrom == 1
         ),
-        available_fn=lambda coordinator: _has_mounted_image(coordinator)
-        and _cdrom_supported(coordinator),
-        should_create_fn=_cdrom_supported,
+        # The dedicated /storage/cdrom endpoint only exists on non-Pro devices.
+        available_fn=lambda coordinator: has_mounted_image(coordinator)
+        and coordinator.is_non_pro_hardware,
+        should_create_fn=lambda coordinator: coordinator.is_non_pro_hardware,
     ),
 )
 
@@ -183,7 +164,7 @@ async def async_setup_entry(
     @callback
     def async_add_media_binary_sensors() -> None:
         """Add media-backed binary sensors when media is first mounted."""
-        if not _has_mounted_image(coordinator):
+        if not has_mounted_image(coordinator):
             return
 
         async_add_entities(
@@ -195,7 +176,7 @@ async def async_setup_entry(
             if description.should_create_fn(coordinator)
         )
 
-    if _has_mounted_image(coordinator):
+    if has_mounted_image(coordinator):
         async_add_media_binary_sensors()
 
     network_entities_added = {

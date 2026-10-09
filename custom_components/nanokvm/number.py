@@ -23,7 +23,12 @@ from .const import (
 )
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
-from .led import async_set_led_strip, max_horizontal_count, max_vertical_count
+from .led import (
+    async_set_led_strip,
+    led_strip_available,
+    max_horizontal_count,
+    max_vertical_count,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -34,11 +39,6 @@ class NanoKVMNumberEntityDescription(NumberEntityDescription):
     available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
     max_value_fn: Callable[[NanoKVMDataUpdateCoordinator], float]
     set_value_fn: Callable[[NanoKVMDataUpdateCoordinator, float], Awaitable[Any]]
-
-
-def _has_led_strip(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether Pro LED strip state is available."""
-    return coordinator.is_pro_hardware and coordinator.led_strip is not None
 
 
 def _led_brightness_value(
@@ -93,7 +93,7 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         mode=NumberMode.SLIDER,
         value_fn=_led_brightness_value,
-        available_fn=_has_led_strip,
+        available_fn=led_strip_available,
         max_value_fn=lambda _: LED_BRIGHTNESS_MAX,
         set_value_fn=lambda coordinator, value: async_set_led_strip(
             coordinator, brightness=int(value)
@@ -108,7 +108,7 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         native_step=1,
         mode=NumberMode.BOX,
         value_fn=_led_horizontal_value,
-        available_fn=_has_led_strip,
+        available_fn=led_strip_available,
         max_value_fn=_led_horizontal_max,
         set_value_fn=lambda coordinator, value: async_set_led_strip(
             coordinator, horizontal_count=int(value)
@@ -123,7 +123,7 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         native_step=1,
         mode=NumberMode.BOX,
         value_fn=_led_vertical_value,
-        available_fn=_has_led_strip,
+        available_fn=led_strip_available,
         max_value_fn=_led_vertical_max,
         set_value_fn=lambda coordinator, value: async_set_led_strip(
             coordinator, vertical_count=int(value)

@@ -30,6 +30,11 @@ class LedBrightnessRequest:
     reported: int | None = None
 
 
+def led_strip_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether Pro LED strip state is available."""
+    return coordinator.is_pro_hardware and coordinator.led_strip is not None
+
+
 def max_horizontal_count(vertical_count: int) -> int:
     """Return maximum horizontal bead count for a vertical bead count."""
     return LED_BEAD_TOTAL_LIMIT - (2 * vertical_count)

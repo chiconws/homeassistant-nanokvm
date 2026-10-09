@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from homeassistant.const import CONF_HOST
-from nanokvm.models import HWVersion
 import pytest
 from yarl import URL
 
@@ -251,11 +250,11 @@ async def test_sensor_setup_handles_initial_media_and_ssh_state(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("hardware_info", "is_pro_hardware", "expected_keys"),
+    ("supports_hdmi_endpoint", "is_pro_hardware", "expected_keys"),
     [
-        (None, False, ["power", "reset", "reboot", "reset_hid"]),
+        (False, False, ["power", "reset", "reboot", "reset_hid"]),
         (
-            SimpleNamespace(version=HWVersion.PCIE),
+            True,
             True,
             ["power", "reset", "reboot", "reset_hdmi", "reset_hid", "sync_time"],
         ),
@@ -264,13 +263,13 @@ async def test_sensor_setup_handles_initial_media_and_ssh_state(
 async def test_button_setup_filters_entities_by_hardware(
     hass_mock: MagicMock,
     config_entry_mock: MagicMock,
-    hardware_info: object,
+    supports_hdmi_endpoint: bool,
     is_pro_hardware: bool,
     expected_keys: list[str],
 ) -> None:
     """Button setup must expose only actions supported by detected hardware."""
     coordinator = _coordinator(
-        hardware_info=hardware_info,
+        supports_hdmi_endpoint=supports_hdmi_endpoint,
         is_pro_hardware=is_pro_hardware,
     )
     _configure_hass(hass_mock, config_entry_mock, coordinator)
