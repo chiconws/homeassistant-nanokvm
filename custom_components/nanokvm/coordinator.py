@@ -607,6 +607,13 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             }
 
         results = await self._async_fetch_concurrently(calls)
+        # The library gates endpoints on a cached firmware version; refresh it
+        # after an update so newly supported endpoints stop being refused.
+        if client.application_version not in (
+            None,
+            results["device_info"].application,
+        ):
+            await client.detect_versions()
 
         # Publish everything together so a failed poll leaves the last state intact.
         for attribute in _GATED_CORE_ATTRIBUTES:

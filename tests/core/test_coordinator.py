@@ -1060,6 +1060,26 @@ async def test_oled_fetch_handles_only_missing_optional_file(
         await coordinator._fetch_oled_info()
 
 
+async def test_core_fetch_refreshes_the_library_firmware_version_after_an_update(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> None:
+    """A polled version that differs from the client's cached one is re-detected."""
+    _configure_required_client_responses(coordinator.client, hardware=HWVersion.PCIE)
+    polled = coordinator.client.get_info.return_value.application
+
+    coordinator.client.application_version = polled
+    await coordinator._async_fetch_core_data()
+    coordinator.client.detect_versions.assert_not_awaited()
+
+    coordinator.client.application_version = None
+    await coordinator._async_fetch_core_data()
+    coordinator.client.detect_versions.assert_not_awaited()
+
+    coordinator.client.application_version = f"{polled}-old"
+    await coordinator._async_fetch_core_data()
+    coordinator.client.detect_versions.assert_awaited_once_with()
+
+
 async def test_core_fetch_populates_pcie_state(
     coordinator: NanoKVMDataUpdateCoordinator,
 ) -> None:
