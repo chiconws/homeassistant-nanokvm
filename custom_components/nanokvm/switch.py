@@ -44,7 +44,23 @@ def _hdmi_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
 
 def _hdmi_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether HDMI controls are available."""
-    return coordinator.supports_hdmi_endpoint and coordinator.hdmi_state is not None
+    return (
+        coordinator.is_admin
+        and coordinator.supports_hdmi_endpoint
+        and coordinator.hdmi_state is not None
+    )
+
+
+def _is_admin(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the account may change administrator-only settings."""
+    return coordinator.is_admin
+
+
+def _non_pro_virtual_device_available(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> bool:
+    """Return whether non-Pro virtual-device controls are available."""
+    return coordinator.is_admin and coordinator.is_non_pro_hardware
 
 
 def _watchdog_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -67,10 +83,8 @@ def _pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> 
 
 def _pro_virtual_mic_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether Pro virtual microphone control is available."""
-    return (
-        _pro_virtual_device_available(coordinator)
-        and coordinator.virtual_device_info.mic is not None
-    )
+    info = coordinator.virtual_device_info
+    return coordinator.is_pro_hardware and info is not None and info.mic is not None
 
 
 def _hdmi_capture_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -103,6 +117,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         ),
         turn_on_fn=lambda coordinator: coordinator.client.enable_ssh(),
         turn_off_fn=lambda coordinator: coordinator.client.disable_ssh(),
+        available_fn=_is_admin,
     ),
     NanoKVMSwitchEntityDescription(
         key="mdns",
@@ -113,6 +128,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         ),
         turn_on_fn=lambda coordinator: coordinator.client.enable_mdns(),
         turn_off_fn=lambda coordinator: coordinator.client.disable_mdns(),
+        available_fn=_is_admin,
     ),
     NanoKVMSwitchEntityDescription(
         key="virtual_network",
@@ -121,7 +137,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.network
         ),
-        available_fn=lambda coordinator: coordinator.is_non_pro_hardware,
+        available_fn=_non_pro_virtual_device_available,
         virtual_device=VirtualDevice.NETWORK,
     ),
     NanoKVMSwitchEntityDescription(
@@ -131,7 +147,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.disk
         ),
-        available_fn=lambda coordinator: coordinator.is_non_pro_hardware,
+        available_fn=_non_pro_virtual_device_available,
         virtual_device=VirtualDevice.DISK,
     ),
     NanoKVMSwitchEntityDescription(
@@ -375,8 +391,10 @@ class NanoKVMVirtualDeviceSwitch(NanoKVMSwitch):
         if self.is_on == enabled:
             return
 
+        device = self.entity_description.virtual_device
+        assert device is not None
         async with self._async_device_action() as client:
-            await client.update_virtual_device(self.entity_description.virtual_device)
+            await client.update_virtual_device(device)
         await self.coordinator.async_request_refresh()
 
 

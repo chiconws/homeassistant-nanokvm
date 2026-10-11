@@ -99,6 +99,18 @@
       },
       "time_synchronized": {
         "name": "Hora Sincronizada"
+      },
+      "num_lock": {
+        "name": "Num Lock"
+      },
+      "caps_lock": {
+        "name": "Caps Lock"
+      },
+      "scroll_lock": {
+        "name": "Scroll Lock"
+      },
+      "hdmi_signal": {
+        "name": "Sinal HDMI"
       }
     },
     "sensor": {
@@ -183,6 +195,9 @@
             "name": "Total em MB"
           }
         }
+      },
+      "account_role": {
+        "name": "Função da conta"
       }
     },
     "switch": {
@@ -287,6 +302,9 @@
       },
       "led_vertical_beads": {
         "name": "LED Pontos Verticais"
+      },
+      "hdmi_idle_timeout": {
+        "name": "Tempo de Inatividade do HDMI"
       }
     },
     "button": {

@@ -13,6 +13,6 @@ def coordinator_state_factory() -> Callable[..., SimpleNamespace]:
     """Build minimal coordinator-shaped state objects for pure helper tests."""
 
     def build(**values: object) -> SimpleNamespace:
-        return SimpleNamespace(**values)
+        return SimpleNamespace(**{"is_admin": True, **values})
 
     return build

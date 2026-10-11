@@ -66,6 +66,18 @@
       },
       "time_synchronized": {
         "name": "Time Synchronized"
+      },
+      "num_lock": {
+        "name": "Num Lock"
+      },
+      "caps_lock": {
+        "name": "Caps Lock"
+      },
+      "scroll_lock": {
+        "name": "Scroll Lock"
+      },
+      "hdmi_signal": {
+        "name": "HDMI Signal"
       }
     },
     "sensor": {
@@ -84,6 +96,9 @@
             "name": "Addresses"
           }
         }
+      },
+      "account_role": {
+        "name": "Account Role"
       }
     },
     "switch": {
@@ -128,6 +143,9 @@
       },
       "led_vertical_beads": {
         "name": "LED Vertical Beads"
+      },
+      "hdmi_idle_timeout": {
+        "name": "HDMI Idle Timeout"
       }
     },
     "button": {

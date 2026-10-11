@@ -17,6 +17,7 @@ from custom_components.nanokvm.const import (
 )
 from custom_components.nanokvm.led import led_strip_available
 from custom_components.nanokvm.number import (
+    HDMI_IDLE_TIMEOUT_MAX_MINUTES,
     NUMBERS,
     _led_brightness_value,
     _led_horizontal_max,
@@ -110,9 +111,10 @@ def test_number_description_keys_and_common_contract() -> None:
         "led_brightness",
         "led_horizontal_beads",
         "led_vertical_beads",
+        "hdmi_idle_timeout",
     ]
 
-    for description in NUMBERS:
+    for description in NUMBERS[:3]:
         assert description.translation_key == description.key
         assert description.entity_category is EntityCategory.CONFIG
         assert description.native_step == 1
@@ -152,3 +154,30 @@ def test_vertical_bead_description_contract() -> None:
     assert description.mode is NumberMode.BOX
     assert description.value_fn is _led_vertical_value
     assert description.max_value_fn is _led_vertical_max
+
+
+def test_hdmi_idle_timeout_description_contract(
+    coordinator_state_factory: CoordinatorStateFactory,
+) -> None:
+    """The idle timeout is a minute count an administrator can change."""
+    description = NUMBERS[3]
+    reported = SimpleNamespace(enabled=True, signal=True, idle_timeout=15)
+    admin = coordinator_state_factory(hdmi_state=reported)
+
+    assert description.native_min_value == 0
+    assert description.native_max_value == HDMI_IDLE_TIMEOUT_MAX_MINUTES == 10080
+    assert description.max_value_fn(admin) == 10080
+    assert description.value_fn(admin) == 15
+    assert description.available_fn(admin) is True
+    # Older firmware reports no timeout; a role=user account cannot set it.
+    older = SimpleNamespace(enabled=True, signal=None, idle_timeout=None)
+    assert description.available_fn(coordinator_state_factory(hdmi_state=older)) is False
+    assert (
+        description.available_fn(
+            coordinator_state_factory(hdmi_state=reported, is_admin=False)
+        )
+        is False
+    )
+    missing = coordinator_state_factory(hdmi_state=None)
+    assert description.available_fn(missing) is False
+    assert description.value_fn(missing) is None

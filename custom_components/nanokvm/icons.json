@@ -21,6 +21,18 @@
       },
       "wired_connected": {
         "default": "mdi:ethernet"
+      },
+      "num_lock": {
+        "default": "mdi:keyboard"
+      },
+      "caps_lock": {
+        "default": "mdi:apple-keyboard-caps"
+      },
+      "scroll_lock": {
+        "default": "mdi:keyboard"
+      },
+      "hdmi_signal": {
+        "default": "mdi:video-input-hdmi"
       }
     },
     "button": {
@@ -57,6 +69,9 @@
       },
       "led_vertical_beads": {
         "default": "mdi:led-strip-variant"
+      },
+      "hdmi_idle_timeout": {
+        "default": "mdi:timer-outline"
       }
     },
     "select": {
@@ -106,6 +121,9 @@
       },
       "wireless_ip_address": {
         "default": "mdi:wifi"
+      },
+      "account_role": {
+        "default": "mdi:account-key"
       }
     },
     "switch": {

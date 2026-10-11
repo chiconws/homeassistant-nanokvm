@@ -11,6 +11,7 @@ from nanokvm.models import HWVersion, IPInfo
 
 from custom_components.nanokvm.binary_sensor import (
     BINARY_SENSORS,
+    KEYBOARD_LED_BINARY_SENSORS,
     MEDIA_BINARY_SENSORS,
     _is_alpha_hardware,
     _static_ip_available,
@@ -286,3 +287,59 @@ def test_binary_sensor_description_inventory_contracts() -> None:
     assert all(callable(description.value_fn) for description in descriptions)
     assert all(callable(description.available_fn) for description in descriptions)
     assert all(callable(description.should_create_fn) for description in descriptions)
+
+
+def test_keyboard_led_sensors_follow_the_host_report(
+    coordinator_state_factory: CoordinatorStateFactory,
+) -> None:
+    """Each lock sensor reads its own LED and needs a report from the host."""
+    by_key = {description.key: description for description in KEYBOARD_LED_BINARY_SENSORS}
+    reported = coordinator_state_factory(
+        keyboard_leds=SimpleNamespace(
+            num_lock=True, caps_lock=False, scroll_lock=True, known=True
+        )
+    )
+    unknown = coordinator_state_factory(
+        keyboard_leds=SimpleNamespace(
+            num_lock=False, caps_lock=False, scroll_lock=False, known=False
+        )
+    )
+    unsupported = coordinator_state_factory(keyboard_leds=None)
+
+    assert {key: d.value_fn(reported) for key, d in by_key.items()} == {
+        "num_lock": True,
+        "caps_lock": False,
+        "scroll_lock": True,
+    }
+    for description in by_key.values():
+        assert description.should_create_fn(reported) is True
+        assert description.available_fn(reported) is True
+        assert description.should_create_fn(unknown) is True
+        assert description.available_fn(unknown) is False
+        assert description.should_create_fn(unsupported) is False
+        assert description.value_fn(unsupported) is False
+
+
+@pytest.mark.parametrize(
+    ("hdmi_state", "created", "is_on"),
+    [
+        (None, False, False),
+        # Older firmware answers without the signal field.
+        (SimpleNamespace(enabled=True, signal=None), False, False),
+        (SimpleNamespace(enabled=True, signal=False), True, False),
+        (SimpleNamespace(enabled=True, signal=True), True, True),
+    ],
+)
+def test_hdmi_signal_sensor_needs_a_reported_signal(
+    coordinator_state_factory: CoordinatorStateFactory,
+    hdmi_state: SimpleNamespace | None,
+    created: bool,
+    is_on: bool,
+) -> None:
+    """The signal sensor exists only where the device reports the HDMI input."""
+    description = _description("hdmi_signal")
+    coordinator = coordinator_state_factory(hdmi_state=hdmi_state)
+
+    assert description.should_create_fn(coordinator) is created
+    assert description.available_fn(coordinator) is created
+    assert description.value_fn(coordinator) is is_on

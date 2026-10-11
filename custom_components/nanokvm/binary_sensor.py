@@ -73,6 +73,32 @@ def _cdrom_mode_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     return has_mounted_image(coordinator) and coordinator.is_non_pro_hardware
 
 
+def _has_hdmi_signal(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the device reports the HDMI input signal."""
+    return bool(coordinator.hdmi_state and coordinator.hdmi_state.signal is not None)
+
+
+def _keyboard_leds_known(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the host has reported its keyboard LED state."""
+    return bool(coordinator.keyboard_leds and coordinator.keyboard_leds.known)
+
+
+def _keyboard_led_on(key: str) -> Callable[[NanoKVMDataUpdateCoordinator], bool]:
+    """Return a reader for one keyboard LED."""
+
+    def is_on(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+        return bool(
+            coordinator.keyboard_leds and getattr(coordinator.keyboard_leds, key)
+        )
+
+    return is_on
+
+
+def _has_keyboard_leds(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the device reports keyboard LED state."""
+    return coordinator.keyboard_leds is not None
+
+
 MEDIA_BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
     NanoKVMBinarySensorEntityDescription(
         key="cdrom_mode",
@@ -104,6 +130,15 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
         # HDD LED is only valid for Alpha hardware
         available_fn=_is_alpha_hardware,
         should_create_fn=_is_alpha_hardware,
+    ),
+    NanoKVMBinarySensorEntityDescription(
+        key="hdmi_signal",
+        translation_key="hdmi_signal",
+        value_fn=lambda coordinator: bool(
+            coordinator.hdmi_state and coordinator.hdmi_state.signal
+        ),
+        available_fn=_has_hdmi_signal,
+        should_create_fn=_has_hdmi_signal,
     ),
     NanoKVMBinarySensorEntityDescription(
         key="wifi_connected",
@@ -147,6 +182,18 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
 )
 
 
+KEYBOARD_LED_BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = tuple(
+    NanoKVMBinarySensorEntityDescription(
+        key=key,
+        translation_key=key,
+        value_fn=_keyboard_led_on(key),
+        available_fn=_keyboard_leds_known,
+        should_create_fn=_has_keyboard_leds,
+    )
+    for key in ("num_lock", "caps_lock", "scroll_lock")
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -159,7 +206,7 @@ async def async_setup_entry(
         entry,
         coordinator,
         async_add_entities,
-        (*BINARY_SENSORS, *MEDIA_BINARY_SENSORS),
+        (*BINARY_SENSORS, *MEDIA_BINARY_SENSORS, *KEYBOARD_LED_BINARY_SENSORS),
         lambda description: description.should_create_fn(coordinator),
         lambda description: NanoKVMBinarySensor(
             coordinator=coordinator, description=description

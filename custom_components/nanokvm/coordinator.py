@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 import contextlib
 import datetime
 import logging
@@ -26,9 +26,11 @@ from nanokvm.client import (
     NanoKVMClient,
     NanoKVMError,
     NanoKVMNotSupportedError,
+    NanoKVMPermissionError,
 )
 from nanokvm.ssh_client import NanoKVMSSHConnectionError
 from nanokvm.models import (
+    GetAccountRsp,
     GetCdRomRsp,
     GetGpioRsp,
     GetHardwareRsp,
@@ -38,6 +40,7 @@ from nanokvm.models import (
     GetHostnameRsp,
     GetHidModeRsp,
     GetInfoRsp,
+    GetKeyboardLedStatusRsp,
     GetLedStripRsp,
     GetLcdTimeFormatRsp,
     GetLowPowerRsp,
@@ -54,6 +57,7 @@ from nanokvm.models import (
     GetWifiRsp,
     HidMode,
     HWVersion,
+    UserRole,
 )
 
 from .const import (
@@ -98,6 +102,7 @@ _WATCHDOG_MIN_VERSION = AwesomeVersion("2.2.2")
 _MAX_CONCURRENT_REQUESTS = 4
 _GATED_CORE_ATTRIBUTES = (
     "virtual_device_info",
+    "keyboard_leds",
     "hdmi_state",
     "swap_size",
     "hdmi_capture",
@@ -133,11 +138,13 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
     device_info: GetInfoRsp
     hostname_info: GetHostnameRsp | None = None
     hardware_info: GetHardwareRsp | None = None
+    account: GetAccountRsp | None = None
     gpio_info: GetGpioRsp | None = None
     virtual_device_info: GetVirtualDeviceRsp | None = None
     ssh_state: GetSSHStateRsp | None = None
     mdns_state: GetMdnsStateRsp | None = None
     hid_mode: GetHidModeRsp | None = None
+    keyboard_leds: GetKeyboardLedStatusRsp | None = None
     oled_info: GetOLEDRsp | None = None
     wifi_status: GetWifiRsp | None = None
     application_version_info: GetVersionRsp | None = None
@@ -205,7 +212,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         )
 
     @contextlib.asynccontextmanager
-    async def async_client(self) -> AsyncIterator[NanoKVMClient]:
+    async def async_client(self) -> AsyncGenerator[NanoKVMClient]:
         """Yield the shared API client to one caller at a time."""
         async with self._client_lock:
             async with self.client as client:
@@ -514,6 +521,11 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 err,
             )
             return None
+        except NanoKVMPermissionError:
+            _LOGGER.debug(
+                "NanoKVM endpoint %s is not allowed for this account", endpoint
+            )
+            return None
         except NanoKVMApiError as err:
             _LOGGER.debug(
                 "NanoKVM optional endpoint %s returned an API error: %s",
@@ -565,6 +577,19 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         client = self.client
         # Hardware identity gates the endpoints below and never changes per device.
         self.hardware_info = await client.get_hardware()
+        # The account role gates the administrator-only endpoints below.
+        previous_account = self.account
+        self.account = (
+            await self._fetch_optional("/auth/account", client.get_account)
+            or previous_account
+        )
+        if (
+            previous_account is not None
+            and self.account is not None
+            and previous_account.role != self.account.role
+        ):
+            # Entities are created per role, so build them again.
+            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 
         def optional(
             endpoint: str, call: Callable[[], Awaitable[Any]]
@@ -575,22 +600,29 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             "device_info": client.get_info,
             "hostname_info": client.get_hostname,
             "gpio_info": client.get_gpio,
-            "ssh_state": client.get_ssh_state,
-            "mdns_state": client.get_mdns_state,
             "hid_mode": client.get_hid_mode,
-            "oled_info": self._fetch_oled_info,
-            "wifi_status": client.get_wifi_status,
-            "mouse_jiggler_state": client.get_mouse_jiggler_state,
-            "tailscale_status": client.get_tailscale_status,
         }
-        if self.hardware_info is not None:
-            calls["virtual_device_info"] = optional(
-                "/vm/device/virtual", client.get_virtual_device_status
-            )
+        if self.is_admin:
+            calls |= {
+                "ssh_state": client.get_ssh_state,
+                "mdns_state": client.get_mdns_state,
+                "oled_info": self._fetch_oled_info,
+                "wifi_status": client.get_wifi_status,
+                "mouse_jiggler_state": client.get_mouse_jiggler_state,
+                "tailscale_status": client.get_tailscale_status,
+            }
+            if self.hardware_info is not None:
+                calls["virtual_device_info"] = optional(
+                    "/vm/device/virtual", client.get_virtual_device_status
+                )
         if self.supports_hdmi_endpoint:
             calls["hdmi_state"] = optional("/vm/hdmi", client.get_hdmi_state)
         if self.is_non_pro_hardware:
-            calls["swap_size"] = optional("/vm/swap", client.get_swap_size)
+            calls["keyboard_leds"] = optional(
+                "/hid/leds", client.get_keyboard_led_status
+            )
+            if self.is_admin:
+                calls["swap_size"] = optional("/vm/swap", client.get_swap_size)
         if self.is_pro_hardware:
             calls |= {
                 "hdmi_capture": optional("/vm/hdmi/capture", client.get_hdmi_capture),
@@ -607,14 +639,21 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             }
 
         results = await self._async_fetch_concurrently(calls)
+        # The library gates endpoints on a cached firmware version; refresh it
+        # after an update so newly supported endpoints stop being refused.
+        if client.application_version not in (
+            None,
+            results["device_info"].application,
+        ):
+            await client.detect_versions()
 
         # Publish everything together so a failed poll leaves the last state intact.
         for attribute in _GATED_CORE_ATTRIBUTES:
             setattr(self, attribute, None)
         for attribute, value in results.items():
             setattr(self, attribute, value)
-        if note_reported_led_strip(self, self.led_strip):
-            request = self.led_brightness_request
+        request = self.led_brightness_request
+        if request is not None and note_reported_led_strip(self, self.led_strip):
             self.hass.config_entries.async_update_entry(
                 self.config_entry,
                 data=self.config_entry.data
@@ -623,6 +662,8 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
     def _async_schedule_app_version_refresh(self) -> None:
         """Refresh application version info outside the critical poll path."""
+        if not self.is_admin:
+            return
         if (
             self._app_version_fetch_task is not None
             and not self._app_version_fetch_task.done()
@@ -672,6 +713,8 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
     async def _async_fetch_storage_data(self) -> None:
         """Fetch storage-specific state (mounted image and CD-ROM mode)."""
+        if not self.is_admin:
+            return
         mounted_image = GetMountedImageRsp(file="", cdrom=False, readOnly=False)
         cdrom_status = GetCdRomRsp(cdrom=0) if self.is_non_pro_hardware else None
         if self.hid_mode and self.hid_mode.mode == HidMode.NORMAL:
@@ -723,6 +766,14 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 application_version,
             )
             return False
+
+    @property
+    def is_admin(self) -> bool:
+        """Return whether the account may use administrator-only endpoints.
+
+        Devices without user roles report none; their one account is an admin.
+        """
+        return self.account is None or self.account.role in (None, UserRole.ADMIN)
 
     @property
     def is_pro_hardware(self) -> bool:

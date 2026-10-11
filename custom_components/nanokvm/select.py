@@ -73,8 +73,8 @@ DISK_TYPE_OPTIONS = {
 
 
 def _has_hid_mode(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether HID mode information is available."""
-    return coordinator.hid_mode is not None
+    """Return whether the HID mode is known and this account may change it."""
+    return coordinator.is_admin and coordinator.hid_mode is not None
 
 
 def _has_mouse_jiggler_state(coordinator: NanoKVMDataUpdateCoordinator) -> bool:

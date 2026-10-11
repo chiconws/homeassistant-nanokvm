@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 from homeassistant.const import CONF_HOST
 from homeassistant.core import ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from nanokvm.client import NanoKVMPermissionError
 from nanokvm.models import (
     DownloadStatus,
     GetCustomEdidListRsp,
@@ -801,3 +802,21 @@ async def test_response_handler_translates_unexpected_errors(
         await _call_service(hass_mock, registered_services, SERVICE_LIST_IMAGES)
 
     assert isinstance(captured.value.__cause__, RuntimeError)
+
+
+async def test_forbidden_service_asks_for_an_administrator_account(
+    hass_mock: MagicMock,
+    registered_services: Mapping[str, RegisteredService],
+) -> None:
+    """A service the account may not use says what it needs."""
+    coordinator = _coordinator()
+    coordinator.client.get_images.side_effect = NanoKVMPermissionError(
+        method="GET", path="/storage/image"
+    )
+    _install_coordinators(hass_mock, coordinator)
+
+    with pytest.raises(
+        HomeAssistantError,
+        match="list_images service needs a NanoKVM administrator account",
+    ):
+        await _call_service(hass_mock, registered_services, SERVICE_LIST_IMAGES)

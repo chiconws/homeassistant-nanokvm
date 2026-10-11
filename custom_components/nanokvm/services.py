@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -18,7 +18,7 @@ from homeassistant.const import ATTR_DEVICE_ID, CONF_HOST
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 
-from nanokvm.client import NanoKVMClient
+from nanokvm.client import NanoKVMClient, NanoKVMPermissionError
 from nanokvm.models import GpioType, MouseJigglerMode
 
 from .const import (
@@ -280,7 +280,7 @@ def async_register_services(hass: HomeAssistant) -> None:
 
     def make_handler(
         service: _Service,
-    ) -> Callable[[ServiceCall], Awaitable[ServiceResponse]]:
+    ) -> Callable[[ServiceCall], Coroutine[Any, Any, ServiceResponse]]:
         async def handle(call: ServiceCall) -> ServiceResponse:
             coordinator = _resolve_target_coordinator(hass, call)
             host = coordinator.config_entry.data.get(CONF_HOST, "<unknown>")
@@ -294,6 +294,11 @@ def async_register_services(hass: HomeAssistant) -> None:
                     result = await service.call(coordinator, client, call)
             except HomeAssistantError:
                 raise
+            except NanoKVMPermissionError as err:
+                raise HomeAssistantError(
+                    f"The {service.name} service needs a NanoKVM administrator "
+                    f"account on {host}"
+                ) from err
             except Exception as err:
                 _LOGGER.error(
                     "Error executing %s service for %s: %s", service.name, host, err

@@ -155,6 +155,12 @@ Each platform follows a similar pattern:
   Some entities are created only after the coordinator sees supporting state,
   such as mounted media, active wired/wireless connections, or enabled SSH.
   Platforms re-check their descriptions on every coordinator update.
+- **Account roles**:
+  Non-Pro firmware 2.5.1 and newer has `admin` and `user` accounts. The
+  coordinator reads the role every poll (`is_admin`; no role means admin),
+  skips administrator-only endpoints for a `user` account, and reloads the
+  entry when the role changes. Entities such an account cannot use are not
+  created; gate new ones on `coordinator.is_admin`.
 - **NanoKVM Pro compatibility**:
   Pro devices expose several APIs with different schemas from non-Pro models.
   Keep Pro-specific polling optional and keep non-Pro-only entities gated by

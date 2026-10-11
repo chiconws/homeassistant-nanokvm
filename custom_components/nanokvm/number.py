@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.number import (
+    NumberDeviceClass,
     NumberEntity,
     NumberEntityDescription,
     NumberMode,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, PERCENTAGE
+from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -29,6 +30,9 @@ from .led import (
     max_horizontal_count,
     max_vertical_count,
 )
+
+# The device accepts up to one week.
+HDMI_IDLE_TIMEOUT_MAX_MINUTES = 7 * 24 * 60
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -80,6 +84,13 @@ def _led_vertical_max(coordinator: NanoKVMDataUpdateCoordinator) -> float:
         else LED_BEAD_MIN
     )
     return max_vertical_count(horizontal_count)
+def _hdmi_idle_timeout_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the HDMI capture idle timeout can be read and changed."""
+    return bool(
+        coordinator.is_admin
+        and coordinator.hdmi_state
+        and coordinator.hdmi_state.idle_timeout is not None
+    )
 
 
 NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
@@ -127,6 +138,26 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         max_value_fn=_led_vertical_max,
         set_value_fn=lambda coordinator, value: async_set_led_strip(
             coordinator, vertical_count=int(value)
+        ),
+    ),
+    NanoKVMNumberEntityDescription(
+        key="hdmi_idle_timeout",
+        translation_key="hdmi_idle_timeout",
+        entity_category=EntityCategory.CONFIG,
+        device_class=NumberDeviceClass.DURATION,
+        native_min_value=0,
+        native_max_value=HDMI_IDLE_TIMEOUT_MAX_MINUTES,
+        native_step=1,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        mode=NumberMode.BOX,
+        value_fn=lambda coordinator: (
+            coordinator.hdmi_state.idle_timeout if coordinator.hdmi_state else None
+        ),
+        available_fn=_hdmi_idle_timeout_available,
+        max_value_fn=lambda _: HDMI_IDLE_TIMEOUT_MAX_MINUTES,
+        # Zero keeps the capture running with no viewers.
+        set_value_fn=lambda coordinator, value: (
+            coordinator.client.set_hdmi_idle_timeout(int(value))
         ),
     ),
 )

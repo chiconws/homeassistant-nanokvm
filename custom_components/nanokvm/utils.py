@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import TypeVar, overload
 
 import aiohttp
 from yarl import URL
@@ -139,6 +139,21 @@ def is_auth_failure(error: BaseException) -> bool:
     return isinstance(error, NanoKVMAuthenticationFailure) or (
         isinstance(error, aiohttp.ClientResponseError) and error.status == 401
     )
+
+
+@overload
+async def async_connect(
+    options: Sequence[NanoKVMAPIConnectionOption], username: str, password: str
+) -> tuple[NanoKVMClient, None]: ...
+
+
+@overload
+async def async_connect(
+    options: Sequence[NanoKVMAPIConnectionOption],
+    username: str,
+    password: str,
+    then: Callable[[NanoKVMClient], Awaitable[_ResultT]],
+) -> tuple[NanoKVMClient, _ResultT]: ...
 
 
 async def async_connect(

@@ -39,6 +39,7 @@ BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
         key="reboot",
         translation_key="reboot",
         press_fn=lambda coordinator: coordinator.client.reboot_system(),
+        available_fn=lambda coordinator: coordinator.is_admin,
     ),
     NanoKVMButtonEntityDescription(
         key="reset_hdmi",
@@ -52,6 +53,7 @@ BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
         translation_key="reset_hid",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda coordinator: coordinator.client.reset_hid(),
+        available_fn=lambda coordinator: coordinator.is_admin,
     ),
     NanoKVMButtonEntityDescription(
         key="sync_time",
