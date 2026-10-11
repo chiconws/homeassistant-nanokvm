@@ -74,7 +74,7 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         async with client:
             await self.coordinator.async_ensure_authenticated(client)
             # Reuse NanoKVMClient's authenticated session and SSL config for MJPEG.
-            async with client._request(
+            async with client._session.request(
                 aiohttp.hdrs.METH_GET,
                 "/stream/mjpeg",
             ) as upstream:

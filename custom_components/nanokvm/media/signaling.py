@@ -127,14 +127,16 @@ class NanoKVMWebRTCManager:
 
             if client.token is None:
                 raise RuntimeError("NanoKVM client authentication did not produce a token")
-            if client._session is None or client._ssl_config is None:
+            # The library has no public websocket for the stream endpoints.
+            transport = client._session
+            if transport._http_session is None or transport._ssl_config is None:
                 raise RuntimeError("NanoKVM client transport is not initialized")
 
-            websocket = await client._session.ws_connect(
+            websocket = await transport._http_session.ws_connect(
                 self._webrtc_stream_url(client.url, pro=is_pro),
                 headers={"Cookie": f"nano-kvm-token={client.token}"},
                 heartbeat=None if is_pro else _WEBSOCKET_HEARTBEAT_SECONDS,
-                ssl=client._ssl_config,
+                ssl=transport._ssl_config,
                 timeout=aiohttp.ClientWSTimeout(ws_close=_LOGIN_TIMEOUT_SECONDS),
             )
 

@@ -163,6 +163,7 @@ class _StreamClient(AbstractAsyncContextManager["_StreamClient"]):
         self.request_context = _RequestContext(upstream)
         self.requests: list[tuple[str, str]] = []
         self.exited = False
+        self._session = self
 
     async def __aenter__(self) -> _StreamClient:
         return self
@@ -170,7 +171,7 @@ class _StreamClient(AbstractAsyncContextManager["_StreamClient"]):
     async def __aexit__(self, *exc_info: object) -> None:
         self.exited = True
 
-    def _request(self, method: str, path: str) -> _RequestContext:
+    def request(self, method: str, path: str) -> _RequestContext:
         self.requests.append((method, path))
         return self.request_context
 

@@ -180,8 +180,9 @@ class FakeClient:
         self.token: str | None = "stream-token"
         self.websocket = websocket or FakeWebSocket()
         self.transport = FakeTransport(self.websocket)
-        self._session: FakeTransport | None = self.transport
-        self._ssl_config: object | None = object()
+        self._session = SimpleNamespace(
+            _http_session=self.transport, _ssl_config=object()
+        )
         self.enter_calls = 0
         self.exit_calls = 0
         self.exit_error: Exception | None = None
@@ -332,7 +333,7 @@ async def test_non_pro_session_signals_offer_answer_candidate_and_cleanup(
     assert url == "wss://nanokvm.local/api/stream/h264"
     assert kwargs["headers"] == {"Cookie": "nano-kvm-token=stream-token"}
     assert kwargs["heartbeat"] == 30.0
-    assert kwargs["ssl"] is client._ssl_config
+    assert kwargs["ssl"] is client._session._ssl_config
     timeout = kwargs["timeout"]
     assert isinstance(timeout, webrtc_module.aiohttp.ClientWSTimeout)
     assert timeout.ws_close == 15
@@ -705,11 +706,11 @@ async def test_pro_offer_without_supported_media_is_rejected_before_client_entry
             "NanoKVM client authentication did not produce a token",
         ),
         (
-            lambda harness, client: setattr(client, "_session", None),
+            lambda harness, client: setattr(client._session, "_http_session", None),
             "NanoKVM client transport is not initialized",
         ),
         (
-            lambda harness, client: setattr(client, "_ssl_config", None),
+            lambda harness, client: setattr(client._session, "_ssl_config", None),
             "NanoKVM client transport is not initialized",
         ),
         (
@@ -929,3 +930,14 @@ async def test_invalid_device_candidate_is_ignored(
     await _finish_reader(client, harness.hass)
 
     assert messages == []
+
+
+@pytest.mark.asyncio
+async def test_real_client_exposes_the_transport_used_for_streams() -> None:
+    """The stream paths reach into the library client; fail if it moves again."""
+    from nanokvm.client import NanoKVMClient
+
+    async with NanoKVMClient("http://nanokvm.local/api/") as client:
+        assert callable(client._session.request)
+        assert client._session._http_session is not None
+        assert client._session._ssl_config is not None
