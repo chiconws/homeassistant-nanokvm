@@ -75,6 +75,9 @@
       },
       "scroll_lock": {
         "name": "Scroll Lock"
+      },
+      "hdmi_signal": {
+        "name": "HDMI Signal"
       }
     },
     "sensor": {
@@ -140,6 +143,9 @@
       },
       "led_vertical_beads": {
         "name": "LED Vertical Beads"
+      },
+      "hdmi_idle_timeout": {
+        "name": "HDMI Idle Timeout"
       }
     },
     "button": {

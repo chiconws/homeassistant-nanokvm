@@ -318,3 +318,28 @@ def test_keyboard_led_sensors_follow_the_host_report(
         assert description.available_fn(unknown) is False
         assert description.should_create_fn(unsupported) is False
         assert description.value_fn(unsupported) is False
+
+
+@pytest.mark.parametrize(
+    ("hdmi_state", "created", "is_on"),
+    [
+        (None, False, False),
+        # Older firmware answers without the signal field.
+        (SimpleNamespace(enabled=True, signal=None), False, False),
+        (SimpleNamespace(enabled=True, signal=False), True, False),
+        (SimpleNamespace(enabled=True, signal=True), True, True),
+    ],
+)
+def test_hdmi_signal_sensor_needs_a_reported_signal(
+    coordinator_state_factory: CoordinatorStateFactory,
+    hdmi_state: SimpleNamespace | None,
+    created: bool,
+    is_on: bool,
+) -> None:
+    """The signal sensor exists only where the device reports the HDMI input."""
+    description = _description("hdmi_signal")
+    coordinator = coordinator_state_factory(hdmi_state=hdmi_state)
+
+    assert description.should_create_fn(coordinator) is created
+    assert description.available_fn(coordinator) is created
+    assert description.value_fn(coordinator) is is_on

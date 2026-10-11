@@ -73,6 +73,11 @@ def _cdrom_mode_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     return has_mounted_image(coordinator) and coordinator.is_non_pro_hardware
 
 
+def _has_hdmi_signal(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the device reports the HDMI input signal."""
+    return bool(coordinator.hdmi_state and coordinator.hdmi_state.signal is not None)
+
+
 def _keyboard_leds_known(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether the host has reported its keyboard LED state."""
     return bool(coordinator.keyboard_leds and coordinator.keyboard_leds.known)
@@ -125,6 +130,15 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
         # HDD LED is only valid for Alpha hardware
         available_fn=_is_alpha_hardware,
         should_create_fn=_is_alpha_hardware,
+    ),
+    NanoKVMBinarySensorEntityDescription(
+        key="hdmi_signal",
+        translation_key="hdmi_signal",
+        value_fn=lambda coordinator: bool(
+            coordinator.hdmi_state and coordinator.hdmi_state.signal
+        ),
+        available_fn=_has_hdmi_signal,
+        should_create_fn=_has_hdmi_signal,
     ),
     NanoKVMBinarySensorEntityDescription(
         key="wifi_connected",

@@ -405,7 +405,7 @@ async def test_non_admin_account_gets_only_the_entities_it_may_use(
         hardware_info=SimpleNamespace(version=HWVersion.PCIE),
         is_non_pro_hardware=True,
         supports_hdmi_endpoint=True,
-        hdmi_state=SimpleNamespace(enabled=True),
+        hdmi_state=SimpleNamespace(enabled=True, signal=True, idle_timeout=0),
         hid_mode=SimpleNamespace(mode=HidMode.NORMAL),
         keyboard_leds=SimpleNamespace(
             num_lock=True, caps_lock=False, scroll_lock=True, known=True
@@ -433,7 +433,13 @@ async def test_non_admin_account_gets_only_the_entities_it_may_use(
         ]
 
     assert created == {
-        "binary_sensor": ["power_led", "num_lock", "caps_lock", "scroll_lock"],
+        "binary_sensor": [
+            "power_led",
+            "hdmi_signal",
+            "num_lock",
+            "caps_lock",
+            "scroll_lock",
+        ],
         "button": ["power", "reset", "reset_hdmi"],
         "number": [],
         "select": [],

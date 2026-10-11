@@ -108,6 +108,9 @@
       },
       "scroll_lock": {
         "name": "Arrêt défil"
+      },
+      "hdmi_signal": {
+        "name": "Signal HDMI"
       }
     },
     "sensor": {
@@ -299,6 +302,9 @@
       },
       "led_vertical_beads": {
         "name": "LED perles verticales"
+      },
+      "hdmi_idle_timeout": {
+        "name": "Délai d'inactivité HDMI"
       }
     },
     "button": {

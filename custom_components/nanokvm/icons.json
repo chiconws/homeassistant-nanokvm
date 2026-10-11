@@ -30,6 +30,9 @@
       },
       "scroll_lock": {
         "default": "mdi:keyboard"
+      },
+      "hdmi_signal": {
+        "default": "mdi:video-input-hdmi"
       }
     },
     "button": {
@@ -66,6 +69,9 @@
       },
       "led_vertical_beads": {
         "default": "mdi:led-strip-variant"
+      },
+      "hdmi_idle_timeout": {
+        "default": "mdi:timer-outline"
       }
     },
     "select": {
