@@ -67,10 +67,8 @@ def _pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> 
 
 def _pro_virtual_mic_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether Pro virtual microphone control is available."""
-    return (
-        _pro_virtual_device_available(coordinator)
-        and coordinator.virtual_device_info.mic is not None
-    )
+    info = coordinator.virtual_device_info
+    return coordinator.is_pro_hardware and info is not None and info.mic is not None
 
 
 def _hdmi_capture_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -375,8 +373,10 @@ class NanoKVMVirtualDeviceSwitch(NanoKVMSwitch):
         if self.is_on == enabled:
             return
 
+        device = self.entity_description.virtual_device
+        assert device is not None
         async with self._async_device_action() as client:
-            await client.update_virtual_device(self.entity_description.virtual_device)
+            await client.update_virtual_device(device)
         await self.coordinator.async_request_refresh()
 
 

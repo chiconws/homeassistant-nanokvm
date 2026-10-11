@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -280,7 +280,7 @@ def async_register_services(hass: HomeAssistant) -> None:
 
     def make_handler(
         service: _Service,
-    ) -> Callable[[ServiceCall], Awaitable[ServiceResponse]]:
+    ) -> Callable[[ServiceCall], Coroutine[Any, Any, ServiceResponse]]:
         async def handle(call: ServiceCall) -> ServiceResponse:
             coordinator = _resolve_target_coordinator(hass, call)
             host = coordinator.config_entry.data.get(CONF_HOST, "<unknown>")

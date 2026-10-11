@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 import contextlib
 import datetime
 import logging
@@ -205,7 +205,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         )
 
     @contextlib.asynccontextmanager
-    async def async_client(self) -> AsyncIterator[NanoKVMClient]:
+    async def async_client(self) -> AsyncGenerator[NanoKVMClient]:
         """Yield the shared API client to one caller at a time."""
         async with self._client_lock:
             async with self.client as client:
@@ -620,8 +620,8 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             setattr(self, attribute, None)
         for attribute, value in results.items():
             setattr(self, attribute, value)
-        if note_reported_led_strip(self, self.led_strip):
-            request = self.led_brightness_request
+        request = self.led_brightness_request
+        if request is not None and note_reported_led_strip(self, self.led_strip):
             self.hass.config_entries.async_update_entry(
                 self.config_entry,
                 data=self.config_entry.data

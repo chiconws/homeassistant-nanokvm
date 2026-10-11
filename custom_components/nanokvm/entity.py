@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncGenerator, Callable, Sequence
 import contextlib
 import logging
 from functools import cached_property
@@ -89,7 +89,7 @@ class NanoKVMEntity(CoordinatorEntity[NanoKVMDataUpdateCoordinator]):
         )
 
     @contextlib.asynccontextmanager
-    async def _async_device_action(self) -> AsyncIterator[NanoKVMClient]:
+    async def _async_device_action(self) -> AsyncGenerator[NanoKVMClient]:
         """Yield the shared client, reporting device failures as action errors."""
         try:
             async with self.coordinator.async_client() as client:
