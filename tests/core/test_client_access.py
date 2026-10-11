@@ -12,8 +12,8 @@ from homeassistant.const import CONF_HOST
 from pytest import MonkeyPatch
 from yarl import URL
 
-import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.coordinator import NanoKVMDataUpdateCoordinator
+import custom_components.nanokvm.utils as utils_module
 
 
 class TrackingClient:
@@ -58,7 +58,9 @@ def _coordinator(client: TrackingClient) -> NanoKVMDataUpdateCoordinator:
         client=client,
         username="admin",
         password="password",
-        device_info=SimpleNamespace(device_key="test-device", application="1.0.0"),
+        device_info=SimpleNamespace(
+            device_key="test-device", application="1.0.0", image=None
+        ),
     )
 
 
@@ -137,8 +139,6 @@ def test_coordinator_poll_uses_serialized_client_access() -> None:
         coordinator._async_fetch_core_data = AsyncMock()
         coordinator._async_fetch_storage_data = AsyncMock()
         coordinator._async_refresh_ssh_data = AsyncMock()
-        coordinator._async_maybe_create_network_entities = MagicMock()
-        coordinator._async_maybe_create_media_entities = MagicMock()
         coordinator._async_schedule_app_version_refresh = MagicMock()
 
         await coordinator._async_fetch_with_client()
@@ -162,13 +162,13 @@ def test_client_replacement_waits_for_active_user(monkeypatch: MonkeyPatch) -> N
             async def authenticate(self, _username: str, _password: str) -> None:
                 replacement_started.set()
 
-        monkeypatch.setattr(coordinator_module, "NanoKVMClient", ReplacementClient)
+        monkeypatch.setattr(utils_module, "NanoKVMClient", ReplacementClient)
         current_client = TrackingClient()
         coordinator = _coordinator(current_client)
 
         async with coordinator.async_client():
             replacement_task = asyncio.create_task(
-                coordinator._async_reauthenticate_client(RuntimeError("reauthenticate"))
+                coordinator._async_reauthenticate_client()
             )
             await asyncio.sleep(0)
             assert not replacement_started.is_set()

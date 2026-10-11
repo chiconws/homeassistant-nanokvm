@@ -6,7 +6,6 @@ import asyncio
 from collections import deque
 from collections.abc import Callable, Coroutine
 import json
-import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -221,18 +220,14 @@ class WebRTCHarness:
     def __init__(
         self,
         *,
-        clients: list[FakeClient | None] | None = None,
+        clients: list[FakeClient] | None = None,
         hass: FakeHass | None = None,
-        hass_ready: bool = True,
         pro: bool = False,
         authenticate_error: Exception | None = None,
-        session_state_callback: Callable[[bool], None] | None = None,
-        signaling_heartbeat_seconds: float = 60.0,
-        max_pending_ice_candidates: int = 64,
+        session_state_callback: Callable[[bool], None] = lambda streaming: None,
     ) -> None:
         self.clients = deque(clients or [FakeClient()])
         self.hass = hass or FakeHass()
-        self.hass_ready = hass_ready
         self.authenticate_error = authenticate_error
         self.authenticated: list[FakeClient] = []
 
@@ -242,23 +237,39 @@ class WebRTCHarness:
                 raise self.authenticate_error
 
         self.manager = NanoKVMWebRTCManager(
-            logger=logging.getLogger(__name__),
-            hass_provider=lambda: self.hass if self.hass_ready else None,
-            client_factory=lambda: self.clients.popleft(),
-            authenticate_client=authenticate,
-            is_pro_hardware=lambda: pro,
-            session_state_callback=session_state_callback,
-            signaling_heartbeat_seconds=signaling_heartbeat_seconds,
-            max_pending_ice_candidates=max_pending_ice_candidates,
+            SimpleNamespace(
+                hass=self.hass,
+                is_pro_hardware=pro,
+                clone_client=lambda: self.clients.popleft(),
+                async_ensure_authenticated=authenticate,
+            ),
+            session_state_callback,
         )
 
 
 @pytest_asyncio.fixture
-async def harness_factory() -> Any:
+async def harness_factory(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Build harnesses and guarantee active signaling tasks are collected."""
     harnesses: list[WebRTCHarness] = []
 
-    def factory(**kwargs: object) -> WebRTCHarness:
+    def factory(
+        *,
+        signaling_heartbeat_seconds: float | None = None,
+        max_pending_ice_candidates: int | None = None,
+        **kwargs: object,
+    ) -> WebRTCHarness:
+        if signaling_heartbeat_seconds is not None:
+            monkeypatch.setattr(
+                webrtc_module,
+                "_SIGNALING_HEARTBEAT_SECONDS",
+                signaling_heartbeat_seconds,
+            )
+        if max_pending_ice_candidates is not None:
+            monkeypatch.setattr(
+                webrtc_module,
+                "_MAX_PENDING_ICE_CANDIDATES",
+                max_pending_ice_candidates,
+            )
         harness = WebRTCHarness(**kwargs)
         harnesses.append(harness)
         return harness
@@ -660,31 +671,6 @@ async def test_candidate_send_failure_is_home_assistant_error(
         await harness.manager.async_on_webrtc_candidate("session", _candidate())
 
 
-@pytest.mark.parametrize(
-    ("clients", "hass_ready", "message"),
-    [
-        ([None], True, "Missing NanoKVM WebRTC client"),
-        ([FakeClient()], False, "Home Assistant is not ready for WebRTC"),
-    ],
-)
-async def test_offer_requires_client_and_home_assistant(
-    harness_factory: Callable[..., WebRTCHarness],
-    clients: list[FakeClient | None],
-    hass_ready: bool,
-    message: str,
-) -> None:
-    """Missing runtime providers must fail before opening transport resources."""
-    harness = harness_factory(clients=clients, hass_ready=hass_ready)
-
-    with pytest.raises(HomeAssistantError, match=message):
-        await harness.manager.async_handle_async_webrtc_offer(
-            VIDEO_ONLY_OFFER, "session", lambda value: None
-        )
-
-    if clients[0] is not None:
-        assert clients[0].enter_calls == 0
-
-
 async def test_pro_offer_without_supported_media_is_rejected_before_client_entry(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
@@ -847,10 +833,10 @@ async def test_heartbeat_failure_closes_session(
     assert client.exit_calls == 1
 
 
-async def test_close_callback_schedules_cleanup_and_noops_without_hass(
+async def test_close_callback_schedules_cleanup(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
-    """Frontend unsubscribe must schedule cleanup only while HA is available."""
+    """Frontend unsubscribe must schedule the session cleanup."""
     client = FakeClient()
     harness = harness_factory(clients=[client])
     await harness.manager.async_handle_async_webrtc_offer(
@@ -860,10 +846,6 @@ async def test_close_callback_schedules_cleanup_and_noops_without_hass(
     harness.manager.close_webrtc_session("session")
     await harness.hass.tasks[-1]
     assert client.exit_calls == 1
-
-    unavailable = harness_factory(hass_ready=False)
-    unavailable.manager.close_webrtc_session("missing")
-    assert unavailable.hass.tasks == []
 
 
 async def test_shutdown_closes_all_non_pro_sessions_and_tolerates_close_errors(
@@ -930,23 +912,6 @@ async def test_new_pro_session_keeps_other_active_session_alive(
     assert first.exit_calls == 0
     assert not second.websocket.closed
     assert second.exit_calls == 0
-
-
-async def test_legacy_aiohttp_timeout_uses_receive_timeout(
-    harness_factory: Callable[..., WebRTCHarness], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Older aiohttp releases must receive their supported timeout keyword."""
-    client = FakeClient()
-    harness = harness_factory(clients=[client])
-    monkeypatch.delattr(webrtc_module.aiohttp, "ClientWSTimeout")
-
-    await harness.manager.async_handle_async_webrtc_offer(
-        VIDEO_ONLY_OFFER, "session", lambda value: None
-    )
-
-    kwargs = client.transport.calls[0][1]
-    assert kwargs["receive_timeout"] == 15.0
-    assert "timeout" not in kwargs
 
 
 async def test_invalid_device_candidate_is_ignored(

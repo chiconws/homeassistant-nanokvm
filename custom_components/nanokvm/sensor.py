@@ -1,7 +1,6 @@
 """Sensor platform for Sipeed NanoKVM."""
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -14,20 +13,16 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTemperature
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import NanoKVMDataUpdateCoordinator
-from .const import (
-    DOMAIN,
-    SIGNAL_NEW_MEDIA_ENTITIES,
-    SIGNAL_NEW_NETWORK_ENTITIES,
-    SIGNAL_NEW_SSH_SENSORS,
+from .entity import (
+    NanoKVMEntity,
+    async_add_entities_as_supported,
+    has_connection_type,
+    has_mounted_image,
 )
-from .entity import NanoKVMEntity
-
-_LOGGER = logging.getLogger(__name__)
 
 _TAILSCALE_STATE_MAP: dict[str, str] = {
     "notInstall": "not_install",
@@ -43,9 +38,9 @@ def _normalize_tailscale_state(raw_state: str | None) -> str | None:
     return _TAILSCALE_STATE_MAP.get(raw_state, raw_state)
 
 
-def _has_mounted_image(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether there is a mounted image."""
-    return bool(coordinator.mounted_image and coordinator.mounted_image.file != "")
+def _ssh_enabled(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the device reports its SSH service as enabled."""
+    return bool(coordinator.ssh_state and coordinator.ssh_state.enabled)
 
 
 def _mounted_image_value(coordinator: NanoKVMDataUpdateCoordinator) -> str:
@@ -53,59 +48,21 @@ def _mounted_image_value(coordinator: NanoKVMDataUpdateCoordinator) -> str:
     return coordinator.mounted_image.file if coordinator.mounted_image else ""
 
 
-def _primary_ip_address(coordinator: NanoKVMDataUpdateCoordinator) -> str | None:
-    """Return the preferred local IP address for the NanoKVM."""
-    addresses = coordinator.device_info.ips
-    if not addresses:
-        return None
-
-    for address in addresses:
-        if address.version == "IPv4":
-            return address.addr
-
-    return addresses[0].addr
-
-
-def _ip_address_attributes(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str, Any]:
-    """Return all NanoKVM-reported addresses as sensor attributes."""
-    return {
-        "addresses": [
-            {
-                "name": address.name,
-                "addr": address.addr,
-                "version": address.version,
-                "type": address.type,
-            }
-            for address in coordinator.device_info.ips
-        ]
-    }
-
-
 def _addresses_for_connection_type(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
+    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str | None
 ) -> list[Any]:
-    """Return NanoKVM addresses for a connection type."""
+    """Return NanoKVM addresses for a connection type, or all of them for None."""
     return [
         address
         for address in coordinator.device_info.ips
-        if address.type.casefold() == connection_type
+        if connection_type in (None, address.type.casefold())
     ]
 
 
-def _has_connection_type(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
-) -> bool:
-    """Return whether an IP connection type is active."""
-    return any(
-        address.addr
-        for address in _addresses_for_connection_type(coordinator, connection_type)
-    )
-
-
 def _connection_ip_value(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
+    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str | None = None
 ) -> str | None:
-    """Return preferred IP address for a connection type."""
+    """Return the preferred IP address, optionally for one connection type."""
     addresses = _addresses_for_connection_type(coordinator, connection_type)
     if not addresses:
         return None
@@ -118,9 +75,9 @@ def _connection_ip_value(
 
 
 def _connection_ip_attributes(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
+    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str | None = None
 ) -> dict[str, Any]:
-    """Return reported addresses for a connection type."""
+    """Return reported addresses, optionally for one connection type."""
     return {
         "addresses": [
             {
@@ -157,12 +114,14 @@ def _tailscale_attributes(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str
 
 def _memory_total_attribute(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str, Any]:
     """Return memory total attribute when available."""
-    return {"total_mb": coordinator.memory_total} if coordinator.memory_total is not None else {}
+    total = coordinator.ssh_metrics.memory_total
+    return {"total_mb": total} if total is not None else {}
 
 
 def _storage_total_attribute(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str, Any]:
     """Return storage total attribute when available."""
-    return {"total_mb": coordinator.storage_total} if coordinator.storage_total is not None else {}
+    total = coordinator.ssh_metrics.storage_total
+    return {"total_mb": total} if total is not None else {}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -173,7 +132,6 @@ class NanoKVMSensorEntityDescription(SensorEntityDescription):
     available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
     should_create_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
     attributes_fn: Callable[[NanoKVMDataUpdateCoordinator], dict[str, Any]] = lambda _: {}
-    connection_type: str | None = None
 
 
 MEDIA_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
@@ -182,8 +140,8 @@ MEDIA_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         translation_key="mounted_image",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_mounted_image_value,
-        should_create_fn=_has_mounted_image,
-        available_fn=_has_mounted_image,
+        should_create_fn=has_mounted_image,
+        available_fn=has_mounted_image,
     ),
 )
 
@@ -192,9 +150,9 @@ SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         key="ip_address",
         translation_key="ip_address",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_primary_ip_address,
-        available_fn=lambda coordinator: _primary_ip_address(coordinator) is not None,
-        attributes_fn=_ip_address_attributes,
+        value_fn=_connection_ip_value,
+        available_fn=lambda coordinator: _connection_ip_value(coordinator) is not None,
+        attributes_fn=_connection_ip_attributes,
     ),
     NanoKVMSensorEntityDescription(
         key="tailscale_state",
@@ -210,10 +168,9 @@ NETWORK_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         key="wired_ip_address",
         translation_key="wired_ip_address",
         entity_category=EntityCategory.DIAGNOSTIC,
-        connection_type="wired",
         value_fn=lambda coordinator: _connection_ip_value(coordinator, "wired"),
-        available_fn=lambda coordinator: _has_connection_type(coordinator, "wired"),
-        should_create_fn=lambda coordinator: _has_connection_type(
+        available_fn=lambda coordinator: has_connection_type(coordinator, "wired"),
+        should_create_fn=lambda coordinator: has_connection_type(
             coordinator, "wired"
         ),
         attributes_fn=lambda coordinator: _connection_ip_attributes(
@@ -224,10 +181,9 @@ NETWORK_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         key="wireless_ip_address",
         translation_key="wireless_ip_address",
         entity_category=EntityCategory.DIAGNOSTIC,
-        connection_type="wireless",
         value_fn=lambda coordinator: _connection_ip_value(coordinator, "wireless"),
-        available_fn=lambda coordinator: _has_connection_type(coordinator, "wireless"),
-        should_create_fn=lambda coordinator: _has_connection_type(
+        available_fn=lambda coordinator: has_connection_type(coordinator, "wireless"),
+        should_create_fn=lambda coordinator: has_connection_type(
             coordinator, "wireless"
         ),
         attributes_fn=lambda coordinator: _connection_ip_attributes(
@@ -242,8 +198,11 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         translation_key="uptime",
         entity_category=EntityCategory.DIAGNOSTIC,
         device_class=SensorDeviceClass.TIMESTAMP,
-        value_fn=lambda coordinator: coordinator.uptime,
-        available_fn=lambda coordinator: coordinator.uptime is not None,
+        should_create_fn=_ssh_enabled,
+        value_fn=lambda coordinator: coordinator.ssh_metrics.uptime,
+        available_fn=lambda coordinator: (
+            coordinator.ssh_metrics.uptime is not None
+        ),
     ),
     NanoKVMSensorEntityDescription(
         key="cpu_temperature",
@@ -252,8 +211,11 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.cpu_temperature,
-        available_fn=lambda coordinator: coordinator.cpu_temperature is not None,
+        should_create_fn=_ssh_enabled,
+        value_fn=lambda coordinator: coordinator.ssh_metrics.cpu_temperature,
+        available_fn=lambda coordinator: (
+            coordinator.ssh_metrics.cpu_temperature is not None
+        ),
     ),
     NanoKVMSensorEntityDescription(
         key="memory_used_percent",
@@ -261,8 +223,11 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.memory_used_percent,
-        available_fn=lambda coordinator: coordinator.memory_used_percent is not None,
+        should_create_fn=_ssh_enabled,
+        value_fn=lambda coordinator: coordinator.ssh_metrics.memory_used_percent,
+        available_fn=lambda coordinator: (
+            coordinator.ssh_metrics.memory_used_percent is not None
+        ),
         attributes_fn=_memory_total_attribute,
     ),
     NanoKVMSensorEntityDescription(
@@ -271,8 +236,11 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coordinator: coordinator.storage_used_percent,
-        available_fn=lambda coordinator: coordinator.storage_used_percent is not None,
+        should_create_fn=_ssh_enabled,
+        value_fn=lambda coordinator: coordinator.ssh_metrics.storage_used_percent,
+        available_fn=lambda coordinator: (
+            coordinator.ssh_metrics.storage_used_percent is not None
+        ),
         attributes_fn=_storage_total_attribute,
     ),
 )
@@ -284,94 +252,17 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM sensor based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
-    async_add_entities(
-        NanoKVMSensor(
-            coordinator=coordinator,
-            description=description,
-        )
-        for description in (*SENSORS, *NETWORK_SENSORS)
-        if description.should_create_fn(coordinator)
-    )
-
-    network_sensor_keys_added = {
-        description.key
-        for description in NETWORK_SENSORS
-        if description.should_create_fn(coordinator)
-    }
-
-    @callback
-    def async_add_network_sensors(connection_type: str) -> None:
-        """Add per-connection IP sensors when a connection type appears."""
-        entities = [
-            NanoKVMSensor(
-                coordinator=coordinator,
-                description=description,
-            )
-            for description in NETWORK_SENSORS
-            if description.connection_type == connection_type
-            and description.key not in network_sensor_keys_added
-            and description.should_create_fn(coordinator)
-        ]
-        if not entities:
-            return
-
-        async_add_entities(entities)
-        network_sensor_keys_added.update(entity.entity_description.key for entity in entities)
-
-    @callback
-    def async_add_media_sensors() -> None:
-        """Add media-backed sensors when media is first mounted."""
-        if not _has_mounted_image(coordinator):
-            return
-
-        _LOGGER.debug("Creating media sensors")
-        async_add_entities(
-            NanoKVMSensor(
-                coordinator=coordinator,
-                description=description,
-            )
-            for description in MEDIA_SENSORS
-        )
-
-    if _has_mounted_image(coordinator):
-        _LOGGER.debug("Mounted image already present during setup, creating media sensors")
-        async_add_media_sensors()
-
-    @callback
-    def async_add_ssh_sensors() -> None:
-        """Add SSH sensors when SSH is enabled."""
-        _LOGGER.debug("Creating SSH sensors")
-        async_add_entities(
-            NanoKVMSensor(
-                coordinator=coordinator,
-                description=description,
-            )
-            for description in SSH_SENSORS
-        )
-        coordinator.ssh_sensors_created = True
-
-    if coordinator.ssh_state and coordinator.ssh_state.enabled:
-        _LOGGER.debug("SSH already enabled during setup, creating SSH sensors")
-        async_add_ssh_sensors()
-
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass, SIGNAL_NEW_MEDIA_ENTITIES.format(entry.entry_id), async_add_media_sensors
-        )
-    )
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            SIGNAL_NEW_NETWORK_ENTITIES.format(entry.entry_id),
-            async_add_network_sensors,
-        )
-    )
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass, SIGNAL_NEW_SSH_SENSORS.format(entry.entry_id), async_add_ssh_sensors
-        )
+    async_add_entities_as_supported(
+        entry,
+        coordinator,
+        async_add_entities,
+        (*SENSORS, *NETWORK_SENSORS, *MEDIA_SENSORS, *SSH_SENSORS),
+        lambda description: description.should_create_fn(coordinator),
+        lambda description: NanoKVMSensor(
+            coordinator=coordinator, description=description
+        ),
     )
 
 

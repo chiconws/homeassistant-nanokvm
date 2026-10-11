@@ -10,21 +10,16 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from nanokvm.client import NanoKVMError
 from nanokvm.models import GpioType, VirtualDevice
 
-from .const import (
-    DOMAIN,
-    SIGNAL_NEW_SSH_SWITCHES,
-)
 from .coordinator import NanoKVMDataUpdateCoordinator
-from .entity import NanoKVMEntity
-from .led import async_set_led_strip
+from .entity import NanoKVMEntity, async_add_entities_as_supported
+from .led import async_set_led_strip, led_strip_available
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,17 +49,15 @@ def _hdmi_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
 
 def _watchdog_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return watchdog switch state."""
-    return bool(coordinator.watchdog_enabled)
+    return bool(coordinator.ssh_metrics.watchdog_enabled)
 
 
 def _watchdog_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether the watchdog switch should be available."""
-    return coordinator.supports_watchdog and coordinator.watchdog_enabled is not None
-
-
-def _non_pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether the non-Pro virtual-device switches apply to this device."""
-    return coordinator.is_non_pro_hardware
+    return (
+        coordinator.supports_watchdog
+        and coordinator.ssh_metrics.watchdog_enabled is not None
+    )
 
 
 def _pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -76,7 +69,6 @@ def _pro_virtual_mic_available(coordinator: NanoKVMDataUpdateCoordinator) -> boo
     """Return whether Pro virtual microphone control is available."""
     return (
         _pro_virtual_device_available(coordinator)
-        and coordinator.virtual_device_info is not None
         and coordinator.virtual_device_info.mic is not None
     )
 
@@ -96,24 +88,9 @@ def _low_power_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     return coordinator.is_pro_hardware and coordinator.low_power is not None
 
 
-def _led_strip_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether Pro LED strip control is available."""
-    return coordinator.is_pro_hardware and coordinator.led_strip is not None
-
-
 def _led_strip_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return LED strip state."""
     return bool(coordinator.led_strip and coordinator.led_strip.on)
-
-
-async def _set_led_strip_on(
-    coordinator: NanoKVMDataUpdateCoordinator, enabled: bool
-) -> None:
-    """Set LED strip power while preserving other LED settings."""
-    try:
-        await async_set_led_strip(coordinator, on=enabled)
-    except ValueError as err:
-        raise HomeAssistantError(str(err)) from err
 
 
 SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
@@ -144,7 +121,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.network
         ),
-        available_fn=_non_pro_virtual_device_available,
+        available_fn=lambda coordinator: coordinator.is_non_pro_hardware,
         virtual_device=VirtualDevice.NETWORK,
     ),
     NanoKVMSwitchEntityDescription(
@@ -154,7 +131,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.disk
         ),
-        available_fn=_non_pro_virtual_device_available,
+        available_fn=lambda coordinator: coordinator.is_non_pro_hardware,
         virtual_device=VirtualDevice.DISK,
     ),
     NanoKVMSwitchEntityDescription(
@@ -233,9 +210,9 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         translation_key="led_strip",
         entity_category=EntityCategory.CONFIG,
         value_fn=_led_strip_value,
-        turn_on_fn=lambda coordinator: _set_led_strip_on(coordinator, True),
-        turn_off_fn=lambda coordinator: _set_led_strip_on(coordinator, False),
-        available_fn=_led_strip_available,
+        turn_on_fn=lambda coordinator: async_set_led_strip(coordinator, on=True),
+        turn_off_fn=lambda coordinator: async_set_led_strip(coordinator, on=False),
+        available_fn=led_strip_available,
     ),
 )
 
@@ -255,66 +232,32 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM switch based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
-    entities: list[NanoKVMSwitch] = []
-    for description in SWITCHES:
-        if not description.available_fn(coordinator):
-            continue
-
+    def switch_class(
+        description: NanoKVMSwitchEntityDescription,
+    ) -> type[NanoKVMSwitch]:
         if description.virtual_device is not None:
-            entities.append(
-                NanoKVMVirtualDeviceSwitch(
-                    coordinator=coordinator,
-                    description=description,
-                )
-            )
-            continue
-
+            return NanoKVMVirtualDeviceSwitch
         if description.key == "power":
-            entities.append(
-                NanoKVMPowerSwitch(
-                    coordinator=coordinator,
-                    description=description,
-                )
-            )
-            continue
-        else:
-            entities.append(
-                NanoKVMSwitch(
-                    coordinator=coordinator,
-                    description=description,
-                )
-            )
+            return NanoKVMPowerSwitch
+        return NanoKVMSwitch
 
-    async_add_entities(entities)
+    async_add_entities(
+        switch_class(description)(coordinator=coordinator, description=description)
+        for description in SWITCHES
+        if description.available_fn(coordinator)
+    )
 
-    @callback
-    def async_add_ssh_switches() -> None:
-        """Add SSH-backed switches when they become available."""
-        entities = [
-            NanoKVMWatchdogSwitch(
-                coordinator=coordinator,
-                description=description,
-            )
-            for description in SSH_SWITCHES
-            if description.available_fn(coordinator)
-        ]
-        if not entities:
-            return
-
-        async_add_entities(entities)
-        coordinator.ssh_switches_created = True
-
-    if any(description.available_fn(coordinator) for description in SSH_SWITCHES):
-        async_add_ssh_switches()
-
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            SIGNAL_NEW_SSH_SWITCHES.format(entry.entry_id),
-            async_add_ssh_switches,
-        )
+    async_add_entities_as_supported(
+        entry,
+        coordinator,
+        async_add_entities,
+        SSH_SWITCHES,
+        lambda description: description.available_fn(coordinator),
+        lambda description: NanoKVMWatchdogSwitch(
+            coordinator=coordinator, description=description
+        ),
     )
 
 
@@ -347,18 +290,23 @@ class NanoKVMSwitch(NanoKVMEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
-        if self.entity_description.turn_on_fn is None:
-            raise RuntimeError(f"Missing turn_on handler for switch: {self.entity_description.key}")
-        async with self._async_device_action():
-            await self.entity_description.turn_on_fn(self.coordinator)
-        await self.coordinator.async_request_refresh()
+        await self._async_set(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
-        if self.entity_description.turn_off_fn is None:
-            raise RuntimeError(f"Missing turn_off handler for switch: {self.entity_description.key}")
+        await self._async_set(False)
+
+    async def _async_call_handler(self, enabled: bool) -> None:
+        """Run the description's device call for the requested state."""
+        description = self.entity_description
+        handler = description.turn_on_fn if enabled else description.turn_off_fn
+        assert handler is not None
         async with self._async_device_action():
-            await self.entity_description.turn_off_fn(self.coordinator)
+            await handler(self.coordinator)
+
+    async def _async_set(self, enabled: bool) -> None:
+        """Switch to the requested state and refresh."""
+        await self._async_call_handler(enabled)
         await self.coordinator.async_request_refresh()
 
 
@@ -374,27 +322,16 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
             return None
         return bool(self.coordinator.gpio_info.pwr)
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the switch."""
-        del kwargs
-        if self.entity_description.turn_on_fn is None:
-            raise RuntimeError(f"Missing turn_on handler for switch: {self.entity_description.key}")
-        if await self._async_current_power_state() is True:
+    async def _async_set(self, enabled: bool) -> None:
+        """Press the power button unless the host is already in that state."""
+        if await self._async_current_power_state() is enabled:
             return
-        async with self._async_device_action():
-            await self.entity_description.turn_on_fn(self.coordinator)
-        await asyncio.sleep(1)
-        await self.coordinator.async_request_refresh()
+        await self._async_call_handler(enabled)
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the power switch with monitoring for actual shutdown."""
-        del kwargs
-        if self.entity_description.turn_off_fn is None:
-            raise RuntimeError(f"Missing turn_off handler for switch: {self.entity_description.key}")
-        if await self._async_current_power_state() is False:
+        if enabled:
+            await asyncio.sleep(1)
+            await self.coordinator.async_request_refresh()
             return
-        async with self._async_device_action():
-            await self.entity_description.turn_off_fn(self.coordinator)
 
         # A host can take minutes to shut down, so follow it in the background
         # instead of holding the action open.
@@ -432,39 +369,23 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
 class NanoKVMVirtualDeviceSwitch(NanoKVMSwitch):
     """Defines a virtual device switch backed by a toggle-only API."""
 
-    async def _async_set_virtual_device_state(self, enabled: bool) -> None:
+    async def _async_set(self, enabled: bool) -> None:
         """Refresh first, then toggle only when the requested state differs."""
-        virtual_device = self.entity_description.virtual_device
-        if virtual_device is None:
-            raise RuntimeError(
-                f"Missing virtual device type for switch: {self.entity_description.key}"
-            )
-
         await self.coordinator.async_refresh()
         if self.is_on == enabled:
             return
 
         async with self._async_device_action() as client:
-            await client.update_virtual_device(virtual_device)
+            await client.update_virtual_device(self.entity_description.virtual_device)
         await self.coordinator.async_request_refresh()
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the virtual device switch."""
-        del kwargs
-        await self._async_set_virtual_device_state(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the virtual device switch."""
-        del kwargs
-        await self._async_set_virtual_device_state(False)
 
 
 class NanoKVMWatchdogSwitch(NanoKVMSwitch):
     """Defines a NanoKVM watchdog switch backed by SSH file control."""
 
-    async def _async_set_watchdog_state(self, enabled: bool) -> None:
+    async def _async_set(self, enabled: bool) -> None:
         """Set watchdog state via SSH and refresh coordinator state."""
-        collector = await self.coordinator.async_ensure_ssh_metrics_collector()
+        collector = self.coordinator.async_ensure_ssh_metrics_collector()
         try:
             await collector.set_watchdog_enabled(enabled)
         except NanoKVMError as err:
@@ -472,13 +393,3 @@ class NanoKVMWatchdogSwitch(NanoKVMSwitch):
                 f"NanoKVM did not accept the request: {err}"
             ) from err
         await self.coordinator.async_request_refresh()
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable the watchdog."""
-        del kwargs
-        await self._async_set_watchdog_state(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable the watchdog."""
-        del kwargs
-        await self._async_set_watchdog_state(False)

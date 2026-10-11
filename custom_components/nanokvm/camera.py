@@ -18,16 +18,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from webrtc_models import RTCIceCandidateInit
 
 from .coordinator import NanoKVMDataUpdateCoordinator
-from .const import DOMAIN
 from .entity import NanoKVMEntity
-from .media.client import NanoKVMStreamClientProvider
 from .media.signaling import NanoKVMWebRTCManager
 
 _LOGGER = logging.getLogger(__name__)
 
-LOGIN_TIMEOUT_SECONDS = 15
-WEBSOCKET_HEARTBEAT_SECONDS = 30.0
-MAX_PENDING_ICE_CANDIDATES = 64
 SNAPSHOT_TIMEOUT_SECONDS = 20
 
 
@@ -37,7 +32,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM camera based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
     async_add_entities([NanoKVMCamera(coordinator)])
 
@@ -56,17 +51,8 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         Camera.__init__(self)
         self._attr_supported_features = CameraEntityFeature.STREAM
         self._attr_is_streaming = False
-        self._client_provider = NanoKVMStreamClientProvider(self.coordinator)
         self._webrtc = NanoKVMWebRTCManager(
-            logger=_LOGGER,
-            hass_provider=lambda: self.hass,
-            client_factory=self._client_provider.create_client,
-            authenticate_client=self._client_provider.async_authenticate,
-            is_pro_hardware=lambda: self.coordinator.is_pro_hardware,
-            session_state_callback=self._handle_streaming_state,
-            login_timeout_seconds=LOGIN_TIMEOUT_SECONDS,
-            websocket_heartbeat_seconds=WEBSOCKET_HEARTBEAT_SECONDS,
-            max_pending_ice_candidates=MAX_PENDING_ICE_CANDIDATES,
+            coordinator, self._handle_streaming_state
         )
 
     @callback
@@ -84,9 +70,9 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
             )
             return None
 
-        client = self._client_provider.create_client()
+        client = self.coordinator.clone_client()
         async with client:
-            await self._client_provider.async_authenticate(client)
+            await self.coordinator.async_ensure_authenticated(client)
             # Reuse NanoKVMClient's authenticated session and SSL config for MJPEG.
             async with client._request(
                 aiohttp.hdrs.METH_GET,

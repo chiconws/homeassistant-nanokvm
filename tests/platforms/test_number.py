@@ -15,9 +15,9 @@ from custom_components.nanokvm.const import (
     LED_BRIGHTNESS_MAX,
     LED_BRIGHTNESS_MIN,
 )
+from custom_components.nanokvm.led import led_strip_available
 from custom_components.nanokvm.number import (
     NUMBERS,
-    _has_led_strip,
     _led_brightness_value,
     _led_horizontal_max,
     _led_horizontal_value,
@@ -59,7 +59,7 @@ def test_led_strip_availability_requires_pro_hardware_and_state(
         led_strip=led_strip,
     )
 
-    assert _has_led_strip(coordinator) is expected
+    assert led_strip_available(coordinator) is expected
 
 
 def test_led_number_values_are_read_from_coordinator_state(
@@ -116,7 +116,7 @@ def test_number_description_keys_and_common_contract() -> None:
         assert description.translation_key == description.key
         assert description.entity_category is EntityCategory.CONFIG
         assert description.native_step == 1
-        assert description.available_fn is _has_led_strip
+        assert description.available_fn is led_strip_available
         assert description.set_value_fn is not None
 
 
@@ -129,7 +129,6 @@ def test_brightness_description_contract() -> None:
     assert description.native_unit_of_measurement == PERCENTAGE
     assert description.mode is NumberMode.SLIDER
     assert description.value_fn is _led_brightness_value
-    assert description.min_value_fn(SimpleNamespace()) == LED_BRIGHTNESS_MIN
     assert description.max_value_fn(SimpleNamespace()) == LED_BRIGHTNESS_MAX
 
 

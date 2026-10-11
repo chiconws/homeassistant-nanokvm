@@ -16,7 +16,7 @@ from homeassistant.core import (
 )
 from homeassistant.const import ATTR_DEVICE_ID, CONF_HOST
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 
 from nanokvm.client import NanoKVMClient
 from nanokvm.models import GpioType, MouseJigglerMode
@@ -97,31 +97,29 @@ SET_MOUSE_JIGGLER_SCHEMA = vol.Schema(
 
 HOST_ONLY_SCHEMA = vol.Schema(_OPTIONAL_HOST_FIELD)
 
-SET_LED_STRIP_SCHEMA = vol.Schema(
-    _OPTIONAL_HOST_FIELD
-    | {
-        vol.Optional(ATTR_ON): bool,
-        vol.Optional(ATTR_BRIGHTNESS): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=LED_BRIGHTNESS_MIN, max=LED_BRIGHTNESS_MAX),
-        ),
-        vol.Optional(ATTR_HORIZONTAL_COUNT): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
-        ),
-        vol.Optional(ATTR_VERTICAL_COUNT): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
-        ),
-    }
+SET_LED_STRIP_SCHEMA = vol.All(
+    vol.Schema(
+        _OPTIONAL_HOST_FIELD
+        | {
+            vol.Optional(ATTR_ON): bool,
+            vol.Optional(ATTR_BRIGHTNESS): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=LED_BRIGHTNESS_MIN, max=LED_BRIGHTNESS_MAX),
+            ),
+            vol.Optional(ATTR_HORIZONTAL_COUNT): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
+            ),
+            vol.Optional(ATTR_VERTICAL_COUNT): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
+            ),
+        }
+    ),
+    cv.has_at_least_one_key(
+        ATTR_ON, ATTR_BRIGHTNESS, ATTR_HORIZONTAL_COUNT, ATTR_VERTICAL_COUNT
+    ),
 )
-
-def _ensure_pro(coordinator: NanoKVMDataUpdateCoordinator, service_name: str) -> None:
-    """Raise when a service requires NanoKVM Pro hardware."""
-    if not coordinator.is_pro_hardware:
-        raise HomeAssistantError(
-            f"The {service_name} service is only available for NanoKVM Pro devices"
-        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -132,7 +130,7 @@ class _Service:
     call: Callable[
         [NanoKVMDataUpdateCoordinator, NanoKVMClient, ServiceCall], Awaitable[Any]
     ]
-    schema: vol.Schema = field(default_factory=lambda: HOST_ONLY_SCHEMA)
+    schema: vol.Schema | vol.All = field(default_factory=lambda: HOST_ONLY_SCHEMA)
     pro_only: bool = False
     returns_response: bool = False
     refresh: bool = False
@@ -142,16 +140,13 @@ async def _set_led_strip(
     coordinator: NanoKVMDataUpdateCoordinator, client: NanoKVMClient, call: ServiceCall
 ) -> None:
     """Apply the LED strip fields given in the service call."""
-    try:
-        await async_set_led_strip(
-            coordinator,
-            on=call.data.get(ATTR_ON),
-            brightness=call.data.get(ATTR_BRIGHTNESS),
-            horizontal_count=call.data.get(ATTR_HORIZONTAL_COUNT),
-            vertical_count=call.data.get(ATTR_VERTICAL_COUNT),
-        )
-    except ValueError as err:
-        raise HomeAssistantError(str(err)) from err
+    await async_set_led_strip(
+        coordinator,
+        on=call.data.get(ATTR_ON),
+        brightness=call.data.get(ATTR_BRIGHTNESS),
+        horizontal_count=call.data.get(ATTR_HORIZONTAL_COUNT),
+        vertical_count=call.data.get(ATTR_VERTICAL_COUNT),
+    )
 
 
 _SERVICES: tuple[_Service, ...] = (
@@ -227,7 +222,10 @@ def _resolve_target_coordinator(
     hass: HomeAssistant, call: ServiceCall
 ) -> NanoKVMDataUpdateCoordinator:
     """Resolve the single NanoKVM device targeted by a service call."""
-    domain_data = hass.data.get(DOMAIN, {})
+    domain_data: dict[str, NanoKVMDataUpdateCoordinator] = {
+        entry.entry_id: entry.runtime_data
+        for entry in hass.config_entries.async_loaded_entries(DOMAIN)
+    }
     coordinators = list(domain_data.values())
     if not coordinators:
         raise ServiceValidationError("No NanoKVM devices are configured")
@@ -279,30 +277,20 @@ def _resolve_target_coordinator(
 
 def async_register_services(hass: HomeAssistant) -> None:
     """Register integration services."""
-    if hass.services.has_service(DOMAIN, SERVICE_PUSH_BUTTON):
-        return
 
     def make_handler(
         service: _Service,
     ) -> Callable[[ServiceCall], Awaitable[ServiceResponse]]:
         async def handle(call: ServiceCall) -> ServiceResponse:
-            if service.name == SERVICE_SET_LED_STRIP and not any(
-                field in call.data
-                for field in (
-                    ATTR_ON,
-                    ATTR_BRIGHTNESS,
-                    ATTR_HORIZONTAL_COUNT,
-                    ATTR_VERTICAL_COUNT,
-                )
-            ):
-                raise HomeAssistantError("At least one LED strip field is required")
-
             coordinator = _resolve_target_coordinator(hass, call)
             host = coordinator.config_entry.data.get(CONF_HOST, "<unknown>")
             try:
                 async with coordinator.async_client() as client:
-                    if service.pro_only:
-                        _ensure_pro(coordinator, service.name)
+                    if service.pro_only and not coordinator.is_pro_hardware:
+                        raise HomeAssistantError(
+                            f"The {service.name} service is only available for "
+                            "NanoKVM Pro devices"
+                        )
                     result = await service.call(coordinator, client, call)
             except HomeAssistantError:
                 raise
@@ -334,9 +322,3 @@ def async_register_services(hass: HomeAssistant) -> None:
             ),
         )
 
-
-def async_unregister_services(hass: HomeAssistant) -> None:
-    """Unregister integration services."""
-    for service in _SERVICES:
-        if hass.services.has_service(DOMAIN, service.name):
-            hass.services.async_remove(DOMAIN, service.name)

@@ -6,13 +6,10 @@ from collections.abc import Callable
 from types import SimpleNamespace
 
 from homeassistant.const import EntityCategory
-from nanokvm.models import HWVersion
 
 from custom_components.nanokvm.button import (
     BUTTONS,
     NanoKVMButton,
-    _is_pcie_hardware,
-    _is_pro_hardware,
 )
 
 
@@ -36,42 +33,21 @@ def test_button_descriptions_expose_stable_metadata() -> None:
     assert all(description.press_fn is not None for description in BUTTONS)
 
 
-def test_pcie_button_availability_requires_detected_pcie_hardware(
-    coordinator_state_factory: Callable[..., SimpleNamespace],
-) -> None:
-    """The HDMI reset button must only apply to detected PCIe hardware."""
-    assert _is_pcie_hardware(
-        coordinator_state_factory(hardware_info=SimpleNamespace(version=HWVersion.PCIE))
-    )
-    assert not _is_pcie_hardware(
-        coordinator_state_factory(hardware_info=SimpleNamespace(version=HWVersion.PRO))
-    )
-    assert not _is_pcie_hardware(coordinator_state_factory(hardware_info=None))
-
-
-def test_pro_button_availability_delegates_to_coordinator_capability(
-    coordinator_state_factory: Callable[..., SimpleNamespace],
-) -> None:
-    """The sync-time button must use the coordinator's Pro capability flag."""
-    assert _is_pro_hardware(coordinator_state_factory(is_pro_hardware=True))
-    assert not _is_pro_hardware(coordinator_state_factory(is_pro_hardware=False))
-
-
 def test_button_description_availability_matches_each_hardware_family(
     coordinator_state_factory: Callable[..., SimpleNamespace],
 ) -> None:
     """Hardware-specific descriptions must not hide generic buttons."""
     states = {
         "non_pcie": coordinator_state_factory(
-            hardware_info=SimpleNamespace(version=HWVersion.BETA),
+            supports_hdmi_endpoint=False,
             is_pro_hardware=False,
         ),
         "pcie": coordinator_state_factory(
-            hardware_info=SimpleNamespace(version=HWVersion.PCIE),
+            supports_hdmi_endpoint=True,
             is_pro_hardware=False,
         ),
         "pro": coordinator_state_factory(
-            hardware_info=SimpleNamespace(version=HWVersion.PRO),
+            supports_hdmi_endpoint=False,
             is_pro_hardware=True,
         ),
     }

@@ -13,11 +13,9 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, PERCENTAGE
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    DOMAIN,
     LED_BEAD_MIN,
     LED_BEAD_TOTAL_LIMIT,
     LED_BRIGHTNESS_MAX,
@@ -25,7 +23,12 @@ from .const import (
 )
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
-from .led import async_set_led_strip, max_horizontal_count, max_vertical_count
+from .led import (
+    async_set_led_strip,
+    led_strip_available,
+    max_horizontal_count,
+    max_vertical_count,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -34,18 +37,8 @@ class NanoKVMNumberEntityDescription(NumberEntityDescription):
 
     value_fn: Callable[[NanoKVMDataUpdateCoordinator], float | None] = lambda _: None
     available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
-    min_value_fn: Callable[[NanoKVMDataUpdateCoordinator], float] = (
-        lambda _: LED_BEAD_MIN
-    )
-    max_value_fn: Callable[[NanoKVMDataUpdateCoordinator], float] = (
-        lambda _: LED_BEAD_TOTAL_LIMIT
-    )
+    max_value_fn: Callable[[NanoKVMDataUpdateCoordinator], float]
     set_value_fn: Callable[[NanoKVMDataUpdateCoordinator, float], Awaitable[Any]]
-
-
-def _has_led_strip(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether Pro LED strip state is available."""
-    return coordinator.is_pro_hardware and coordinator.led_strip is not None
 
 
 def _led_brightness_value(
@@ -89,27 +82,6 @@ def _led_vertical_max(coordinator: NanoKVMDataUpdateCoordinator) -> float:
     return max_vertical_count(horizontal_count)
 
 
-async def _set_led_brightness(
-    coordinator: NanoKVMDataUpdateCoordinator, value: float
-) -> None:
-    """Set LED strip brightness while preserving other LED settings."""
-    await async_set_led_strip(coordinator, brightness=int(value))
-
-
-async def _set_led_horizontal_count(
-    coordinator: NanoKVMDataUpdateCoordinator, value: float
-) -> None:
-    """Set horizontal LED bead count while preserving other LED settings."""
-    await async_set_led_strip(coordinator, horizontal_count=int(value))
-
-
-async def _set_led_vertical_count(
-    coordinator: NanoKVMDataUpdateCoordinator, value: float
-) -> None:
-    """Set vertical LED bead count while preserving other LED settings."""
-    await async_set_led_strip(coordinator, vertical_count=int(value))
-
-
 NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
     NanoKVMNumberEntityDescription(
         key="led_brightness",
@@ -121,10 +93,11 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         mode=NumberMode.SLIDER,
         value_fn=_led_brightness_value,
-        available_fn=_has_led_strip,
-        min_value_fn=lambda _: LED_BRIGHTNESS_MIN,
+        available_fn=led_strip_available,
         max_value_fn=lambda _: LED_BRIGHTNESS_MAX,
-        set_value_fn=_set_led_brightness,
+        set_value_fn=lambda coordinator, value: async_set_led_strip(
+            coordinator, brightness=int(value)
+        ),
     ),
     NanoKVMNumberEntityDescription(
         key="led_horizontal_beads",
@@ -135,10 +108,11 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         native_step=1,
         mode=NumberMode.BOX,
         value_fn=_led_horizontal_value,
-        available_fn=_has_led_strip,
-        min_value_fn=lambda _: LED_BEAD_MIN,
+        available_fn=led_strip_available,
         max_value_fn=_led_horizontal_max,
-        set_value_fn=_set_led_horizontal_count,
+        set_value_fn=lambda coordinator, value: async_set_led_strip(
+            coordinator, horizontal_count=int(value)
+        ),
     ),
     NanoKVMNumberEntityDescription(
         key="led_vertical_beads",
@@ -149,10 +123,11 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
         native_step=1,
         mode=NumberMode.BOX,
         value_fn=_led_vertical_value,
-        available_fn=_has_led_strip,
-        min_value_fn=lambda _: LED_BEAD_MIN,
+        available_fn=led_strip_available,
         max_value_fn=_led_vertical_max,
-        set_value_fn=_set_led_vertical_count,
+        set_value_fn=lambda coordinator, value: async_set_led_strip(
+            coordinator, vertical_count=int(value)
+        ),
     ),
 )
 
@@ -163,7 +138,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM number based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
     async_add_entities(
         NanoKVMNumber(
@@ -205,21 +180,12 @@ class NanoKVMNumber(NanoKVMEntity, NumberEntity):
         return self.entity_description.value_fn(self.coordinator)
 
     @property
-    def native_min_value(self) -> float:
-        """Return the dynamic minimum value."""
-        return self.entity_description.min_value_fn(self.coordinator)
-
-    @property
     def native_max_value(self) -> float:
         """Return the dynamic maximum value."""
         return self.entity_description.max_value_fn(self.coordinator)
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the number value."""
-        try:
-            async with self._async_device_action():
-                await self.entity_description.set_value_fn(self.coordinator, value)
-        except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
-
+        async with self._async_device_action():
+            await self.entity_description.set_value_fn(self.coordinator, value)
         await self.coordinator.async_request_refresh()

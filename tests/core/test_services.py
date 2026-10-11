@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.const import CONF_HOST
 from homeassistant.core import ServiceCall, SupportsResponse
@@ -112,6 +112,7 @@ def _coordinator(
         async_request_refresh=AsyncMock(),
         is_pro_hardware=is_pro_hardware,
         led_strip=led_strip,
+        led_brightness_request=None,
     )
 
 
@@ -129,7 +130,6 @@ def _service_registry(hass: MagicMock) -> SimpleNamespace:
 def _capture_registered_services(hass: MagicMock) -> dict[str, RegisteredService]:
     """Register services and return their captured handlers and schemas."""
     registry = _service_registry(hass)
-    registry.has_service.return_value = False
     services_module.async_register_services(hass)
 
     registered: dict[str, RegisteredService] = {}
@@ -161,11 +161,11 @@ def registered_services(hass_mock: MagicMock) -> dict[str, RegisteredService]:
 
 
 def _install_coordinators(hass: MagicMock, *coordinators: SimpleNamespace) -> None:
-    """Install coordinators into Home Assistant integration storage."""
-    hass.data[DOMAIN] = {
-        f"entry-{index}": coordinator
+    """Install coordinators as loaded NanoKVM config entries."""
+    hass.config_entries.async_loaded_entries.return_value = [
+        SimpleNamespace(entry_id=f"entry-{index}", runtime_data=coordinator)
         for index, coordinator in enumerate(coordinators, start=1)
-    }
+    ]
 
 
 async def _call_service(
@@ -185,24 +185,6 @@ async def _call_service(
         return_response=service.supports_response is SupportsResponse.ONLY,
     )
     return await service.handler(service_call)
-
-
-def test_pro_gate_accepts_pro_hardware() -> None:
-    """Pro services must accept coordinators reporting Pro hardware."""
-    services_module._ensure_pro(
-        SimpleNamespace(is_pro_hardware=True), SERVICE_SCAN_WIFI
-    )
-
-
-def test_pro_gate_rejects_other_hardware() -> None:
-    """Pro services must expose a user-facing hardware error."""
-    with pytest.raises(
-        HomeAssistantError,
-        match="The scan_wifi service is only available for NanoKVM Pro devices",
-    ):
-        services_module._ensure_pro(
-            SimpleNamespace(is_pro_hardware=False), SERVICE_SCAN_WIFI
-        )
 
 
 def test_service_schemas_apply_defaults_and_coercion() -> None:
@@ -279,18 +261,6 @@ def test_register_services_excludes_out_of_scope_recording_surface(
 
     assert "start_hdmi_recording" not in registered
     assert "stop_hdmi_recording" not in registered
-
-
-def test_register_services_is_idempotent_when_already_registered(
-    hass_mock: MagicMock,
-) -> None:
-    """Repeated setup must not replace existing service handlers."""
-    registry = _service_registry(hass_mock)
-    registry.has_service.return_value = True
-
-    services_module.async_register_services(hass_mock)
-
-    registry.async_register.assert_not_called()
 
 
 async def test_target_resolution_rejects_empty_configuration(
@@ -575,9 +545,7 @@ async def test_led_strip_requires_at_least_one_update_field(
     """An empty LED update must fail before resolving or contacting a device."""
     _install_coordinators(hass_mock, _coordinator(is_pro_hardware=True))
 
-    with pytest.raises(
-        HomeAssistantError, match="At least one LED strip field is required"
-    ):
+    with pytest.raises(vol.Invalid, match="must contain at least one of"):
         await _call_service(hass_mock, registered_services, SERVICE_SET_LED_STRIP)
 
 
@@ -833,34 +801,3 @@ async def test_response_handler_translates_unexpected_errors(
         await _call_service(hass_mock, registered_services, SERVICE_LIST_IMAGES)
 
     assert isinstance(captured.value.__cause__, RuntimeError)
-
-
-def test_unregister_services_removes_only_registered_services(
-    hass_mock: MagicMock,
-) -> None:
-    """Unload must remove every currently registered integration service."""
-    registered_names = {SERVICE_REBOOT, SERVICE_SCAN_WIFI, SERVICE_LIST_IMAGES}
-    registry = _service_registry(hass_mock)
-    registry.has_service.side_effect = lambda domain, service_name: (
-        domain == DOMAIN and service_name in registered_names
-    )
-
-    services_module.async_unregister_services(hass_mock)
-
-    assert registry.async_remove.call_args_list == [
-        call(DOMAIN, service_name)
-        for service_name in (service.name for service in services_module._SERVICES)
-        if service_name in registered_names
-    ]
-
-
-def test_unregister_services_is_noop_when_none_are_registered(
-    hass_mock: MagicMock,
-) -> None:
-    """Unload must tolerate an already-empty service registry."""
-    registry = _service_registry(hass_mock)
-    registry.has_service.return_value = False
-
-    services_module.async_unregister_services(hass_mock)
-
-    registry.async_remove.assert_not_called()

@@ -9,17 +9,17 @@ from homeassistant.util import dt as dt_util
 from nanokvm.ssh_client import NanoKVMSSH
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class SSHMetricsSnapshot:
-    """Snapshot of metrics collected via SSH."""
+    """Snapshot of metrics collected via SSH; all None while SSH is unavailable."""
 
-    uptime: datetime.datetime | None
-    cpu_temperature: float | None
-    memory_total: float | None
-    memory_used_percent: float | None
-    storage_total: float | None
-    storage_used_percent: float | None
-    watchdog_enabled: bool | None
+    uptime: datetime.datetime | None = None
+    cpu_temperature: float | None = None
+    memory_total: float | None = None
+    memory_used_percent: float | None = None
+    storage_total: float | None = None
+    storage_used_percent: float | None = None
+    watchdog_enabled: bool | None = None
 
 
 class SSHMetricsCollector:
@@ -29,14 +29,13 @@ class SSHMetricsCollector:
         self,
         host: str,
         password: str,
-        username: str = "root",
         known_hosts: str | None = None,
     ) -> None:
         """Initialize the SSH collector."""
         self._password = password
         self._client = NanoKVMSSH(
             host=host,
-            username=username,
+            username="root",
             known_hosts=known_hosts,
             allow_unknown_host_key=False,
         )
@@ -60,8 +59,8 @@ class SSHMetricsCollector:
 
         uptime = await self._fetch_uptime()
         cpu_temperature = await self._fetch_cpu_temperature()
-        memory_stats = await self._fetch_memory()
-        storage_stats = await self._fetch_storage()
+        memory_total, memory_used_percent = await self._fetch_memory()
+        storage_total, storage_used_percent = await self._fetch_storage()
         watchdog_enabled = None
         if include_watchdog:
             watchdog_enabled = await self.fetch_watchdog_enabled()
@@ -69,10 +68,10 @@ class SSHMetricsCollector:
         return SSHMetricsSnapshot(
             uptime=uptime,
             cpu_temperature=cpu_temperature,
-            memory_total=memory_stats.get("total"),
-            memory_used_percent=memory_stats.get("used_percent"),
-            storage_total=storage_stats.get("total"),
-            storage_used_percent=storage_stats.get("used_percent"),
+            memory_total=memory_total,
+            memory_used_percent=memory_used_percent,
+            storage_total=storage_total,
+            storage_used_percent=storage_used_percent,
             watchdog_enabled=watchdog_enabled,
         )
 
@@ -97,8 +96,8 @@ class SSHMetricsCollector:
                 return dt_util.utc_from_timestamp(int(parts[1]))
         return None
 
-    async def _fetch_memory(self) -> dict[str, float | None]:
-        """Fetch memory stats via SSH."""
+    async def _fetch_memory(self) -> tuple[float | None, float | None]:
+        """Fetch total memory in MB and the used percentage via SSH."""
         meminfo = await self._client.run_command("cat /proc/meminfo")
         mem_data: dict[str, int] = {}
         for line in meminfo.splitlines():
@@ -118,7 +117,7 @@ class SSHMetricsCollector:
                 memory_used = round(total_mb - memory_free, 2)
                 used_percent = round((memory_used / total_mb) * 100, 2)
 
-        return {"total": total_mb, "used_percent": used_percent}
+        return total_mb, used_percent
 
     async def _fetch_cpu_temperature(self) -> float | None:
         """Fetch CPU temperature in Celsius via SSH."""
@@ -128,8 +127,8 @@ class SSHMetricsCollector:
             value /= 1000
         return round(value, 1)
 
-    async def _fetch_storage(self) -> dict[str, float | None]:
-        """Fetch storage stats via SSH."""
+    async def _fetch_storage(self) -> tuple[float | None, float | None]:
+        """Fetch total storage in MB and the used percentage via SSH."""
         df_output = await self._client.run_command("df -k /")
         lines = df_output.splitlines()
         total_mb: float | None = None
@@ -141,4 +140,4 @@ class SSHMetricsCollector:
                 total_mb = round(int(parts[1]) / 1024, 2)
                 used_percent = float(parts[4].rstrip("%"))
 
-        return {"total": total_mb, "used_percent": used_percent}
+        return total_mb, used_percent

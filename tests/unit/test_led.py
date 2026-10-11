@@ -5,18 +5,16 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+from homeassistant.exceptions import HomeAssistantError
 from nanokvm.models import GetLedStripRsp
 import pytest
 
 from custom_components.nanokvm.const import LED_BEAD_TOTAL_LIMIT
 from custom_components.nanokvm.led import (
-    LedStripConfig,
     async_set_led_strip,
-    build_led_strip_config,
     max_horizontal_count,
     max_vertical_count,
     note_reported_led_strip,
-    validate_led_strip_config,
 )
 
 
@@ -32,133 +30,74 @@ def test_led_axis_limits_share_the_total_bead_constraint() -> None:
     assert max_horizontal_count(0) == LED_BEAD_TOTAL_LIMIT
 
 
-@pytest.mark.parametrize("brightness", [0, 100])
-def test_led_config_accepts_brightness_boundaries(brightness: int) -> None:
-    """Both documented brightness boundaries must be valid."""
-    validate_led_strip_config(
-        LedStripConfig(
-            on=True,
-            brightness=brightness,
-            horizontal_count=1,
-            vertical_count=1,
-        )
-    )
-
-
-@pytest.mark.parametrize("brightness", [-1, 101])
-def test_led_config_rejects_out_of_range_brightness(brightness: int) -> None:
-    """Brightness outside the hardware range must be rejected."""
-    with pytest.raises(ValueError, match="LED brightness must be between 0 and 100"):
-        validate_led_strip_config(
-            LedStripConfig(
-                on=True,
-                brightness=brightness,
-                horizontal_count=1,
-                vertical_count=1,
-            )
-        )
-
-
-def test_led_config_rejects_missing_horizontal_bead() -> None:
-    """At least one horizontal bead is required."""
-    with pytest.raises(ValueError, match="Horizontal LED beads must be at least 1"):
-        validate_led_strip_config(
-            LedStripConfig(
-                on=True,
-                brightness=50,
-                horizontal_count=0,
-                vertical_count=1,
-            )
-        )
-
-
-def test_led_config_rejects_missing_vertical_bead() -> None:
-    """At least one vertical bead is required."""
-    with pytest.raises(ValueError, match="Vertical LED beads must be at least 1"):
-        validate_led_strip_config(
-            LedStripConfig(
-                on=True,
-                brightness=50,
-                horizontal_count=1,
-                vertical_count=0,
-            )
-        )
-
-
-def test_led_config_rejects_aggregate_limit_overflow() -> None:
-    """The full strip must fit within the device's aggregate bead limit."""
-    with pytest.raises(
-        ValueError, match=r"horizontal_count \+ \(2 \* vertical_count\)"
-    ):
-        validate_led_strip_config(
-            LedStripConfig(
-                on=True,
-                brightness=50,
-                horizontal_count=101,
-                vertical_count=25,
-            )
-        )
-
-
-def test_build_led_config_requires_current_device_state() -> None:
-    """Partial updates cannot be constructed without a complete device baseline."""
-    with pytest.raises(ValueError, match="LED strip state is unavailable"):
-        build_led_strip_config(None, brightness=50)
-
-
-def test_build_led_config_preserves_unspecified_device_values() -> None:
-    """A partial update must copy every field that was not explicitly changed."""
-    assert build_led_strip_config(_device_state(), brightness=25) == LedStripConfig(
-        on=True,
-        brightness=25,
-        horizontal_count=30,
-        vertical_count=20,
-    )
-
-
-def test_build_led_config_without_overrides_copies_current_state() -> None:
-    """A no-op update must still produce the complete validated value object."""
-    assert build_led_strip_config(_device_state()) == LedStripConfig(
-        on=True,
-        brightness=75,
-        horizontal_count=30,
-        vertical_count=20,
-    )
-
-
-def test_build_led_config_applies_complete_valid_update() -> None:
-    """Explicit updates must override all device values and remain validated."""
-    assert build_led_strip_config(
-        _device_state(),
-        on=False,
-        brightness=0,
-        horizontal_count=50,
-        vertical_count=50,
-    ) == LedStripConfig(
-        on=False,
-        brightness=0,
-        horizontal_count=50,
-        vertical_count=50,
-    )
-
-
-def test_build_led_config_validates_the_merged_result() -> None:
-    """Invalid partial updates must be rejected after merging with device state."""
-    with pytest.raises(ValueError, match="LED brightness"):
-        build_led_strip_config(_device_state(), brightness=101)
-
-
 def _led_coordinator(brightness: int = 68) -> SimpleNamespace:
     """Return a coordinator-shaped object with a reported LED strip state."""
     return SimpleNamespace(
         led_strip=GetLedStripRsp(on=False, hor=114, ver=18, brightness=brightness),
         client=SimpleNamespace(set_led_strip=AsyncMock()),
+        led_brightness_request=None,
     )
 
 
 def _sent_brightness(coordinator: SimpleNamespace) -> int:
     """Return the brightness of the most recent device write."""
     return coordinator.client.set_led_strip.await_args.kwargs["brightness"]
+
+
+@pytest.mark.parametrize("brightness", [0, 100])
+async def test_led_write_accepts_brightness_boundaries(brightness: int) -> None:
+    """Both documented brightness boundaries must be valid."""
+    coordinator = _led_coordinator()
+
+    await async_set_led_strip(coordinator, on=True, brightness=brightness)
+
+    assert _sent_brightness(coordinator) == brightness
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"brightness": -1}, "LED brightness must be between 0 and 100"),
+        ({"brightness": 101}, "LED brightness must be between 0 and 100"),
+        ({"horizontal_count": 0}, "Horizontal LED beads must be at least 1"),
+        ({"vertical_count": 0}, "Vertical LED beads must be at least 1"),
+        (
+            {"horizontal_count": 101, "vertical_count": 25},
+            r"horizontal_count \+ \(2 \* vertical_count\)",
+        ),
+    ],
+)
+async def test_led_write_rejects_invalid_merged_values(
+    change: dict[str, int], message: str
+) -> None:
+    """Values outside the hardware limits are rejected before any device write."""
+    coordinator = _led_coordinator()
+
+    with pytest.raises(HomeAssistantError, match=message):
+        await async_set_led_strip(coordinator, on=True, **change)
+    coordinator.client.set_led_strip.assert_not_awaited()
+
+
+async def test_led_write_requires_current_device_state() -> None:
+    """Partial updates cannot be sent without a complete device baseline."""
+    coordinator = _led_coordinator()
+    coordinator.led_strip = None
+
+    with pytest.raises(HomeAssistantError, match="LED strip state is unavailable"):
+        await async_set_led_strip(coordinator, brightness=50)
+
+
+async def test_led_write_applies_complete_valid_update() -> None:
+    """Explicit updates must override all device values."""
+    coordinator = _led_coordinator()
+
+    await async_set_led_strip(
+        coordinator, on=True, brightness=0, horizontal_count=50, vertical_count=50
+    )
+
+    coordinator.client.set_led_strip.assert_awaited_once_with(
+        on=True, brightness=0, horizontal_count=50, vertical_count=50
+    )
 
 
 async def test_led_toggle_keeps_requested_brightness_when_device_reports_lower() -> None:
@@ -211,7 +150,7 @@ async def test_led_write_failure_keeps_the_previous_request() -> None:
 
     with pytest.raises(RuntimeError):
         await async_set_led_strip(coordinator, on=True, brightness=90)
-    with pytest.raises(ValueError):
+    with pytest.raises(HomeAssistantError):
         await async_set_led_strip(coordinator, on=True, brightness=500)
 
     assert coordinator.led_brightness_request.requested == 40
@@ -226,7 +165,7 @@ async def test_led_settings_are_rejected_while_the_strip_is_off(
     """The device ignores settings sent while off, so they are not sent at all."""
     coordinator = _led_coordinator()
 
-    with pytest.raises(ValueError, match="Turn the LED strip on"):
+    with pytest.raises(HomeAssistantError, match="Turn the LED strip on"):
         await async_set_led_strip(coordinator, **change)
     coordinator.client.set_led_strip.assert_not_awaited()
 

@@ -27,11 +27,13 @@ The integration follows the standard structure for a Home Assistant
 ### Core Files
 
 - **`__init__.py`**: Main entry point.
+  - **`async_setup`**: Registers the integration services once.
   - **`async_setup_entry`**: Initializes the integration from a config entry.
     Creates/authenticates the client, fetches initial device info, creates the
-    coordinator, forwards setup to platform files, and registers services.
-  - **`async_unload_entry`**: Unloads platforms, disconnects SSH collector, and
-    unregisters services when the last entry is removed.
+    coordinator, stores it in `entry.runtime_data`, and forwards setup to
+    platform files.
+  - **`async_unload_entry`**: Unloads platforms. The config entry shuts the
+    coordinator down, which disconnects the SSH collector.
 
 - **`coordinator.py`**: Hosts `NanoKVMDataUpdateCoordinator`.
   - Central polling logic (`_async_update_data`) and API fetch helpers.
@@ -49,12 +51,13 @@ The integration follows the standard structure for a Home Assistant
 
 - **`entity.py`**: Defines `NanoKVMEntity` base class.
   - Shared entity behavior (`unique_id`, `device_info`) for all platforms.
+  - `async_add_entities_as_supported` adds each described entity once, at
+    setup or on a later coordinator update, when the device supports it.
   - `_async_device_action` wraps client access for actions and reports device
     failures as `HomeAssistantError`.
 
 - **`services.py`**: Service schemas, registration, and handlers.
-  - Implements all `nanokvm.*` service behavior, response services, and
-    unregister logic.
+  - Implements all `nanokvm.*` service behavior and response services.
   - Targets a device by `device_id`, or by `host` matched against the entry's
     current and preferred hosts.
 
@@ -71,11 +74,15 @@ The integration follows the standard structure for a Home Assistant
     NanoKVM, and treats a different device at a saved address as its own device.
 
 - **`const.py`**: Central repository for shared constants (domain, service
-  names, attributes, defaults, icons, and signal names).
+  names, attributes, and defaults).
 
 - **`utils.py`**: Shared helpers for host normalization and SSH host extraction.
   - Resolves HTTP/HTTPS API candidates, HTTPS probe URLs, scheme-preserving
     verification URLs, and normalized host matching keys.
+  - `async_connect` is the one place that tries those candidates in order and
+    authenticates. Setup, the config flow, reauthentication, and transport
+    failover all call it and translate its three errors (`InvalidAuth`,
+    `SSLCertificateChanged`, `CannotConnect`).
 
 - **`ssh_metrics.py`**: SSH metrics collection implementation used by the
   coordinator.
@@ -146,7 +153,8 @@ Each platform follows a similar pattern:
   entities.
 - **Optional and dynamic entities**:
   Some entities are created only after the coordinator sees supporting state,
-  such as mounted media, active wired/wireless connections, or SSH metrics.
+  such as mounted media, active wired/wireless connections, or enabled SSH.
+  Platforms re-check their descriptions on every coordinator update.
 - **NanoKVM Pro compatibility**:
   Pro devices expose several APIs with different schemas from non-Pro models.
   Keep Pro-specific polling optional and keep non-Pro-only entities gated by

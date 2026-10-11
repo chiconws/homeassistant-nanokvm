@@ -1,9 +1,31 @@
 """Shared utility helpers for the Sipeed NanoKVM integration."""
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from typing import TypeVar
 
+import aiohttp
 from yarl import URL
+
+from homeassistant.exceptions import HomeAssistantError
+
+from nanokvm.client import NanoKVMAuthenticationFailure, NanoKVMClient, NanoKVMError
+
+_ResultT = TypeVar("_ResultT")
+
+
+class CannotConnect(HomeAssistantError):
+    """No API candidate could be reached; the cause is the last failure."""
+
+
+class InvalidAuth(HomeAssistantError):
+    """The device rejected the credentials."""
+
+
+class SSLCertificateChanged(HomeAssistantError):
+    """The device certificate is untrusted or differs from the saved one."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,3 +132,49 @@ def host_match_key(host: str) -> tuple[str, int | None, str]:
         origin.explicit_port,
         _normalize_api_path(origin.path),
     )
+
+
+def is_auth_failure(error: BaseException) -> bool:
+    """Return whether the exception represents invalid credentials."""
+    return isinstance(error, NanoKVMAuthenticationFailure) or (
+        isinstance(error, aiohttp.ClientResponseError) and error.status == 401
+    )
+
+
+async def async_connect(
+    options: Sequence[NanoKVMAPIConnectionOption],
+    username: str,
+    password: str,
+    then: Callable[[NanoKVMClient], Awaitable[_ResultT]] | None = None,
+) -> tuple[NanoKVMClient, _ResultT | None]:
+    """Authenticate against the first candidate that answers.
+
+    Returns the authenticated client and what `then` returned for it. An
+    unreachable candidate gives way to the next one; any other failure stops.
+    """
+    last_error: Exception | None = None
+
+    for index, option in enumerate(options):
+        client = NanoKVMClient(option.base_url, ssl_fingerprint=option.ssl_fingerprint)
+        try:
+            async with client:
+                await client.authenticate(username, password)
+                result = await then(client) if then is not None else None
+            return client, result
+        except (
+            aiohttp.ServerFingerprintMismatch,
+            aiohttp.ClientConnectorCertificateError,
+        ) as err:
+            if option.scheme == "http" and index < len(options) - 1:
+                last_error = err
+                continue
+            raise SSLCertificateChanged from err
+        except aiohttp.ClientConnectionError as err:
+            last_error = err
+        except (aiohttp.ClientError, NanoKVMError, asyncio.TimeoutError) as err:
+            if is_auth_failure(err):
+                raise InvalidAuth from err
+            last_error = err
+            break
+
+    raise CannotConnect from last_error

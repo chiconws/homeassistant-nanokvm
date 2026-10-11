@@ -39,6 +39,7 @@ from custom_components.nanokvm.const import (
     DOMAIN,
     INTEGRATION_TITLE,
 )
+import custom_components.nanokvm.utils as utils_module
 
 
 @dataclass(slots=True)
@@ -111,6 +112,7 @@ def install_client(monkeypatch: pytest.MonkeyPatch):
         ScriptedClient.scenarios = list(scenarios)
         ScriptedClient.instances = []
         monkeypatch.setattr(config_flow_module, "NanoKVMClient", ScriptedClient)
+        monkeypatch.setattr(utils_module, "NanoKVMClient", ScriptedClient)
         return ScriptedClient
 
     return install
@@ -170,16 +172,6 @@ async def test_prepare_ssh_host_key_probes_enabled_service(
 
     assert result is host_key
     probe.assert_awaited_once_with("nanokvm.local")
-
-
-@pytest.mark.asyncio
-async def test_prepare_ssh_host_key_skips_clients_without_ssh_endpoint(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Test doubles and older clients without SSH state remain optional."""
-    monkeypatch.setattr(config_flow_module, "NanoKVMClient", ScriptedClient)
-
-    assert await async_prepare_ssh_host_key(_connection_data()) is None
 
 
 @pytest.mark.asyncio
@@ -342,7 +334,7 @@ def test_flow_initial_state_and_fingerprint_formatting(flow: NanoKVMConfigFlow) 
     assert flow.data == {}
     assert flow._discovered_fingerprint is None
     assert flow._ssl_return_step is None
-    assert flow._format_fingerprint("AABB01") == "AA:BB:01"
+    assert config_flow_module._format_fingerprint("AABB01") == "AA:BB:01"
 
 
 def test_find_matching_entry_returns_first_match_or_none(

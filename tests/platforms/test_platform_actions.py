@@ -43,7 +43,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
     values: dict[str, object] = {
         "application_version_info": SimpleNamespace(current="1.0.0", latest="1.1.0"),
         "async_client": MagicMock(side_effect=async_client),
-        "async_ensure_ssh_metrics_collector": AsyncMock(),
+        "async_ensure_ssh_metrics_collector": MagicMock(),
         "async_refresh": AsyncMock(),
         "async_request_refresh": AsyncMock(),
         "client": client,
@@ -53,6 +53,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "hostname_info": None,
         "is_pro_hardware": True,
         "last_update_success": True,
+        "led_brightness_request": None,
         "led_strip": SimpleNamespace(
             on=True,
             brightness=75,
@@ -60,7 +61,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
             vertical_count=20,
         ),
         "virtual_device_info": SimpleNamespace(network=False, disk=False, mic=False),
-        "watchdog_enabled": False,
+        "ssh_metrics": SimpleNamespace(watchdog_enabled=False),
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -309,26 +310,12 @@ async def test_generic_switch_actions_use_handlers_and_refresh() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generic_switch_missing_handlers_raise() -> None:
-    """Malformed generic switch descriptions must fail clearly."""
-    entity = switch_module.NanoKVMSwitch(
-        _coordinator(),
-        switch_module.NanoKVMSwitchEntityDescription(key="missing"),
-    )
-
-    with pytest.raises(RuntimeError, match="Missing turn_on handler"):
-        await entity.async_turn_on()
-    with pytest.raises(RuntimeError, match="Missing turn_off handler"):
-        await entity.async_turn_off()
-
-
-@pytest.mark.asyncio
 async def test_led_switch_preserves_strip_values_and_translates_missing_state() -> None:
     """LED power writes must preserve strip geometry and report unavailable state."""
     coordinator = _coordinator()
     coordinator.client.set_led_strip = AsyncMock()
 
-    await switch_module._set_led_strip_on(coordinator, False)
+    await _description(switch_module.SWITCHES, "led_strip").turn_off_fn(coordinator)
 
     coordinator.client.set_led_strip.assert_awaited_once_with(
         on=False,
@@ -339,7 +326,7 @@ async def test_led_switch_preserves_strip_values_and_translates_missing_state() 
 
     coordinator.led_strip = None
     with pytest.raises(HomeAssistantError, match="LED strip state is unavailable"):
-        await switch_module._set_led_strip_on(coordinator, True)
+        await _description(switch_module.SWITCHES, "led_strip").turn_on_fn(coordinator)
 
 
 @pytest.mark.asyncio
@@ -351,20 +338,6 @@ async def test_power_state_refresh_handles_unavailable_gpio() -> None:
     )
 
     assert await entity._async_current_power_state() is None
-
-
-@pytest.mark.asyncio
-async def test_power_switch_missing_handlers_raise() -> None:
-    """Malformed power descriptions must fail before polling or client access."""
-    entity = switch_module.NanoKVMPowerSwitch(
-        _coordinator(),
-        switch_module.NanoKVMSwitchEntityDescription(key="power"),
-    )
-
-    with pytest.raises(RuntimeError, match="Missing turn_on handler"):
-        await entity.async_turn_on()
-    with pytest.raises(RuntimeError, match="Missing turn_off handler"):
-        await entity.async_turn_off()
 
 
 def _run_power_off_monitor_inline(
@@ -513,18 +486,6 @@ async def test_virtual_device_switch_toggles_only_when_state_differs() -> None:
     coordinator.client.update_virtual_device.assert_awaited_once_with(
         VirtualDevice.NETWORK
     )
-
-
-@pytest.mark.asyncio
-async def test_virtual_device_switch_requires_device_type() -> None:
-    """A malformed virtual-device description must fail before refresh."""
-    entity = switch_module.NanoKVMVirtualDeviceSwitch(
-        _coordinator(),
-        switch_module.NanoKVMSwitchEntityDescription(key="missing"),
-    )
-
-    with pytest.raises(RuntimeError, match="Missing virtual device type"):
-        await entity.async_turn_on()
 
 
 @pytest.mark.asyncio

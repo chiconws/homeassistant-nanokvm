@@ -11,19 +11,18 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from nanokvm.models import HWVersion
 
-from .const import (
-    DOMAIN,
-    SIGNAL_NEW_MEDIA_ENTITIES,
-    SIGNAL_NEW_NETWORK_ENTITIES,
-)
 from .coordinator import NanoKVMDataUpdateCoordinator
-from .entity import NanoKVMEntity
+from .entity import (
+    NanoKVMEntity,
+    async_add_entities_as_supported,
+    has_connection_type,
+    has_mounted_image,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -54,29 +53,9 @@ def _wifi_supported(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     return bool(coordinator.wifi_status and coordinator.wifi_status.supported)
 
 
-def _has_mounted_image(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether there is a mounted image."""
-    return bool(coordinator.mounted_image and coordinator.mounted_image.file != "")
-
-
-def _cdrom_supported(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether the dedicated /storage/cdrom endpoint exists on this device."""
-    return coordinator.is_non_pro_hardware
-
-
-def _has_connection_type(
-    coordinator: NanoKVMDataUpdateCoordinator, connection_type: str
-) -> bool:
-    """Return whether an IP connection type is active."""
-    return any(
-        address.addr and address.type.casefold() == connection_type
-        for address in coordinator.device_info.ips
-    )
-
-
 def _wired_active(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether a wired network connection is active."""
-    return _has_connection_type(coordinator, "wired")
+    return has_connection_type(coordinator, "wired")
 
 
 def _static_ip_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -89,6 +68,11 @@ def _time_status_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     return coordinator.is_pro_hardware and coordinator.time_status is not None
 
 
+def _cdrom_mode_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether an image is mounted where /storage/cdrom exists (non-Pro)."""
+    return has_mounted_image(coordinator) and coordinator.is_non_pro_hardware
+
+
 MEDIA_BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
     NanoKVMBinarySensorEntityDescription(
         key="cdrom_mode",
@@ -97,9 +81,8 @@ MEDIA_BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.cdrom_status and coordinator.cdrom_status.cdrom == 1
         ),
-        available_fn=lambda coordinator: _has_mounted_image(coordinator)
-        and _cdrom_supported(coordinator),
-        should_create_fn=_cdrom_supported,
+        available_fn=_cdrom_mode_available,
+        should_create_fn=_cdrom_mode_available,
     ),
 )
 
@@ -170,75 +153,17 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM binary sensor based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
-    async_add_entities(
-        NanoKVMBinarySensor(
-            coordinator=coordinator,
-            description=description,
-        )
-        for description in BINARY_SENSORS
-        if description.should_create_fn(coordinator)
-    )
-
-    @callback
-    def async_add_media_binary_sensors() -> None:
-        """Add media-backed binary sensors when media is first mounted."""
-        if not _has_mounted_image(coordinator):
-            return
-
-        async_add_entities(
-            NanoKVMBinarySensor(
-                coordinator=coordinator,
-                description=description,
-            )
-            for description in MEDIA_BINARY_SENSORS
-            if description.should_create_fn(coordinator)
-        )
-
-    if _has_mounted_image(coordinator):
-        async_add_media_binary_sensors()
-
-    network_entities_added = {
-        description.key
-        for description in BINARY_SENSORS
-        if description.should_create_fn(coordinator)
-    }
-
-    @callback
-    def async_add_network_binary_sensors(connection_type: str) -> None:
-        """Add network binary sensors when a connection type appears."""
-        if connection_type != "wired":
-            return
-
-        entities = [
-            NanoKVMBinarySensor(
-                coordinator=coordinator,
-                description=description,
-            )
-            for description in BINARY_SENSORS
-            if description.key not in network_entities_added
-            and description.should_create_fn(coordinator)
-        ]
-        if not entities:
-            return
-
-        async_add_entities(entities)
-        network_entities_added.update(entity.entity_description.key for entity in entities)
-
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            SIGNAL_NEW_MEDIA_ENTITIES.format(entry.entry_id),
-            async_add_media_binary_sensors,
-        )
-    )
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            SIGNAL_NEW_NETWORK_ENTITIES.format(entry.entry_id),
-            async_add_network_binary_sensors,
-        )
+    async_add_entities_as_supported(
+        entry,
+        coordinator,
+        async_add_entities,
+        (*BINARY_SENSORS, *MEDIA_BINARY_SENSORS),
+        lambda description: description.should_create_fn(coordinator),
+        lambda description: NanoKVMBinarySensor(
+            coordinator=coordinator, description=description
+        ),
     )
 
 

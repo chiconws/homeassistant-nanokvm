@@ -9,6 +9,7 @@ from homeassistant.const import EntityCategory
 from nanokvm.models import VirtualDevice
 import pytest
 
+from custom_components.nanokvm.led import led_strip_available
 from custom_components.nanokvm.switch import (
     SSH_SWITCHES,
     SWITCHES,
@@ -18,10 +19,8 @@ from custom_components.nanokvm.switch import (
     _hdmi_capture_available,
     _hdmi_passthrough_available,
     _hdmi_value,
-    _led_strip_available,
     _led_strip_value,
     _low_power_available,
-    _non_pro_virtual_device_available,
     _pro_virtual_device_available,
     _pro_virtual_mic_available,
     _watchdog_available,
@@ -134,7 +133,11 @@ def test_watchdog_value_normalizes_optional_state(
 ) -> None:
     """Unknown watchdog state must not be presented as enabled."""
     assert (
-        _watchdog_value(coordinator_state_factory(watchdog_enabled=watchdog_enabled))
+        _watchdog_value(
+            coordinator_state_factory(
+                ssh_metrics=SimpleNamespace(watchdog_enabled=watchdog_enabled)
+            )
+        )
         is expected
     )
 
@@ -157,7 +160,7 @@ def test_watchdog_availability_requires_support_and_known_state(
     """A known false watchdog value must remain available when supported."""
     coordinator = coordinator_state_factory(
         supports_watchdog=supports_watchdog,
-        watchdog_enabled=watchdog_enabled,
+        ssh_metrics=SimpleNamespace(watchdog_enabled=watchdog_enabled),
     )
 
     assert _watchdog_available(coordinator) is expected
@@ -178,11 +181,9 @@ def test_virtual_device_availability_separates_hardware_families(
         virtual_device_info=SimpleNamespace(mic=False),
     )
 
-    assert _non_pro_virtual_device_available(non_pro)
     assert not _pro_virtual_device_available(non_pro)
     assert not _pro_virtual_mic_available(non_pro)
 
-    assert not _non_pro_virtual_device_available(pro)
     assert _pro_virtual_device_available(pro)
     assert _pro_virtual_mic_available(pro)
 
@@ -214,7 +215,7 @@ def test_pro_virtual_mic_requires_reported_mic_state(
         (_hdmi_capture_available, "hdmi_capture"),
         (_hdmi_passthrough_available, "hdmi_passthrough"),
         (_low_power_available, "low_power"),
-        (_led_strip_available, "led_strip"),
+        (led_strip_available, "led_strip"),
     ],
 )
 def test_pro_feature_availability_requires_pro_hardware_and_reported_state(
@@ -265,7 +266,7 @@ def test_all_switch_value_functions_read_their_reported_state(
         hdmi_passthrough=SimpleNamespace(enabled=True),
         low_power=SimpleNamespace(enabled=True),
         led_strip=SimpleNamespace(on=True),
-        watchdog_enabled=True,
+        ssh_metrics=SimpleNamespace(watchdog_enabled=True),
     )
 
     assert all(
@@ -287,7 +288,7 @@ def test_all_switch_value_functions_handle_missing_state(
         hdmi_passthrough=None,
         low_power=None,
         led_strip=None,
-        watchdog_enabled=None,
+        ssh_metrics=SimpleNamespace(watchdog_enabled=None),
     )
 
     assert not any(

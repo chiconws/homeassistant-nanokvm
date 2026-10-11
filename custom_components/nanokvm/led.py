@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from homeassistant.exceptions import HomeAssistantError
 from nanokvm.models import GetLedStripRsp
 
 from .const import (
@@ -15,16 +16,6 @@ from .const import (
 
 if TYPE_CHECKING:
     from .coordinator import NanoKVMDataUpdateCoordinator
-
-
-@dataclass(frozen=True, slots=True)
-class LedStripConfig:
-    """Complete NanoKVM Pro LED strip configuration."""
-
-    on: bool
-    brightness: int
-    horizontal_count: int
-    vertical_count: int
 
 
 @dataclass(slots=True)
@@ -39,6 +30,11 @@ class LedBrightnessRequest:
     reported: int | None = None
 
 
+def led_strip_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether Pro LED strip state is available."""
+    return coordinator.is_pro_hardware and coordinator.led_strip is not None
+
+
 def max_horizontal_count(vertical_count: int) -> int:
     """Return maximum horizontal bead count for a vertical bead count."""
     return LED_BEAD_TOTAL_LIMIT - (2 * vertical_count)
@@ -49,60 +45,11 @@ def max_vertical_count(horizontal_count: int) -> int:
     return (LED_BEAD_TOTAL_LIMIT - horizontal_count) // 2
 
 
-def validate_led_strip_config(config: LedStripConfig) -> None:
-    """Validate NanoKVM Pro LED strip values."""
-    if not LED_BRIGHTNESS_MIN <= config.brightness <= LED_BRIGHTNESS_MAX:
-        raise ValueError(
-            f"LED brightness must be between {LED_BRIGHTNESS_MIN} and "
-            f"{LED_BRIGHTNESS_MAX}"
-        )
-
-    if config.horizontal_count < LED_BEAD_MIN:
-        raise ValueError(f"Horizontal LED beads must be at least {LED_BEAD_MIN}")
-
-    if config.vertical_count < LED_BEAD_MIN:
-        raise ValueError(f"Vertical LED beads must be at least {LED_BEAD_MIN}")
-
-    if config.horizontal_count + (2 * config.vertical_count) > LED_BEAD_TOTAL_LIMIT:
-        raise ValueError(
-            "LED bead counts must satisfy horizontal_count + "
-            f"(2 * vertical_count) <= {LED_BEAD_TOTAL_LIMIT}"
-        )
-
-
-def build_led_strip_config(
-    current: GetLedStripRsp | None,
-    *,
-    on: bool | None = None,
-    brightness: int | None = None,
-    horizontal_count: int | None = None,
-    vertical_count: int | None = None,
-) -> LedStripConfig:
-    """Build and validate a complete LED strip config from partial updates."""
-    if current is None:
-        raise ValueError("LED strip state is unavailable")
-
-    config = LedStripConfig(
-        on=current.on if on is None else on,
-        brightness=current.brightness if brightness is None else brightness,
-        horizontal_count=(
-            current.horizontal_count
-            if horizontal_count is None
-            else horizontal_count
-        ),
-        vertical_count=(
-            current.vertical_count if vertical_count is None else vertical_count
-        ),
-    )
-    validate_led_strip_config(config)
-    return config
-
-
 def note_reported_led_strip(
     coordinator: NanoKVMDataUpdateCoordinator, reported: GetLedStripRsp | None
 ) -> bool:
     """Record the brightness reported by the first poll after a write."""
-    request = getattr(coordinator, "led_brightness_request", None)
+    request = coordinator.led_brightness_request
     if request is None or request.reported is not None or reported is None:
         return False
     request.reported = reported.brightness
@@ -119,33 +66,52 @@ async def async_set_led_strip(
 ) -> None:
     """Send a partial LED strip update, keeping the other settings as requested."""
     current = coordinator.led_strip
+    if current is None:
+        raise HomeAssistantError("LED strip state is unavailable")
+
     changes_settings = any(
         value is not None for value in (brightness, horizontal_count, vertical_count)
     )
-    request = getattr(coordinator, "led_brightness_request", None)
+    request = coordinator.led_brightness_request
     if (
         brightness is None
-        and current is not None
         and request is not None
         and request.reported in (None, current.brightness)
     ):
         # Nothing else changed the brightness since the last write.
         brightness = request.requested
 
-    config = build_led_strip_config(
-        current,
+    on = current.on if on is None else on
+    brightness = current.brightness if brightness is None else brightness
+    if horizontal_count is None:
+        horizontal_count = current.horizontal_count
+    if vertical_count is None:
+        vertical_count = current.vertical_count
+
+    if not LED_BRIGHTNESS_MIN <= brightness <= LED_BRIGHTNESS_MAX:
+        raise HomeAssistantError(
+            f"LED brightness must be between {LED_BRIGHTNESS_MIN} and "
+            f"{LED_BRIGHTNESS_MAX}"
+        )
+    if horizontal_count < LED_BEAD_MIN:
+        raise HomeAssistantError(
+            f"Horizontal LED beads must be at least {LED_BEAD_MIN}"
+        )
+    if vertical_count < LED_BEAD_MIN:
+        raise HomeAssistantError(f"Vertical LED beads must be at least {LED_BEAD_MIN}")
+    if horizontal_count + (2 * vertical_count) > LED_BEAD_TOTAL_LIMIT:
+        raise HomeAssistantError(
+            "LED bead counts must satisfy horizontal_count + "
+            f"(2 * vertical_count) <= {LED_BEAD_TOTAL_LIMIT}"
+        )
+    if changes_settings and not on:
+        # The device accepts the request but ignores settings while off.
+        raise HomeAssistantError("Turn the LED strip on before changing its settings")
+
+    await coordinator.client.set_led_strip(
         on=on,
         brightness=brightness,
         horizontal_count=horizontal_count,
         vertical_count=vertical_count,
     )
-    if changes_settings and not config.on:
-        # The device accepts the request but ignores settings while off.
-        raise ValueError("Turn the LED strip on before changing its settings")
-    await coordinator.client.set_led_strip(
-        on=config.on,
-        brightness=config.brightness,
-        horizontal_count=config.horizontal_count,
-        vertical_count=config.vertical_count,
-    )
-    coordinator.led_brightness_request = LedBrightnessRequest(config.brightness)
+    coordinator.led_brightness_request = LedBrightnessRequest(brightness)
