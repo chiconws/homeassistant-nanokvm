@@ -160,6 +160,19 @@ SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_tailscale_state_value,
         attributes_fn=_tailscale_attributes,
+        should_create_fn=lambda coordinator: coordinator.is_admin,
+    ),
+    NanoKVMSensorEntityDescription(
+        key="account_role",
+        translation_key="account_role",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coordinator: (
+            coordinator.account.role if coordinator.account else None
+        ),
+        # Only firmware with user accounts reports a role.
+        should_create_fn=lambda coordinator: bool(
+            coordinator.account and coordinator.account.role
+        ),
     ),
 )
 

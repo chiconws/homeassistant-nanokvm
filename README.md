@@ -79,7 +79,7 @@ Notes:
 | Camera | HDMI stream camera with WebRTC and non-Pro still snapshots |
 | Number | Pro LED brightness, horizontal beads, vertical beads |
 | Select | HID mode, Mouse Jiggler, OLED timeout, Swap size, Pro LCD time format, Pro virtual disk type |
-| Sensor | IP address, wired/wireless IP address, mounted image, Tailscale, SSH diagnostics |
+| Sensor | IP address, wired/wireless IP address, mounted image, Tailscale, account role, SSH diagnostics |
 | Switch | Power, SSH, mDNS, virtual network/disk, HDMI output, watchdog, Pro HDMI capture/passthrough, Pro low power, Pro LED strip, Pro virtual mic |
 | Update | Application version and install action |
 
@@ -91,6 +91,19 @@ Notes:
 - SSH diagnostics appear after SSH is enabled on the NanoKVM.
 - The watchdog switch requires SSH and NanoKVM application version `2.2.2` or newer.
 - Pro LED bead counts must satisfy `horizontal + (2 * vertical) <= 150`.
+
+### Non-administrator accounts
+
+Non-Pro application `2.5.1` and newer has user accounts with the roles `admin` and `user`. The integration works with either and reports the role in the **Account role** diagnostic sensor. A `user` account only gets the entities the device lets it use:
+
+| Works with a `user` account | Needs an `admin` account |
+| --- | --- |
+| Camera, Power switch, Power/Reset buttons, Reset HDMI button | SSH, mDNS, virtual network/disk and HDMI output switches |
+| Power LED, wired connected | Reboot and Reset HID buttons |
+| IP address sensors, account role | HID mode, Mouse Jiggler, OLED timeout and Swap size selects |
+| `push_button`, `paste_text`, `wake_on_lan`, `reset_hdmi` services | Mounted image, CD-ROM mode, Wi-Fi, Tailscale, SSH diagnostics, watchdog, application update |
+
+Changing the account's role on the device reloads the integration so the entities match.
 
 ## Hardware Compatibility
 

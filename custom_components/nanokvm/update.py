@@ -43,7 +43,9 @@ async def async_setup_entry(
     """Set up NanoKVM update based on a config entry."""
     coordinator = entry.runtime_data
 
-    async_add_entities([NanoKVMUpdate(coordinator)])
+    # Only an administrator can read or install application versions.
+    if coordinator.is_admin:
+        async_add_entities([NanoKVMUpdate(coordinator)])
 
 
 class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):

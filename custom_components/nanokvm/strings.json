@@ -84,6 +84,9 @@
             "name": "Addresses"
           }
         }
+      },
+      "account_role": {
+        "name": "Account Role"
       }
     },
     "switch": {

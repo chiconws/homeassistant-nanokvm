@@ -18,7 +18,7 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from nanokvm.client import NanoKVMClient, NanoKVMError
+from nanokvm.client import NanoKVMClient, NanoKVMError, NanoKVMPermissionError
 
 from .const import DOMAIN, INTEGRATION_TITLE
 from .coordinator import NanoKVMDataUpdateCoordinator
@@ -94,6 +94,10 @@ class NanoKVMEntity(CoordinatorEntity[NanoKVMDataUpdateCoordinator]):
         try:
             async with self.coordinator.async_client() as client:
                 yield client
+        except NanoKVMPermissionError as err:
+            raise HomeAssistantError(
+                "This needs a NanoKVM administrator account"
+            ) from err
         except (NanoKVMError, aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise HomeAssistantError(
                 f"NanoKVM did not accept the request: {str(err) or type(err).__name__}"

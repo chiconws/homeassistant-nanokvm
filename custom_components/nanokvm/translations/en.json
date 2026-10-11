@@ -183,6 +183,9 @@
             "name": "Total MB"
           }
         }
+      },
+      "account_role": {
+        "name": "Account Role"
       }
     },
     "switch": {

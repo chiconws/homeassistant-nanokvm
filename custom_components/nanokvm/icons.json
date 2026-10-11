@@ -106,6 +106,9 @@
       },
       "wireless_ip_address": {
         "default": "mdi:wifi"
+      },
+      "account_role": {
+        "default": "mdi:account-key"
       }
     },
     "switch": {

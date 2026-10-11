@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 from homeassistant.const import CONF_HOST
 import pytest
+from nanokvm.models import HidMode, HWVersion
 from yarl import URL
 
 import custom_components.nanokvm.binary_sensor as binary_sensor_module
@@ -30,8 +31,10 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
             image="2026-01-01",
             ips=[],
         ),
+        "account": None,
         "gpio_info": SimpleNamespace(pwr=False, hdd=False),
         "hardware_info": None,
+        "is_admin": True,
         "hdmi_capture": None,
         "hdmi_passthrough": None,
         "hdmi_state": None,
@@ -383,3 +386,54 @@ async def test_update_setup_adds_application_update(
     await update_module.async_setup_entry(hass_mock, config_entry_mock, add_entities)
 
     assert [entity.entity_description.key for entity in batches[0]] == ["application"]
+
+
+@pytest.mark.asyncio
+async def test_non_admin_account_gets_only_the_entities_it_may_use(
+    hass_mock: MagicMock,
+    config_entry_mock: MagicMock,
+) -> None:
+    """A role=user account on a PCIe gets no administrator-only entity.
+
+    The state mirrors what firmware 2.5.2 answers such an account: the
+    administrator-only endpoints are refused, so their state stays empty.
+    """
+    coordinator = _coordinator(
+        account=SimpleNamespace(username="guest", role="user"),
+        is_admin=False,
+        hardware_info=SimpleNamespace(version=HWVersion.PCIE),
+        is_non_pro_hardware=True,
+        supports_hdmi_endpoint=True,
+        hdmi_state=SimpleNamespace(enabled=True),
+        hid_mode=SimpleNamespace(mode=HidMode.NORMAL),
+        application_version_info=None,
+        mdns_state=None,
+        ssh_state=None,
+    )
+    _configure_hass(hass_mock, config_entry_mock, coordinator)
+
+    created: dict[str, list[str]] = {}
+    for name, module in (
+        ("binary_sensor", binary_sensor_module),
+        ("button", button_module),
+        ("number", number_module),
+        ("select", select_module),
+        ("sensor", sensor_module),
+        ("switch", switch_module),
+        ("update", update_module),
+    ):
+        add_entities, batches = _entity_collector()
+        await module.async_setup_entry(hass_mock, config_entry_mock, add_entities)
+        created[name] = [
+            entity.entity_description.key for batch in batches for entity in batch
+        ]
+
+    assert created == {
+        "binary_sensor": ["power_led"],
+        "button": ["power", "reset", "reset_hdmi"],
+        "number": [],
+        "select": [],
+        "sensor": ["ip_address", "account_role"],
+        "switch": ["power"],
+        "update": [],
+    }

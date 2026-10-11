@@ -22,8 +22,10 @@ from nanokvm.client import (
     NanoKVMClient,
     NanoKVMError,
     NanoKVMNotSupportedError,
+    NanoKVMPermissionError,
 )
 from nanokvm.models import (
+    GetAccountRsp,
     GetCdRomRsp,
     GetGpioRsp,
     GetHardwareRsp,
@@ -144,6 +146,7 @@ def _configure_required_client_responses(
     client: MagicMock,
     *,
     hardware: HWVersion | None,
+    role: str | None = "admin",
 ) -> dict[str, object]:
     """Configure complete core endpoint responses for one hardware model."""
     responses: dict[str, object] = {
@@ -151,6 +154,7 @@ def _configure_required_client_responses(
         "hostname_info": GetHostnameRsp(hostname="nano"),
         "hardware_info": None if hardware is None else GetHardwareRsp(version=hardware),
         "gpio_info": GetGpioRsp(pwr=True, hdd=False),
+        "account": GetAccountRsp(username="nano", role=role),
         "virtual_device_info": GetVirtualDeviceRsp(network=True, disk=True),
         "ssh_state": GetSSHStateRsp(enabled=True),
         "mdns_state": GetMdnsStateRsp(enabled=True),
@@ -174,6 +178,7 @@ def _configure_required_client_responses(
     client.get_hostname.return_value = responses["hostname_info"]
     client.get_hardware.return_value = responses["hardware_info"]
     client.get_gpio.return_value = responses["gpio_info"]
+    client.get_account.return_value = responses["account"]
     client.get_virtual_device_status.return_value = responses["virtual_device_info"]
     client.get_ssh_state.return_value = responses["ssh_state"]
     client.get_mdns_state.return_value = responses["mdns_state"]
@@ -1078,6 +1083,79 @@ async def test_core_fetch_refreshes_the_library_firmware_version_after_an_update
     coordinator.client.application_version = f"{polled}-old"
     await coordinator._async_fetch_core_data()
     coordinator.client.detect_versions.assert_awaited_once_with()
+
+
+async def test_core_fetch_as_non_admin_skips_administrator_endpoints(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> None:
+    """A role=user account polls only what it may read, and still succeeds."""
+    client = coordinator.client
+    responses = _configure_required_client_responses(
+        client, hardware=HWVersion.PCIE, role="user"
+    )
+
+    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_storage_data()
+    coordinator._async_schedule_app_version_refresh()
+
+    assert coordinator.is_admin is False
+    for attribute in ("gpio_info", "hid_mode", "hdmi_state"):
+        assert getattr(coordinator, attribute) == responses[attribute]
+    for attribute, endpoint in (
+        ("ssh_state", client.get_ssh_state),
+        ("mdns_state", client.get_mdns_state),
+        ("oled_info", client.get_oled_info),
+        ("wifi_status", client.get_wifi_status),
+        ("mouse_jiggler_state", client.get_mouse_jiggler_state),
+        ("tailscale_status", client.get_tailscale_status),
+        ("virtual_device_info", client.get_virtual_device_status),
+        ("swap_size", client.get_swap_size),
+        ("mounted_image", client.get_mounted_image),
+    ):
+        assert getattr(coordinator, attribute) is None
+        endpoint.assert_not_awaited()
+    assert coordinator._app_version_fetch_task is None
+
+
+@pytest.mark.parametrize("role", [None, "admin"])
+async def test_accounts_without_a_user_role_are_administrators(
+    coordinator: NanoKVMDataUpdateCoordinator, role: str | None
+) -> None:
+    """Devices without user roles, and a missing account answer, stay unrestricted."""
+    assert coordinator.is_admin is True
+    coordinator.account = GetAccountRsp(username="nano", role=role)
+    assert coordinator.is_admin is True
+
+
+async def test_account_role_change_reloads_the_entry(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> None:
+    """Entities depend on the role, so a changed role rebuilds them."""
+    client = coordinator.client
+    _configure_required_client_responses(client, hardware=HWVersion.PCIE, role="user")
+    reload = coordinator.hass.config_entries.async_schedule_reload
+
+    await coordinator._async_fetch_core_data()
+    # A poll that cannot read the account keeps the role it knew.
+    client.get_account.side_effect = _api_error()
+    await coordinator._async_fetch_core_data()
+    assert coordinator.account.role == "user"
+    reload.assert_not_called()
+
+    client.get_account.side_effect = None
+    client.get_account.return_value = GetAccountRsp(username="nano", role="admin")
+    await coordinator._async_fetch_core_data()
+    reload.assert_called_once_with(coordinator.config_entry.entry_id)
+
+
+async def test_optional_fetch_treats_a_forbidden_endpoint_as_unavailable(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> None:
+    """A 403 means the account may not use the endpoint, not a failed poll."""
+    endpoint = AsyncMock(
+        side_effect=NanoKVMPermissionError(method="GET", path="/vm/ssh")
+    )
+    assert await coordinator._fetch_optional("/vm/ssh", endpoint) is None
 
 
 async def test_core_fetch_populates_pcie_state(

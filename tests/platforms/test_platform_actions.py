@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
-from nanokvm.client import NanoKVMError
+from nanokvm.client import NanoKVMError, NanoKVMPermissionError
 from nanokvm.ssh_client import NanoKVMSSHError
 from nanokvm.models import (
     DiskType,
@@ -532,6 +532,10 @@ async def test_watchdog_switch_translates_ssh_failures() -> None:
         (NanoKVMError("device busy"), "device busy"),
         (aiohttp.ClientConnectionError("connection reset"), "connection reset"),
         (TimeoutError(), "TimeoutError"),
+        (
+            NanoKVMPermissionError(method="POST", path="/vm/system/reboot"),
+            "needs a NanoKVM administrator account",
+        ),
     ],
 )
 async def test_entity_actions_translate_device_failures(
