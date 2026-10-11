@@ -26,6 +26,7 @@ from nanokvm.client import (
 )
 from nanokvm.models import (
     GetAccountRsp,
+    GetKeyboardLedStatusRsp,
     GetCdRomRsp,
     GetGpioRsp,
     GetHardwareRsp,
@@ -155,6 +156,9 @@ def _configure_required_client_responses(
         "hardware_info": None if hardware is None else GetHardwareRsp(version=hardware),
         "gpio_info": GetGpioRsp(pwr=True, hdd=False),
         "account": GetAccountRsp(username="nano", role=role),
+        "keyboard_leds": GetKeyboardLedStatusRsp(
+            numLock=True, capsLock=False, scrollLock=True, known=True
+        ),
         "virtual_device_info": GetVirtualDeviceRsp(network=True, disk=True),
         "ssh_state": GetSSHStateRsp(enabled=True),
         "mdns_state": GetMdnsStateRsp(enabled=True),
@@ -179,6 +183,7 @@ def _configure_required_client_responses(
     client.get_hardware.return_value = responses["hardware_info"]
     client.get_gpio.return_value = responses["gpio_info"]
     client.get_account.return_value = responses["account"]
+    client.get_keyboard_led_status.return_value = responses["keyboard_leds"]
     client.get_virtual_device_status.return_value = responses["virtual_device_info"]
     client.get_ssh_state.return_value = responses["ssh_state"]
     client.get_mdns_state.return_value = responses["mdns_state"]
@@ -1099,7 +1104,7 @@ async def test_core_fetch_as_non_admin_skips_administrator_endpoints(
     coordinator._async_schedule_app_version_refresh()
 
     assert coordinator.is_admin is False
-    for attribute in ("gpio_info", "hid_mode", "hdmi_state"):
+    for attribute in ("gpio_info", "hid_mode", "hdmi_state", "keyboard_leds"):
         assert getattr(coordinator, attribute) == responses[attribute]
     for attribute, endpoint in (
         ("ssh_state", client.get_ssh_state),

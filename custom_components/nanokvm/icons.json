@@ -21,6 +21,15 @@
       },
       "wired_connected": {
         "default": "mdi:ethernet"
+      },
+      "num_lock": {
+        "default": "mdi:keyboard"
+      },
+      "caps_lock": {
+        "default": "mdi:apple-keyboard-caps"
+      },
+      "scroll_lock": {
+        "default": "mdi:keyboard"
       }
     },
     "button": {

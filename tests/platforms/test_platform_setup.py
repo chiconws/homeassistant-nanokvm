@@ -35,6 +35,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "gpio_info": SimpleNamespace(pwr=False, hdd=False),
         "hardware_info": None,
         "is_admin": True,
+        "keyboard_leds": None,
         "hdmi_capture": None,
         "hdmi_passthrough": None,
         "hdmi_state": None,
@@ -406,6 +407,9 @@ async def test_non_admin_account_gets_only_the_entities_it_may_use(
         supports_hdmi_endpoint=True,
         hdmi_state=SimpleNamespace(enabled=True),
         hid_mode=SimpleNamespace(mode=HidMode.NORMAL),
+        keyboard_leds=SimpleNamespace(
+            num_lock=True, caps_lock=False, scroll_lock=True, known=True
+        ),
         application_version_info=None,
         mdns_state=None,
         ssh_state=None,
@@ -429,7 +433,7 @@ async def test_non_admin_account_gets_only_the_entities_it_may_use(
         ]
 
     assert created == {
-        "binary_sensor": ["power_led"],
+        "binary_sensor": ["power_led", "num_lock", "caps_lock", "scroll_lock"],
         "button": ["power", "reset", "reset_hdmi"],
         "number": [],
         "select": [],

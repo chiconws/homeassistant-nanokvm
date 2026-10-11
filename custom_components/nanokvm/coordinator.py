@@ -40,6 +40,7 @@ from nanokvm.models import (
     GetHostnameRsp,
     GetHidModeRsp,
     GetInfoRsp,
+    GetKeyboardLedStatusRsp,
     GetLedStripRsp,
     GetLcdTimeFormatRsp,
     GetLowPowerRsp,
@@ -101,6 +102,7 @@ _WATCHDOG_MIN_VERSION = AwesomeVersion("2.2.2")
 _MAX_CONCURRENT_REQUESTS = 4
 _GATED_CORE_ATTRIBUTES = (
     "virtual_device_info",
+    "keyboard_leds",
     "hdmi_state",
     "swap_size",
     "hdmi_capture",
@@ -142,6 +144,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
     ssh_state: GetSSHStateRsp | None = None
     mdns_state: GetMdnsStateRsp | None = None
     hid_mode: GetHidModeRsp | None = None
+    keyboard_leds: GetKeyboardLedStatusRsp | None = None
     oled_info: GetOLEDRsp | None = None
     wifi_status: GetWifiRsp | None = None
     application_version_info: GetVersionRsp | None = None
@@ -614,8 +617,12 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 )
         if self.supports_hdmi_endpoint:
             calls["hdmi_state"] = optional("/vm/hdmi", client.get_hdmi_state)
-        if self.is_non_pro_hardware and self.is_admin:
-            calls["swap_size"] = optional("/vm/swap", client.get_swap_size)
+        if self.is_non_pro_hardware:
+            calls["keyboard_leds"] = optional(
+                "/hid/leds", client.get_keyboard_led_status
+            )
+            if self.is_admin:
+                calls["swap_size"] = optional("/vm/swap", client.get_swap_size)
         if self.is_pro_hardware:
             calls |= {
                 "hdmi_capture": optional("/vm/hdmi/capture", client.get_hdmi_capture),

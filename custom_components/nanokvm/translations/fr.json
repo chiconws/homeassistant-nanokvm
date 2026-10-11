@@ -99,6 +99,15 @@
       },
       "time_synchronized": {
         "name": "Heure synchronisée"
+      },
+      "num_lock": {
+        "name": "Verr. num"
+      },
+      "caps_lock": {
+        "name": "Verr. maj"
+      },
+      "scroll_lock": {
+        "name": "Arrêt défil"
       }
     },
     "sensor": {

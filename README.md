@@ -74,7 +74,7 @@ Notes:
 
 | Platform | Highlights |
 | --- | --- |
-| Binary sensor | Power LED, HDD LED, Wi-Fi/wired connected, CD-ROM mode, Pro static IP enabled, Pro time synchronized |
+| Binary sensor | Power LED, HDD LED, Num/Caps/Scroll Lock, Wi-Fi/wired connected, CD-ROM mode, Pro static IP enabled, Pro time synchronized |
 | Button | Power/Reset buttons, reboot, reset HID/HDMI, Pro sync time |
 | Camera | HDMI stream camera with WebRTC and non-Pro still snapshots |
 | Number | Pro LED brightness, horizontal beads, vertical beads |
@@ -91,6 +91,7 @@ Notes:
 - SSH diagnostics appear after SSH is enabled on the NanoKVM.
 - The watchdog switch requires SSH and NanoKVM application version `2.2.2` or newer.
 - Pro LED bead counts must satisfy `horizontal + (2 * vertical) <= 150`.
+- Num/Caps/Scroll Lock sensors need a non-Pro model on application `2.5.0` or newer, and stay unavailable until the host reports its keyboard LEDs.
 
 ### Non-administrator accounts
 
@@ -99,7 +100,7 @@ Non-Pro application `2.5.1` and newer has user accounts with the roles `admin` a
 | Works with a `user` account | Needs an `admin` account |
 | --- | --- |
 | Camera, Power switch, Power/Reset buttons, Reset HDMI button | SSH, mDNS, virtual network/disk and HDMI output switches |
-| Power LED, wired connected | Reboot and Reset HID buttons |
+| Power LED, Num/Caps/Scroll Lock, wired connected | Reboot and Reset HID buttons |
 | IP address sensors, account role | HID mode, Mouse Jiggler, OLED timeout and Swap size selects |
 | `push_button`, `paste_text`, `wake_on_lan`, `reset_hdmi` services | Mounted image, CD-ROM mode, Wi-Fi, Tailscale, SSH diagnostics, watchdog, application update |
 
