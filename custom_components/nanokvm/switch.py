@@ -10,28 +10,16 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from nanokvm.client import NanoKVMError
 from nanokvm.models import GpioType, VirtualDevice
 
-from .const import (
-    DOMAIN,
-    ICON_DISK,
-    ICON_HDMI,
-    ICON_LED_STRIP,
-    ICON_MDNS,
-    ICON_NETWORK,
-    ICON_SSH,
-    ICON_POWER,
-    ICON_WATCHDOG,
-    SIGNAL_NEW_SSH_SWITCHES,
-)
 from .coordinator import NanoKVMDataUpdateCoordinator
-from .entity import NanoKVMEntity
-from .led import build_led_strip_config
+from .entity import NanoKVMEntity, async_add_entities_as_supported
+from .led import async_set_led_strip, led_strip_available
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,22 +44,36 @@ def _hdmi_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
 
 def _hdmi_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether HDMI controls are available."""
-    return coordinator.supports_hdmi_endpoint and coordinator.hdmi_state is not None
+    return (
+        coordinator.is_admin
+        and coordinator.supports_hdmi_endpoint
+        and coordinator.hdmi_state is not None
+    )
+
+
+def _is_admin(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the account may change administrator-only settings."""
+    return coordinator.is_admin
+
+
+def _non_pro_virtual_device_available(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> bool:
+    """Return whether non-Pro virtual-device controls are available."""
+    return coordinator.is_admin and coordinator.is_non_pro_hardware
 
 
 def _watchdog_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return watchdog switch state."""
-    return bool(coordinator.watchdog_enabled)
+    return bool(coordinator.ssh_metrics.watchdog_enabled)
 
 
 def _watchdog_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether the watchdog switch should be available."""
-    return coordinator.supports_watchdog and coordinator.watchdog_enabled is not None
-
-
-def _non_pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether the non-Pro virtual-device switches apply to this device."""
-    return coordinator.supports_non_pro_virtual_device_controls
+    return (
+        coordinator.supports_watchdog
+        and coordinator.ssh_metrics.watchdog_enabled is not None
+    )
 
 
 def _pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -81,11 +83,8 @@ def _pro_virtual_device_available(coordinator: NanoKVMDataUpdateCoordinator) -> 
 
 def _pro_virtual_mic_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether Pro virtual microphone control is available."""
-    return (
-        _pro_virtual_device_available(coordinator)
-        and coordinator.virtual_device_info is not None
-        and coordinator.virtual_device_info.mic is not None
-    )
+    info = coordinator.virtual_device_info
+    return coordinator.is_pro_hardware and info is not None and info.mic is not None
 
 
 def _hdmi_capture_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -103,63 +102,37 @@ def _low_power_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     return coordinator.is_pro_hardware and coordinator.low_power is not None
 
 
-def _led_strip_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether Pro LED strip control is available."""
-    return coordinator.is_pro_hardware and coordinator.led_strip is not None
-
-
 def _led_strip_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return LED strip state."""
     return bool(coordinator.led_strip and coordinator.led_strip.on)
 
 
-async def _set_led_strip_on(
-    coordinator: NanoKVMDataUpdateCoordinator, enabled: bool
-) -> None:
-    """Set LED strip power while preserving other LED settings."""
-    try:
-        config = build_led_strip_config(coordinator.led_strip, on=enabled)
-    except ValueError as err:
-        raise HomeAssistantError(str(err)) from err
-
-    await coordinator.client.set_led_strip(
-        on=config.on,
-        brightness=config.brightness,
-        horizontal_count=config.horizontal_count,
-        vertical_count=config.vertical_count,
-    )
-
-
 SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     NanoKVMSwitchEntityDescription(
         key="ssh",
-        name="SSH",
         translation_key="ssh",
-        icon=ICON_SSH,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: bool(
             coordinator.ssh_state and coordinator.ssh_state.enabled
         ),
         turn_on_fn=lambda coordinator: coordinator.client.enable_ssh(),
         turn_off_fn=lambda coordinator: coordinator.client.disable_ssh(),
+        available_fn=_is_admin,
     ),
     NanoKVMSwitchEntityDescription(
         key="mdns",
-        name="mDNS",
         translation_key="mdns",
-        icon=ICON_MDNS,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: bool(
             coordinator.mdns_state and coordinator.mdns_state.enabled
         ),
         turn_on_fn=lambda coordinator: coordinator.client.enable_mdns(),
         turn_off_fn=lambda coordinator: coordinator.client.disable_mdns(),
+        available_fn=_is_admin,
     ),
     NanoKVMSwitchEntityDescription(
         key="virtual_network",
-        name="Virtual Network",
         translation_key="virtual_network",
-        icon=ICON_NETWORK,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.network
@@ -169,9 +142,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
     NanoKVMSwitchEntityDescription(
         key="virtual_disk",
-        name="Virtual Disk",
         translation_key="virtual_disk",
-        icon=ICON_DISK,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.disk
@@ -181,9 +152,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
     NanoKVMSwitchEntityDescription(
         key="virtual_network",
-        name="Virtual Network",
         translation_key="virtual_network",
-        icon=ICON_NETWORK,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.network
@@ -193,9 +162,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
     NanoKVMSwitchEntityDescription(
         key="virtual_mic",
-        name="Virtual Microphone",
         translation_key="virtual_mic",
-        icon="mdi:microphone",
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: bool(
             coordinator.virtual_device_info and coordinator.virtual_device_info.mic
@@ -205,9 +172,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
     NanoKVMSwitchEntityDescription(
         key="power",
-        name="Power",
         translation_key="power",
-        icon=ICON_POWER,
         value_fn=lambda coordinator: bool(
             coordinator.gpio_info and coordinator.gpio_info.pwr
         ),
@@ -216,9 +181,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
     NanoKVMSwitchEntityDescription(
         key="hdmi",
-        name="HDMI Output",
         translation_key="hdmi",
-        icon=ICON_HDMI,
         entity_category=EntityCategory.CONFIG,
         value_fn=_hdmi_value,
         turn_on_fn=lambda coordinator: coordinator.client.enable_hdmi(),
@@ -227,9 +190,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
     NanoKVMSwitchEntityDescription(
         key="hdmi_capture",
-        name="HDMI Capture",
         translation_key="hdmi_capture",
-        icon=ICON_HDMI,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: bool(
             coordinator.hdmi_capture and coordinator.hdmi_capture.enabled
@@ -240,9 +201,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
     NanoKVMSwitchEntityDescription(
         key="hdmi_passthrough",
-        name="HDMI Passthrough",
         translation_key="hdmi_passthrough",
-        icon=ICON_HDMI,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: bool(
             coordinator.hdmi_passthrough and coordinator.hdmi_passthrough.enabled
@@ -253,9 +212,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
     NanoKVMSwitchEntityDescription(
         key="low_power",
-        name="Low Power",
         translation_key="low_power",
-        icon="mdi:power-sleep",
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda coordinator: bool(
             coordinator.low_power and coordinator.low_power.enabled
@@ -266,23 +223,19 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
     NanoKVMSwitchEntityDescription(
         key="led_strip",
-        name="LED Strip",
         translation_key="led_strip",
-        icon=ICON_LED_STRIP,
         entity_category=EntityCategory.CONFIG,
         value_fn=_led_strip_value,
-        turn_on_fn=lambda coordinator: _set_led_strip_on(coordinator, True),
-        turn_off_fn=lambda coordinator: _set_led_strip_on(coordinator, False),
-        available_fn=_led_strip_available,
+        turn_on_fn=lambda coordinator: async_set_led_strip(coordinator, on=True),
+        turn_off_fn=lambda coordinator: async_set_led_strip(coordinator, on=False),
+        available_fn=led_strip_available,
     ),
 )
 
 SSH_SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     NanoKVMSwitchEntityDescription(
         key="watchdog",
-        name="Watchdog",
         translation_key="watchdog",
-        icon=ICON_WATCHDOG,
         entity_category=EntityCategory.CONFIG,
         value_fn=_watchdog_value,
         available_fn=_watchdog_available,
@@ -295,73 +248,32 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM switch based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
-    entities: list[NanoKVMSwitch] = []
-    for description in SWITCHES:
-        if not description.available_fn(coordinator):
-            continue
-
+    def switch_class(
+        description: NanoKVMSwitchEntityDescription,
+    ) -> type[NanoKVMSwitch]:
         if description.virtual_device is not None:
-            entities.append(
-                NanoKVMVirtualDeviceSwitch(
-                    coordinator=coordinator,
-                    description=description,
-                )
-            )
-            continue
-
+            return NanoKVMVirtualDeviceSwitch
         if description.key == "power":
-            entities.append(
-                NanoKVMPowerSwitch(
-                    coordinator=coordinator,
-                    description=description,
-                )
-            )
-            continue
-        else:
-            entities.append(
-                NanoKVMSwitch(
-                    coordinator=coordinator,
-                    description=description,
-                )
-            )
+            return NanoKVMPowerSwitch
+        return NanoKVMSwitch
 
-    async_add_entities(entities)
+    async_add_entities(
+        switch_class(description)(coordinator=coordinator, description=description)
+        for description in SWITCHES
+        if description.available_fn(coordinator)
+    )
 
-    ssh_entities_added = False
-
-    @callback
-    def async_add_ssh_switches() -> None:
-        """Add SSH-backed switches when they become available."""
-        nonlocal ssh_entities_added
-        if ssh_entities_added:
-            return
-
-        entities = [
-            NanoKVMWatchdogSwitch(
-                coordinator=coordinator,
-                description=description,
-            )
-            for description in SSH_SWITCHES
-            if description.available_fn(coordinator)
-        ]
-        if not entities:
-            return
-
-        async_add_entities(entities)
-        ssh_entities_added = True
-        coordinator.ssh_switches_created = True
-
-    if any(description.available_fn(coordinator) for description in SSH_SWITCHES):
-        async_add_ssh_switches()
-
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass,
-            SIGNAL_NEW_SSH_SWITCHES.format(entry.entry_id),
-            async_add_ssh_switches,
-        )
+    async_add_entities_as_supported(
+        entry,
+        coordinator,
+        async_add_entities,
+        SSH_SWITCHES,
+        lambda description: description.available_fn(coordinator),
+        lambda description: NanoKVMWatchdogSwitch(
+            coordinator=coordinator, description=description
+        ),
     )
 
 
@@ -394,23 +306,30 @@ class NanoKVMSwitch(NanoKVMEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
-        if self.entity_description.turn_on_fn is None:
-            raise RuntimeError(f"Missing turn_on handler for switch: {self.entity_description.key}")
-        async with self.coordinator.async_client():
-            await self.entity_description.turn_on_fn(self.coordinator)
-        await self.coordinator.async_request_refresh()
+        await self._async_set(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
-        if self.entity_description.turn_off_fn is None:
-            raise RuntimeError(f"Missing turn_off handler for switch: {self.entity_description.key}")
-        async with self.coordinator.async_client():
-            await self.entity_description.turn_off_fn(self.coordinator)
+        await self._async_set(False)
+
+    async def _async_call_handler(self, enabled: bool) -> None:
+        """Run the description's device call for the requested state."""
+        description = self.entity_description
+        handler = description.turn_on_fn if enabled else description.turn_off_fn
+        assert handler is not None
+        async with self._async_device_action():
+            await handler(self.coordinator)
+
+    async def _async_set(self, enabled: bool) -> None:
+        """Switch to the requested state and refresh."""
+        await self._async_call_handler(enabled)
         await self.coordinator.async_request_refresh()
 
 
 class NanoKVMPowerSwitch(NanoKVMSwitch):
     """Defines a NanoKVM power switch with special shutdown behavior."""
+
+    _shutdown_monitor: asyncio.Task[None] | None = None
 
     async def _async_current_power_state(self) -> bool | None:
         """Refresh and return the current power state when available."""
@@ -419,28 +338,28 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
             return None
         return bool(self.coordinator.gpio_info.pwr)
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the switch."""
-        del kwargs
-        if self.entity_description.turn_on_fn is None:
-            raise RuntimeError(f"Missing turn_on handler for switch: {self.entity_description.key}")
-        if await self._async_current_power_state() is True:
+    async def _async_set(self, enabled: bool) -> None:
+        """Press the power button unless the host is already in that state."""
+        if await self._async_current_power_state() is enabled:
             return
-        async with self.coordinator.async_client():
-            await self.entity_description.turn_on_fn(self.coordinator)
-        await asyncio.sleep(1)
-        await self.coordinator.async_request_refresh()
+        await self._async_call_handler(enabled)
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the power switch with monitoring for actual shutdown."""
-        del kwargs
-        if self.entity_description.turn_off_fn is None:
-            raise RuntimeError(f"Missing turn_off handler for switch: {self.entity_description.key}")
-        if await self._async_current_power_state() is False:
+        if enabled:
+            await asyncio.sleep(1)
+            await self.coordinator.async_request_refresh()
             return
-        async with self.coordinator.async_client():
-            await self.entity_description.turn_off_fn(self.coordinator)
 
+        # A host can take minutes to shut down, so follow it in the background
+        # instead of holding the action open.
+        if self._shutdown_monitor is not None:
+            self._shutdown_monitor.cancel()
+        self._shutdown_monitor = self.hass.async_create_background_task(
+            self._async_monitor_shutdown(),
+            name=f"nanokvm power-off monitor {self.unique_id}",
+        )
+
+    async def _async_monitor_shutdown(self) -> None:
+        """Refresh until the host reports power off or the wait times out."""
         SHUTDOWN_TIMEOUT = 300
         SHUTDOWN_POLL_INTERVAL = 5
 
@@ -455,52 +374,40 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
         _LOGGER.warning("Device did not turn off within %s seconds", SHUTDOWN_TIMEOUT)
         await self.coordinator.async_request_refresh()
 
+    async def async_will_remove_from_hass(self) -> None:
+        """Stop following a pending shutdown when the entity is removed."""
+        await super().async_will_remove_from_hass()
+        if self._shutdown_monitor is not None:
+            self._shutdown_monitor.cancel()
+            self._shutdown_monitor = None
+
 
 class NanoKVMVirtualDeviceSwitch(NanoKVMSwitch):
     """Defines a virtual device switch backed by a toggle-only API."""
 
-    async def _async_set_virtual_device_state(self, enabled: bool) -> None:
+    async def _async_set(self, enabled: bool) -> None:
         """Refresh first, then toggle only when the requested state differs."""
-        virtual_device = self.entity_description.virtual_device
-        if virtual_device is None:
-            raise RuntimeError(
-                f"Missing virtual device type for switch: {self.entity_description.key}"
-            )
-
         await self.coordinator.async_refresh()
         if self.is_on == enabled:
             return
 
-        async with self.coordinator.async_client() as client:
-            await client.update_virtual_device(virtual_device)
+        device = self.entity_description.virtual_device
+        assert device is not None
+        async with self._async_device_action() as client:
+            await client.update_virtual_device(device)
         await self.coordinator.async_request_refresh()
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the virtual device switch."""
-        del kwargs
-        await self._async_set_virtual_device_state(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the virtual device switch."""
-        del kwargs
-        await self._async_set_virtual_device_state(False)
 
 
 class NanoKVMWatchdogSwitch(NanoKVMSwitch):
     """Defines a NanoKVM watchdog switch backed by SSH file control."""
 
-    async def _async_set_watchdog_state(self, enabled: bool) -> None:
+    async def _async_set(self, enabled: bool) -> None:
         """Set watchdog state via SSH and refresh coordinator state."""
-        collector = await self.coordinator.async_ensure_ssh_metrics_collector()
-        await collector.set_watchdog_enabled(enabled)
+        collector = self.coordinator.async_ensure_ssh_metrics_collector()
+        try:
+            await collector.set_watchdog_enabled(enabled)
+        except NanoKVMError as err:
+            raise HomeAssistantError(
+                f"NanoKVM did not accept the request: {err}"
+            ) from err
         await self.coordinator.async_request_refresh()
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable the watchdog."""
-        del kwargs
-        await self._async_set_watchdog_state(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable the watchdog."""
-        del kwargs
-        await self._async_set_watchdog_state(False)

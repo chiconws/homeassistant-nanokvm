@@ -4,9 +4,8 @@ DOMAIN = "nanokvm"
 INTEGRATION_TITLE = "NanoKVM"
 
 # Configuration
-CONF_HOST = "host"
-CONF_USERNAME = "username"
-CONF_PASSWORD = "password"
+CONF_PREFERRED_HOST = "preferred_host"
+CONF_LED_BRIGHTNESS = "led_brightness"
 CONF_USE_STATIC_HOST = "use_static_host"
 CONF_SSL_FINGERPRINT = "ssl_fingerprint"
 CONF_SSH_HOST_KEY = "ssh_host_key"
@@ -16,6 +15,9 @@ CONF_TRUST_SSH_HOST_KEY = "trust_ssh_host_key"
 DEFAULT_USERNAME = "admin"
 DEFAULT_PASSWORD = "admin"
 DEFAULT_SCAN_INTERVAL = 30
+PREFERRED_HOST_CHECK_INTERVAL_SECONDS = 60
+PREFERRED_HOST_MAX_CHECK_INTERVAL_SECONDS = 3600
+PREFERRED_HOST_TIMEOUT_SECONDS = 5
 
 # Services
 SERVICE_PUSH_BUTTON = "push_button"
@@ -47,35 +49,6 @@ ATTR_VERTICAL_COUNT = "vertical_count"
 # Button types
 BUTTON_TYPE_POWER = "power"
 BUTTON_TYPE_RESET = "reset"
-
-# Entity categories
-ENTITY_CATEGORY_CONFIG = "config"
-ENTITY_CATEGORY_DIAGNOSTIC = "diagnostic"
-
-# Icons
-ICON_KVM = "mdi:keyboard-variant"
-ICON_POWER = "mdi:power"
-ICON_RESET = "mdi:restart"
-ICON_HID = "mdi:keyboard"
-ICON_NETWORK = "mdi:ethernet"
-ICON_DISK = "mdi:harddisk"
-ICON_SSH = "mdi:console"
-ICON_MDNS = "mdi:dns"
-ICON_OLED = "mdi:monitor-small"
-ICON_WIFI = "mdi:wifi"
-ICON_IMAGE = "mdi:disc"
-ICON_CDROM = "mdi:disc"
-ICON_MOUSE_JIGGLER = "mdi:mouse"
-ICON_HDMI = "mdi:video-input-hdmi"
-ICON_WATCHDOG = "mdi:shield-refresh"
-ICON_LED_STRIP = "mdi:led-strip-variant"
-ICON_CLOCK = "mdi:clock-outline"
-
-# Signals
-SIGNAL_NEW_SSH_SENSORS = "nanokvm_new_ssh_sensors_{}"
-SIGNAL_NEW_SSH_SWITCHES = "nanokvm_new_ssh_switches_{}"
-SIGNAL_NEW_MEDIA_ENTITIES = "nanokvm_new_media_entities_{}"
-SIGNAL_NEW_NETWORK_ENTITIES = "nanokvm_new_network_entities_{}"
 
 # NanoKVM Pro LED strip limits
 LED_BRIGHTNESS_MIN = 0

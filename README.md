@@ -60,6 +60,7 @@ Notes:
 - If no scheme is provided, the integration tries `http` first and then `https`.
 - Self-signed HTTPS certificates are supported by confirming the presented fingerprint during setup or reauthentication.
 - When **Use static host only** is disabled, zeroconf rediscovery can refresh the stored host/IP.
+- NanoKVM Pro keeps the address chosen during setup as its preferred address. If discovery switches to another interface, it checks for the preferred address once per minute, backing off to once per hour while it stays unreachable, and returns when the same device is reachable there. If another NanoKVM takes over that address, it is no longer preferred.
 - Coordinator polling interval is 30 seconds.
 
 ## Known Limitations
@@ -73,29 +74,43 @@ Notes:
 
 | Platform | Highlights |
 | --- | --- |
-| Binary sensor | Power LED, HDD LED, Wi-Fi/wired connected, CD-ROM mode, Pro static IP enabled, Pro time synchronized |
+| Binary sensor | Power LED, HDD LED, HDMI signal, Num/Caps/Scroll Lock, Wi-Fi/wired connected, CD-ROM mode, Pro static IP enabled, Pro time synchronized |
 | Button | Power/Reset buttons, reboot, reset HID/HDMI, Pro sync time |
 | Camera | HDMI stream camera with WebRTC and non-Pro still snapshots |
-| Number | Pro LED brightness, horizontal beads, vertical beads |
+| Number | HDMI idle timeout, Pro LED brightness, horizontal beads, vertical beads |
 | Select | HID mode, Mouse Jiggler, OLED timeout, Swap size, Pro LCD time format, Pro virtual disk type |
-| Sensor | IP address, wired/wireless IP address, mounted image, Tailscale, SSH diagnostics |
+| Sensor | IP address, wired/wireless IP address, mounted image, Tailscale, account role, SSH diagnostics |
 | Switch | Power, SSH, mDNS, virtual network/disk, HDMI output, watchdog, Pro HDMI capture/passthrough, Pro low power, Pro LED strip, Pro virtual mic |
 | Update | Application version and install action |
 
 Notes:
 
-- HDMI output controls are PCI-E only.
+- HDMI output controls, the HDMI signal sensor and the HDMI idle timeout are PCI-E only. The idle timeout (minutes without viewers before capture stops, `0` to disable) needs application `2.5.0` or newer.
 - HDD LED is Alpha-only.
 - Wi-Fi entities only appear when the device reports Wi-Fi support.
 - SSH diagnostics appear after SSH is enabled on the NanoKVM.
 - The watchdog switch requires SSH and NanoKVM application version `2.2.2` or newer.
 - Pro LED bead counts must satisfy `horizontal + (2 * vertical) <= 150`.
+- Num/Caps/Scroll Lock sensors need a non-Pro model on application `2.5.0` or newer, and stay unavailable until the host reports its keyboard LEDs.
+
+### Non-administrator accounts
+
+Non-Pro application `2.5.1` and newer has user accounts with the roles `admin` and `user`. The integration works with either and reports the role in the **Account role** diagnostic sensor. A `user` account only gets the entities the device lets it use:
+
+| Works with a `user` account | Needs an `admin` account |
+| --- | --- |
+| Camera, Power switch, Power/Reset buttons, Reset HDMI button | SSH, mDNS, virtual network/disk and HDMI output switches, HDMI idle timeout |
+| Power LED, HDMI signal, Num/Caps/Scroll Lock, wired connected | Reboot and Reset HID buttons |
+| IP address sensors, account role | HID mode, Mouse Jiggler, OLED timeout and Swap size selects |
+| `push_button`, `paste_text`, `wake_on_lan`, `reset_hdmi` services | Mounted image, CD-ROM mode, Wi-Fi, Tailscale, SSH diagnostics, watchdog, application update |
+
+Changing the account's role on the device reloads the integration so the entities match.
 
 ## Hardware Compatibility
 
 | Feature | Availability |
 | --- | --- |
-| HDMI switch/button controls | PCI-E models |
+| HDMI switch/button controls, HDMI signal, HDMI idle timeout | PCI-E models |
 | HDD LED binary sensor | Alpha models |
 | SSH diagnostic sensors | Any model with SSH enabled |
 | Swap size, CD-ROM mode, virtual disk switch | Non-Pro models |
@@ -144,6 +159,7 @@ Notes:
 
 - `push_button.duration` range is `100-5000` ms.
 - `set_led_strip.brightness` range is `0-100`; LED beads must satisfy `horizontal + (2 * vertical) <= 150`.
+- The Pro ignores LED settings while the strip is off, so brightness and bead counts can only be changed while it is on (or in the same call that turns it on).
 - `host` is optional when one NanoKVM is configured and required when multiple devices are configured.
 - Response services return structured data to callers that request a response.
 

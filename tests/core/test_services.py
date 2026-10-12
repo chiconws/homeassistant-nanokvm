@@ -7,10 +7,12 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
+from homeassistant.const import CONF_HOST
 from homeassistant.core import ServiceCall, SupportsResponse
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from nanokvm.client import NanoKVMPermissionError
 from nanokvm.models import (
     DownloadStatus,
     GetCustomEdidListRsp,
@@ -38,7 +40,6 @@ from custom_components.nanokvm.const import (
     ATTR_VERTICAL_COUNT,
     BUTTON_TYPE_POWER,
     BUTTON_TYPE_RESET,
-    CONF_HOST,
     DOMAIN,
     SERVICE_GET_IMAGE_DOWNLOAD_STATUS,
     SERVICE_IMAGE_DOWNLOAD_ENABLED,
@@ -65,19 +66,6 @@ class RegisteredService:
     supports_response: SupportsResponse
 
 
-class ModelResponse:
-    """Minimal model-dump boundary used by response normalization tests."""
-
-    def __init__(self, response: dict[str, Any]) -> None:
-        self.response = response
-        self.mode: str | None = None
-
-    def model_dump(self, *, mode: str) -> dict[str, Any]:
-        """Record the requested serialization mode and return JSON-ready data."""
-        self.mode = mode
-        return self.response
-
-
 def _client() -> SimpleNamespace:
     """Return the NanoKVM client methods exposed through service handlers."""
     return SimpleNamespace(
@@ -100,6 +88,7 @@ def _client() -> SimpleNamespace:
 def _coordinator(
     host: str | None = "nanokvm.local",
     *,
+    preferred_host: str | None = None,
     client: SimpleNamespace | None = None,
     is_pro_hardware: bool = False,
     led_strip: GetLedStripRsp | None = None,
@@ -108,6 +97,8 @@ def _coordinator(
     """Return a coordinator with a serialized client-access boundary."""
     service_client = client or _client()
     entry_data = {CONF_HOST: host} if host is not None else {}
+    if preferred_host is not None:
+        entry_data["preferred_host"] = preferred_host
 
     @asynccontextmanager
     async def async_client():
@@ -122,6 +113,7 @@ def _coordinator(
         async_request_refresh=AsyncMock(),
         is_pro_hardware=is_pro_hardware,
         led_strip=led_strip,
+        led_brightness_request=None,
     )
 
 
@@ -139,7 +131,6 @@ def _service_registry(hass: MagicMock) -> SimpleNamespace:
 def _capture_registered_services(hass: MagicMock) -> dict[str, RegisteredService]:
     """Register services and return their captured handlers and schemas."""
     registry = _service_registry(hass)
-    registry.has_service.return_value = False
     services_module.async_register_services(hass)
 
     registered: dict[str, RegisteredService] = {}
@@ -171,11 +162,11 @@ def registered_services(hass_mock: MagicMock) -> dict[str, RegisteredService]:
 
 
 def _install_coordinators(hass: MagicMock, *coordinators: SimpleNamespace) -> None:
-    """Install coordinators into Home Assistant integration storage."""
-    hass.data[DOMAIN] = {
-        f"entry-{index}": coordinator
+    """Install coordinators as loaded NanoKVM config entries."""
+    hass.config_entries.async_loaded_entries.return_value = [
+        SimpleNamespace(entry_id=f"entry-{index}", runtime_data=coordinator)
         for index, coordinator in enumerate(coordinators, start=1)
-    }
+    ]
 
 
 async def _call_service(
@@ -195,45 +186,6 @@ async def _call_service(
         return_response=service.supports_response is SupportsResponse.ONLY,
     )
     return await service.handler(service_call)
-
-
-def test_model_to_response_serializes_models_in_json_mode() -> None:
-    """Model responses must request JSON-safe values for Home Assistant."""
-    model = ModelResponse({"status": "ready"})
-
-    assert services_module._model_to_response(model) == {"status": "ready"}
-    assert model.mode == "json"
-
-
-def test_model_to_response_preserves_mapping_responses() -> None:
-    """Already-normalized mapping responses must be returned unchanged."""
-    response = {"items": ["one", "two"]}
-
-    assert services_module._model_to_response(response) is response
-
-
-@pytest.mark.parametrize("value", [None, True, "ready", ["one"]])
-def test_model_to_response_wraps_non_mapping_values(value: object) -> None:
-    """Scalar and sequence responses must receive a stable response key."""
-    assert services_module._model_to_response(value) == {"value": value}
-
-
-def test_pro_gate_accepts_pro_hardware() -> None:
-    """Pro services must accept coordinators reporting Pro hardware."""
-    services_module._ensure_pro(
-        SimpleNamespace(is_pro_hardware=True), SERVICE_SCAN_WIFI
-    )
-
-
-def test_pro_gate_rejects_other_hardware() -> None:
-    """Pro services must expose a user-facing hardware error."""
-    with pytest.raises(
-        HomeAssistantError,
-        match="The scan_wifi service is only available for NanoKVM Pro devices",
-    ):
-        services_module._ensure_pro(
-            SimpleNamespace(is_pro_hardware=False), SERVICE_SCAN_WIFI
-        )
 
 
 def test_service_schemas_apply_defaults_and_coercion() -> None:
@@ -285,7 +237,9 @@ def test_register_services_registers_complete_surface_with_response_contracts(
     """Registration must expose every implementation service exactly once."""
     registered = _capture_registered_services(hass_mock)
 
-    assert tuple(registered) == services_module._SERVICE_NAMES
+    assert tuple(registered) == tuple(
+        service.name for service in services_module._SERVICES
+    )
     assert {
         name
         for name, service in registered.items()
@@ -308,18 +262,6 @@ def test_register_services_excludes_out_of_scope_recording_surface(
 
     assert "start_hdmi_recording" not in registered
     assert "stop_hdmi_recording" not in registered
-
-
-def test_register_services_is_idempotent_when_already_registered(
-    hass_mock: MagicMock,
-) -> None:
-    """Repeated setup must not replace existing service handlers."""
-    registry = _service_registry(hass_mock)
-    registry.has_service.return_value = True
-
-    services_module.async_register_services(hass_mock)
-
-    registry.async_register.assert_not_called()
 
 
 async def test_target_resolution_rejects_empty_configuration(
@@ -357,7 +299,7 @@ async def test_target_resolution_requires_host_for_multiple_devices(
 
     with pytest.raises(
         HomeAssistantError,
-        match="Multiple NanoKVM devices are configured; specify the host field",
+        match="Multiple NanoKVM devices are configured; specify the device_id or host",
     ):
         await _call_service(hass_mock, registered_services, SERVICE_REBOOT)
 
@@ -380,6 +322,63 @@ async def test_target_resolution_matches_normalized_host_forms(
 
     first.client.reboot_system.assert_not_awaited()
     selected.client.reboot_system.assert_awaited_once_with()
+
+
+async def test_target_resolution_matches_preferred_host_of_fallback_entry(
+    hass_mock: MagicMock,
+    registered_services: Mapping[str, RegisteredService],
+) -> None:
+    """A device on its fallback address still answers to its preferred host."""
+    first = _coordinator("first.local")
+    selected = _coordinator("192.0.2.21", preferred_host="https://192.0.2.20")
+    _install_coordinators(hass_mock, first, selected)
+
+    await _call_service(
+        hass_mock, registered_services, SERVICE_REBOOT, {CONF_HOST: "192.0.2.20"}
+    )
+
+    first.client.reboot_system.assert_not_awaited()
+    selected.client.reboot_system.assert_awaited_once_with()
+
+
+async def test_target_resolution_by_device_id(
+    hass_mock: MagicMock,
+    registered_services: Mapping[str, RegisteredService],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A device target selects its coordinator regardless of the current host."""
+    first = _coordinator("first.local")
+    selected = _coordinator("second.local")
+    _install_coordinators(hass_mock, first, selected)
+    devices = {
+        "device-2": SimpleNamespace(config_entries={"other-entry", "entry-2"}),
+        "foreign": SimpleNamespace(config_entries={"other-entry"}),
+    }
+    monkeypatch.setattr(
+        services_module.dr,
+        "async_get",
+        lambda hass: SimpleNamespace(async_get=devices.get),
+    )
+
+    await _call_service(
+        hass_mock, registered_services, SERVICE_REBOOT, {"device_id": "device-2"}
+    )
+
+    first.client.reboot_system.assert_not_awaited()
+    selected.client.reboot_system.assert_awaited_once_with()
+
+    # A bad target is the caller's mistake, not an internal failure.
+    for device_id in ("foreign", "missing"):
+        with pytest.raises(
+            ServiceValidationError,
+            match=f"No NanoKVM device is configured for device {device_id}",
+        ):
+            await _call_service(
+                hass_mock,
+                registered_services,
+                SERVICE_REBOOT,
+                {"device_id": device_id},
+            )
 
 
 async def test_target_resolution_rejects_unknown_host(
@@ -537,6 +536,7 @@ async def test_mouse_jiggler_maps_mode_enum(
     coordinator.client.set_mouse_jiggler_state.assert_awaited_once_with(
         False, expected_mode
     )
+    coordinator.async_request_refresh.assert_awaited_once_with()
 
 
 async def test_led_strip_requires_at_least_one_update_field(
@@ -546,9 +546,7 @@ async def test_led_strip_requires_at_least_one_update_field(
     """An empty LED update must fail before resolving or contacting a device."""
     _install_coordinators(hass_mock, _coordinator(is_pro_hardware=True))
 
-    with pytest.raises(
-        HomeAssistantError, match="At least one LED strip field is required"
-    ):
+    with pytest.raises(vol.Invalid, match="must contain at least one of"):
         await _call_service(hass_mock, registered_services, SERVICE_SET_LED_STRIP)
 
 
@@ -806,32 +804,19 @@ async def test_response_handler_translates_unexpected_errors(
     assert isinstance(captured.value.__cause__, RuntimeError)
 
 
-def test_unregister_services_removes_only_registered_services(
+async def test_forbidden_service_asks_for_an_administrator_account(
     hass_mock: MagicMock,
+    registered_services: Mapping[str, RegisteredService],
 ) -> None:
-    """Unload must remove every currently registered integration service."""
-    registered_names = {SERVICE_REBOOT, SERVICE_SCAN_WIFI, SERVICE_LIST_IMAGES}
-    registry = _service_registry(hass_mock)
-    registry.has_service.side_effect = lambda domain, service_name: (
-        domain == DOMAIN and service_name in registered_names
+    """A service the account may not use says what it needs."""
+    coordinator = _coordinator()
+    coordinator.client.get_images.side_effect = NanoKVMPermissionError(
+        method="GET", path="/storage/image"
     )
+    _install_coordinators(hass_mock, coordinator)
 
-    services_module.async_unregister_services(hass_mock)
-
-    assert registry.async_remove.call_args_list == [
-        call(DOMAIN, service_name)
-        for service_name in services_module._SERVICE_NAMES
-        if service_name in registered_names
-    ]
-
-
-def test_unregister_services_is_noop_when_none_are_registered(
-    hass_mock: MagicMock,
-) -> None:
-    """Unload must tolerate an already-empty service registry."""
-    registry = _service_registry(hass_mock)
-    registry.has_service.return_value = False
-
-    services_module.async_unregister_services(hass_mock)
-
-    registry.async_remove.assert_not_called()
+    with pytest.raises(
+        HomeAssistantError,
+        match="list_images service needs a NanoKVM administrator account",
+    ):
+        await _call_service(hass_mock, registered_services, SERVICE_LIST_IMAGES)

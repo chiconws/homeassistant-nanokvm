@@ -11,13 +11,14 @@ from yarl import URL
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from nanokvm.client import NanoKVMClient, NanoKVMAuthenticationFailure, NanoKVMError
 from nanokvm.utils import async_fetch_remote_fingerprint
 
 from .const import (
+    CONF_PREFERRED_HOST,
     CONF_SSH_HOST_KEY,
     CONF_SSL_FINGERPRINT,
     CONF_TRUST_SSH_HOST_KEY,
@@ -26,6 +27,7 @@ from .const import (
     DEFAULT_USERNAME,
     DOMAIN,
     INTEGRATION_TITLE,
+    PREFERRED_HOST_TIMEOUT_SECONDS,
 )
 from .ssh_host_keys import (
     SSHHostKey,
@@ -33,52 +35,29 @@ from .ssh_host_keys import (
     retarget_known_hosts_line,
 )
 from .utils import (
+    CannotConnect,
+    InvalidAuth,
+    SSLCertificateChanged,
     api_connection_options,
+    async_connect,
     extract_ssh_host,
     https_probe_url,
     normalize_host,
     normalize_mdns,
+    verification_url,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 async def validate_input(data: dict[str, Any]) -> str:
     """Validate the user input allows us to connect."""
-    options = api_connection_options(
-        data[CONF_HOST],
-        data.get(CONF_SSL_FINGERPRINT),
+    _, device_info = await async_connect(
+        api_connection_options(data[CONF_HOST], data.get(CONF_SSL_FINGERPRINT)),
+        data[CONF_USERNAME],
+        data[CONF_PASSWORD],
+        lambda client: client.get_info(),
     )
-    last_error: Exception | None = None
-
-    for index, option in enumerate(options):
-        async with NanoKVMClient(
-            option.base_url,
-            ssl_fingerprint=option.ssl_fingerprint,
-        ) as client:
-            try:
-                await client.authenticate(data[CONF_USERNAME], data[CONF_PASSWORD])
-                device_info = await client.get_info()
-                return str(device_info.device_key)
-            except NanoKVMAuthenticationFailure as err:
-                raise InvalidAuth from err
-            except (
-                aiohttp.ClientConnectorCertificateError,
-                aiohttp.ServerFingerprintMismatch,
-            ) as err:
-                if option.scheme == "http" and index < len(options) - 1:
-                    last_error = err
-                    continue
-                raise SSLCertificateChanged from err
-            except aiohttp.ClientConnectionError as err:
-                last_error = err
-                if index < len(options) - 1:
-                    continue
-            except (asyncio.TimeoutError, aiohttp.ClientError, NanoKVMError) as err:
-                last_error = err
-                break
-
-    assert last_error is not None
-    raise CannotConnect from last_error
+    return str(device_info.device_key)
 
 
 async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
@@ -88,9 +67,6 @@ async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
     therefore leaves the integration usable while an enabled service gets a
     strict, user-confirmed host key before metrics collection can authenticate.
     """
-    if not hasattr(NanoKVMClient, "get_ssh_state"):
-        return None
-
     options = api_connection_options(
         data[CONF_HOST],
         data.get(CONF_SSL_FINGERPRINT),
@@ -106,7 +82,7 @@ async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
         except (asyncio.TimeoutError, aiohttp.ClientError, NanoKVMError):
             continue
 
-        if not getattr(ssh_state, "enabled", False):
+        if not ssh_state.enabled:
             return None
 
         try:
@@ -120,6 +96,27 @@ async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
             return None
 
     return None
+
+
+async def async_is_nanokvm_api(api_url: str, ssl_fingerprint: str) -> bool:
+    """Return whether a not yet trusted HTTPS endpoint speaks the NanoKVM API.
+
+    Only the public factory-default credentials are sent, so nothing secret
+    reaches a host whose certificate the user has not approved.
+    """
+    try:
+        async with NanoKVMClient(api_url, ssl_fingerprint=ssl_fingerprint) as client:
+            await client.authenticate(DEFAULT_USERNAME, DEFAULT_PASSWORD)
+    except NanoKVMAuthenticationFailure:
+        return True
+    except (aiohttp.ClientError, asyncio.TimeoutError, NanoKVMError):
+        return False
+    return True
+
+
+def _format_fingerprint(fingerprint: str) -> str:
+    """Format a hex fingerprint with colons for display."""
+    return ":".join(fingerprint[i : i + 2] for i in range(0, len(fingerprint), 2))
 
 
 class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -137,26 +134,6 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         self._pending_device_key: str | None = None
         self._pending_ssh_host_key: SSHHostKey | None = None
         self._reconfigure_entry: ConfigEntry | None = None
-
-    def _get_reauth_entry(self) -> ConfigEntry:
-        """Return the config entry currently undergoing reauthentication."""
-        entry_id = self.context.get("entry_id")
-        if entry_id is None:
-            raise RuntimeError("Reauth flow started without a NanoKVM entry ID")
-        entry = self.hass.config_entries.async_get_entry(entry_id)
-        if entry is None:
-            raise RuntimeError("Reauth flow started for a missing NanoKVM entry")
-        return entry
-
-    def _get_reconfigure_entry(self) -> ConfigEntry:
-        """Return the config entry currently undergoing reconfiguration."""
-        entry_id = self.context.get("entry_id")
-        if entry_id is None:
-            raise RuntimeError("Reconfigure flow started without a NanoKVM entry ID")
-        entry = self.hass.config_entries.async_get_entry(entry_id)
-        if entry is None:
-            raise RuntimeError("Reconfigure flow started for a missing NanoKVM entry")
-        return entry
 
     async def _async_add_device_with_ssh_key(
         self,
@@ -187,21 +164,81 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
     def _async_find_entry_by_discovery_host(
         self, *discovery_hosts: str
     ) -> ConfigEntry | None:
-        """Find an existing config entry by its configured host."""
+        """Find an entry by its host or its API-reported device hostname."""
         normalized_hosts = {
             host.rstrip(".").casefold() for host in discovery_hosts
         }
+        hostname_candidates: list[ConfigEntry] = []
         for entry in self._async_current_entries():
-            configured_host = entry.data.get(CONF_HOST)
-            if not isinstance(configured_host, str):
+            has_valid_host = False
+            for configured_host in (
+                entry.data.get(CONF_HOST), entry.data.get(CONF_PREFERRED_HOST)
+            ):
+                if not isinstance(configured_host, str):
+                    continue
+                try:
+                    configured_host = extract_ssh_host(configured_host)
+                except ValueError:
+                    continue
+                has_valid_host = True
+                if configured_host.rstrip(".").casefold() in normalized_hosts:
+                    return entry
+            if has_valid_host:
+                hostname_candidates.append(entry)
+
+        for entry in hostname_candidates:
+            if entry.unique_id is None:
                 continue
-            try:
-                configured_host = extract_ssh_host(configured_host)
-            except ValueError:
+            device = dr.async_get(self.hass).async_get_device(
+                identifiers={(DOMAIN, entry.unique_id)}
+            )
+            if device is None or not device.name:
                 continue
-            if configured_host.rstrip(".").casefold() in normalized_hosts:
+            device_hostname = device.name.rstrip(".").casefold()
+            if not device_hostname.endswith(".local"):
+                device_hostname += ".local"
+            if device_hostname in normalized_hosts:
                 return entry
         return None
+
+    async def _async_select_discovery_host(
+        self,
+        entry: ConfigEntry,
+        discovery_host: str,
+        device_key: str,
+    ) -> tuple[str, str]:
+        """Prefer the chosen host, then the working fallback, after identity checks.
+
+        Returns the host to use and the preferred host to keep.
+        """
+        current_host = entry.data[CONF_HOST]
+        preferred_host = entry.data.get(CONF_PREFERRED_HOST) or current_host
+        selected_host = discovery_host
+        preferred_host_reassigned = False
+        for host in dict.fromkeys((preferred_host, current_host)):
+            probe_url = verification_url(host)
+            if probe_url == https_probe_url(discovery_host):
+                # The discovery request has already verified this endpoint.
+                selected_host = host
+                break
+            try:
+                async with asyncio.timeout(PREFERRED_HOST_TIMEOUT_SECONDS):
+                    candidate_key = await validate_input(
+                        dict(entry.data) | {CONF_HOST: probe_url}
+                    )
+            except (
+                CannotConnect, InvalidAuth, SSLCertificateChanged, asyncio.TimeoutError
+            ):
+                continue
+            if candidate_key == device_key:
+                selected_host = host
+                break
+            if host == preferred_host:
+                # The address now belongs to another NanoKVM.
+                preferred_host_reassigned = True
+        if preferred_host_reassigned:
+            preferred_host = selected_host
+        return selected_host, preferred_host
 
     async def _async_handle_existing_entry(
         self,
@@ -209,6 +246,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         discovery_host: str,
         *,
         device_key: str | None = None,
+        preferred_host: str | None = None,
     ) -> ConfigFlowResult:
         """Handle discovery for an already-configured device."""
         current_host = entry.data[CONF_HOST]
@@ -222,19 +260,15 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             return self.async_abort(reason="already_configured")
 
-        if current_host != discovery_host:
-            _LOGGER.debug(
-                "Updating discovered host for NanoKVM from %s to %s",
-                current_host,
-                discovery_host,
-            )
-        else:
-            _LOGGER.debug(
-                "Device %s is already configured with the current host, ignoring discovery",
-                discovery_host,
-            )
+        _LOGGER.debug(
+            "NanoKVM configured at %s was discovered at %s",
+            current_host,
+            discovery_host,
+        )
 
         data_updates: dict[str, Any] = {CONF_HOST: discovery_host}
+        if preferred_host is not None:
+            data_updates[CONF_PREFERRED_HOST] = preferred_host
         trusted_ssh_key = entry.data.get(CONF_SSH_HOST_KEY)
         if isinstance(trusted_ssh_key, str) and trusted_ssh_key:
             try:
@@ -247,6 +281,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                     entry,
                     discovery_host,
                     device_key,
+                    preferred_host=preferred_host,
                 )
             if updated_ssh_key != trusted_ssh_key:
                 if device_key == entry.unique_id:
@@ -256,30 +291,61 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                         entry,
                         discovery_host,
                         device_key,
+                        preferred_host=preferred_host,
                     )
 
-        update_kwargs: dict[str, Any] = {
-            "data_updates": data_updates,
-            "reason": "already_configured",
-            "reload_even_if_entry_is_unchanged": False,
-        }
-        if device_key is not None and entry.unique_id != device_key:
-            update_kwargs["unique_id"] = device_key
+        return self._async_update_discovered_entry(entry, data_updates, device_key)
 
-        return self.async_update_reload_and_abort(entry, **update_kwargs)
+    def _async_update_discovered_entry(
+        self,
+        entry: ConfigEntry,
+        data_updates: dict[str, Any],
+        device_key: str | None,
+    ) -> ConfigFlowResult:
+        """Save discovery updates and migrate a legacy unique ID when verified."""
+        return self._async_update_and_abort(
+            entry,
+            device_key,
+            data_updates=data_updates,
+            reason="already_configured",
+            reload_even_if_entry_is_unchanged=False,
+        )
+
+    def _async_update_and_abort(
+        self, entry: ConfigEntry, device_key: str | None, **kwargs: Any
+    ) -> ConfigFlowResult:
+        """Update an entry, replacing its unique ID with a verified device key."""
+        if device_key is not None and entry.unique_id != device_key:
+            kwargs["unique_id"] = device_key
+        return self.async_update_reload_and_abort(entry, **kwargs)
 
     async def _async_reconfirm_ssh_host_key(
         self,
         entry: ConfigEntry,
         discovery_host: str,
         device_key: str | None,
+        *,
+        preferred_host: str | None = None,
     ) -> ConfigFlowResult:
         """Require fresh user trust when discovery cannot verify key identity."""
         data = dict(entry.data)
         data[CONF_HOST] = discovery_host
+        if preferred_host is not None:
+            data[CONF_PREFERRED_HOST] = preferred_host
         host_key = await async_prepare_ssh_host_key(data)
         if host_key is None:
-            return self.async_abort(reason="ssh_host_key_unavailable")
+            if device_key is None:
+                # Nothing verified this host, so it cannot replace the saved one.
+                return self.async_abort(reason="ssh_host_key_unavailable")
+            # SSH is optional. Keep the API host current and drop the key that
+            # can no longer be verified until the user approves a new one.
+            data_updates: dict[str, Any] = {
+                CONF_HOST: discovery_host,
+                CONF_SSH_HOST_KEY: None,
+            }
+            if preferred_host is not None:
+                data_updates[CONF_PREFERRED_HOST] = preferred_host
+            return self._async_update_discovered_entry(entry, data_updates, device_key)
 
         self._reconfigure_entry = entry
         self._pending_ssh_host_key = host_key
@@ -299,28 +365,10 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(device_key)
         self._abort_if_unique_id_configured()
 
-        if CONF_USE_STATIC_HOST not in data:
-            data[CONF_USE_STATIC_HOST] = False
-
-        if data[CONF_USE_STATIC_HOST]:
-            _LOGGER.debug(
-                "Device configured to use static host %s (mDNS discovery disabled)",
-                data[CONF_HOST]
-            )
-        else:
-            _LOGGER.debug(
-                "Device configured to allow mDNS discovery (host: %s, key: %s)",
-                data[CONF_HOST],
-                device_key
-            )
+        data.setdefault(CONF_USE_STATIC_HOST, False)
+        data.setdefault(CONF_PREFERRED_HOST, data[CONF_HOST])
 
         return self.async_create_entry(title=INTEGRATION_TITLE, data=data)
-
-    def _format_fingerprint(self, fingerprint: str) -> str:
-        """Format a hex fingerprint with colons for display."""
-        return ":".join(
-            fingerprint[i : i + 2] for i in range(0, len(fingerprint), 2)
-        )
 
     async def _async_fetch_and_redirect_ssl(
         self, return_step: str
@@ -362,7 +410,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="ssl_fingerprint",
             description_placeholders={
                 "host": self.data[CONF_HOST],
-                "fingerprint": self._format_fingerprint(fingerprint),
+                "fingerprint": _format_fingerprint(fingerprint),
             },
         )
 
@@ -384,8 +432,8 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="ssl_fingerprint_changed",
             description_placeholders={
                 "host": self.data[CONF_HOST],
-                "old_fingerprint": self._format_fingerprint(old_fingerprint),
-                "new_fingerprint": self._format_fingerprint(fingerprint),
+                "old_fingerprint": _format_fingerprint(old_fingerprint),
+                "new_fingerprint": _format_fingerprint(fingerprint),
             },
         )
 
@@ -429,18 +477,15 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             data_updates = {CONF_SSH_HOST_KEY: host_key.known_hosts_line}
             if self.data.get(CONF_HOST) != entry.data.get(CONF_HOST):
                 data_updates[CONF_HOST] = self.data[CONF_HOST]
-            update_kwargs: dict[str, Any] = {
-                "data_updates": data_updates,
-                "reason": "reconfigure_successful",
-            }
+            if CONF_PREFERRED_HOST in self.data:
+                data_updates[CONF_PREFERRED_HOST] = self.data[CONF_PREFERRED_HOST]
             device_key = self._pending_device_key
             self._pending_device_key = None
-            self._pending_ssh_host_key = None
-            if device_key is not None and entry.unique_id != device_key:
-                update_kwargs["unique_id"] = device_key
-            return self.async_update_reload_and_abort(
+            return self._async_update_and_abort(
                 entry,
-                **update_kwargs,
+                device_key,
+                data_updates=data_updates,
+                reason="reconfigure_successful",
             )
 
         device_key = self._pending_device_key
@@ -479,7 +524,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             await validate_input(self.data)
         except SSLCertificateChanged:
             return await self._async_fetch_and_redirect_ssl("reauth_finish")
-        except (InvalidAuth, CannotConnect, Exception):
+        except Exception:
             pass
 
         return await self.async_step_reauth_confirm()
@@ -537,7 +582,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             device_key = await validate_input(self.data)
         except InvalidAuth:
             return await self.async_step_reauth_confirm()
-        except (CannotConnect, SSLCertificateChanged, Exception) as err:
+        except Exception as err:
             _LOGGER.error(
                 "Reauth failed after SSL confirmation: %s: %s",
                 type(err).__name__,
@@ -560,20 +605,15 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         ):
             return self.async_abort(reason="already_configured")
 
-        update_kwargs: dict[str, Any] = {
-            "data_updates": {
+        return self._async_update_and_abort(
+            entry,
+            device_key,
+            data_updates={
                 CONF_USERNAME: self.data[CONF_USERNAME],
                 CONF_PASSWORD: self.data[CONF_PASSWORD],
                 CONF_SSL_FINGERPRINT: self.data.get(CONF_SSL_FINGERPRINT),
             },
-        }
-        if entry.unique_id != device_key:
-            update_kwargs["unique_id"] = device_key
-
-        return self.async_update_reload_and_abort(
-            entry,
             reason="reauth_successful",
-            **update_kwargs,
         )
 
     async def async_step_user(
@@ -699,6 +739,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             self._async_find_entry_by_discovery_host(
                 discovery_host,
                 discovery_hostname,
+                *discovery_info.addresses,
             )
             if is_ssh_service
             else None
@@ -747,12 +788,50 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 device_info = await client.get_info()
                 device_key = str(device_info.device_key)
 
+                if existing_entry and existing_entry.unique_id not in (
+                    device_key, discovery_hostname
+                ):
+                    # Another NanoKVM answers at an address saved for this
+                    # entry. Leave the entry alone and handle the device by
+                    # its own identity.
+                    _LOGGER.debug(
+                        "Device at %s differs from the entry configured for that address",
+                        discovery_host,
+                    )
+                    existing_entry = None
+
                 await self.async_set_unique_id(device_key)
 
                 # Support both old (mDNS) and new (device_key) unique IDs.
                 if entry := self._async_find_matching_entry(
                     device_key, discovery_hostname
                 ):
+                    if (
+                        is_ssh_service
+                        and not entry.data.get(CONF_USE_STATIC_HOST, False)
+                    ):
+                        (
+                            selected_host,
+                            preferred_host,
+                        ) = await self._async_select_discovery_host(
+                            entry, discovery_host, device_key
+                        )
+                        current_host = entry.data[CONF_HOST]
+                        if selected_host != current_host or preferred_host != (
+                            entry.data.get(CONF_PREFERRED_HOST) or current_host
+                        ):
+                            return await self._async_handle_existing_entry(
+                                entry,
+                                selected_host,
+                                device_key=device_key,
+                                preferred_host=preferred_host,
+                            )
+                        if (
+                            entry.unique_id == device_key
+                            and extract_ssh_host(current_host) != discovery_host
+                        ):
+                            return self.async_abort(reason="already_configured")
+                        discovery_host = selected_host
                     return await self._async_handle_existing_entry(
                         entry,
                         discovery_host,
@@ -767,6 +846,9 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                     discovery_host,
                 )
             except NanoKVMAuthenticationFailure:
+                if existing_entry and existing_entry.unique_id != discovery_hostname:
+                    # A hostname hint is insufficient to authorize a host change.
+                    return self.async_abort(reason="already_configured")
                 # Fall back to legacy ID path when authentication blocks device_key retrieval.
                 if entry := self._async_find_matching_entry(discovery_hostname):
                     return await self._async_handle_existing_entry(
@@ -789,15 +871,35 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                         discovery_host,
                     )
             except aiohttp.ClientConnectorCertificateError:
+                if existing_entry:
+                    # Without a saved pin, discovery cannot verify this entry.
+                    return self.async_abort(reason="already_configured")
+                # Reserve the hostname before waiting for TLS trust so repeated
+                # zeroconf updates cannot create duplicate discovery flows.
+                await self.async_set_unique_id(discovery_hostname)
+                # Any host can advertise SSH, so only ask for TLS trust once
+                # the endpoint has answered like a NanoKVM.
+                try:
+                    fingerprint = await async_fetch_remote_fingerprint(api_url)
+                except (aiohttp.ClientError, asyncio.TimeoutError, OSError):
+                    fingerprint = None
+                if fingerprint is None or not await async_is_nanokvm_api(
+                    api_url, fingerprint
+                ):
+                    _LOGGER.debug(
+                        "Ignoring %s (%s): untrusted TLS host is not a NanoKVM.",
+                        discovery_hostname,
+                        discovery_host,
+                    )
+                    return self.async_abort(reason="cannot_connect")
                 _LOGGER.debug(
                     "NanoKVM discovered at %s (%s) uses an untrusted TLS certificate.",
                     discovery_hostname,
                     discovery_host,
                 )
-                # Reserve the hostname before waiting for TLS trust so repeated
-                # zeroconf updates cannot create duplicate discovery flows.
-                await self.async_set_unique_id(discovery_hostname)
-                return await self._async_fetch_and_redirect_ssl("zeroconf")
+                self._ssl_return_step = "zeroconf"
+                self._discovered_fingerprint = fingerprint
+                return await self.async_step_ssl_fingerprint()
             except (aiohttp.ClientError, asyncio.TimeoutError, NanoKVMError) as err:
                 _LOGGER.debug(
                     "Failed to connect to %s (%s) during discovery: %s. Ignoring as most likely not a NanoKVM device.",
@@ -809,14 +911,3 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return await self.async_step_user(user_input=self.data)
 
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class InvalidAuth(HomeAssistantError):
-    """Error to indicate there is invalid auth."""
-
-
-class SSLCertificateChanged(HomeAssistantError):
-    """Error to indicate the SSL certificate has changed."""

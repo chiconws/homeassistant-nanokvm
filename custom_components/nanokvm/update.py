@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
 
 import aiohttp
@@ -22,29 +20,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from nanokvm.client import NanoKVMError
 
-from .const import DOMAIN
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
 
 _LOGGER = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True, kw_only=True)
-class NanoKVMUpdateEntityDescription(UpdateEntityDescription):
-    """Describes NanoKVM update entity."""
-
-    available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
-
-
-UPDATES: tuple[NanoKVMUpdateEntityDescription, ...] = (
-    NanoKVMUpdateEntityDescription(
-        key="application",
-        name="Application",
-        translation_key="application",
-        icon="mdi:update",
-        device_class=UpdateDeviceClass.FIRMWARE,
-    ),
-)
 
 
 def _normalize_version(version: str | None) -> str | None:
@@ -62,34 +41,27 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM update based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
-    async_add_entities(
-        NanoKVMUpdate(
-            coordinator=coordinator,
-            description=description,
-        )
-        for description in UPDATES
-        if description.available_fn(coordinator)
-    )
+    # Only an administrator can read or install application versions.
+    if coordinator.is_admin:
+        async_add_entities([NanoKVMUpdate(coordinator)])
 
 
 class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
     """Defines a NanoKVM update entity."""
 
-    entity_description: NanoKVMUpdateEntityDescription
+    entity_description = UpdateEntityDescription(
+        key="application",
+        translation_key="application",
+        device_class=UpdateDeviceClass.FIRMWARE,
+    )
     _attr_supported_features = UpdateEntityFeature.INSTALL
 
-    def __init__(
-        self,
-        coordinator: NanoKVMDataUpdateCoordinator,
-        description: NanoKVMUpdateEntityDescription,
-    ) -> None:
+    def __init__(self, coordinator: NanoKVMDataUpdateCoordinator) -> None:
         """Initialize NanoKVM update."""
-        self.entity_description = description
         super().__init__(
-            coordinator=coordinator,
-            unique_id_suffix=f"update_{description.key}",
+            coordinator=coordinator, unique_id_suffix="update_application"
         )
 
     @property
@@ -97,7 +69,6 @@ class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
         """Return if entity is available."""
         return (
             super().available
-            and self.entity_description.available_fn(self.coordinator)
             and self.coordinator.application_version_info is not None
         )
 
@@ -134,22 +105,18 @@ class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
     ) -> None:
         """Trigger NanoKVM application update."""
         del version, backup, kwargs
-        should_refresh = True
         try:
             async with self.coordinator.async_client() as client:
                 await client.update_application()
         except aiohttp.ServerDisconnectedError:
-            should_refresh = False
             _LOGGER.debug(
                 "NanoKVM disconnected while starting the application update; "
                 "assuming the update is continuing"
             )
+            return
         except (NanoKVMError, aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise HomeAssistantError(
                 f"Failed to start NanoKVM application update: {err}"
             ) from err
-
-        if not should_refresh:
-            return
 
         await self.coordinator.async_request_refresh()

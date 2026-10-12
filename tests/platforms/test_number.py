@@ -15,10 +15,10 @@ from custom_components.nanokvm.const import (
     LED_BRIGHTNESS_MAX,
     LED_BRIGHTNESS_MIN,
 )
+from custom_components.nanokvm.led import led_strip_available
 from custom_components.nanokvm.number import (
+    HDMI_IDLE_TIMEOUT_MAX_MINUTES,
     NUMBERS,
-    NanoKVMNumberEntityDescription,
-    _has_led_strip,
     _led_brightness_value,
     _led_horizontal_max,
     _led_horizontal_value,
@@ -60,7 +60,7 @@ def test_led_strip_availability_requires_pro_hardware_and_state(
         led_strip=led_strip,
     )
 
-    assert _has_led_strip(coordinator) is expected
+    assert led_strip_available(coordinator) is expected
 
 
 def test_led_number_values_are_read_from_coordinator_state(
@@ -105,33 +105,20 @@ def test_dynamic_axis_maxima_use_minimum_axis_without_state(
     assert _led_vertical_max(coordinator) == 74
 
 
-def test_number_description_defaults_are_safe(
-    coordinator_state_factory: CoordinatorStateFactory,
-) -> None:
-    """An uncustomized description has inert value/action defaults."""
-    description = NanoKVMNumberEntityDescription(key="test")
-    coordinator = coordinator_state_factory()
-
-    assert description.value_fn(coordinator) is None
-    assert description.available_fn(coordinator) is True
-    assert description.min_value_fn(coordinator) == LED_BEAD_MIN
-    assert description.max_value_fn(coordinator) == LED_BEAD_TOTAL_LIMIT
-    assert description.set_value_fn is None
-
-
 def test_number_description_keys_and_common_contract() -> None:
     """All LED number descriptions have stable registry and action metadata."""
     assert [description.key for description in NUMBERS] == [
         "led_brightness",
         "led_horizontal_beads",
         "led_vertical_beads",
+        "hdmi_idle_timeout",
     ]
 
-    for description in NUMBERS:
+    for description in NUMBERS[:3]:
         assert description.translation_key == description.key
         assert description.entity_category is EntityCategory.CONFIG
         assert description.native_step == 1
-        assert description.available_fn is _has_led_strip
+        assert description.available_fn is led_strip_available
         assert description.set_value_fn is not None
 
 
@@ -144,7 +131,6 @@ def test_brightness_description_contract() -> None:
     assert description.native_unit_of_measurement == PERCENTAGE
     assert description.mode is NumberMode.SLIDER
     assert description.value_fn is _led_brightness_value
-    assert description.min_value_fn(SimpleNamespace()) == LED_BRIGHTNESS_MIN
     assert description.max_value_fn(SimpleNamespace()) == LED_BRIGHTNESS_MAX
 
 
@@ -168,3 +154,30 @@ def test_vertical_bead_description_contract() -> None:
     assert description.mode is NumberMode.BOX
     assert description.value_fn is _led_vertical_value
     assert description.max_value_fn is _led_vertical_max
+
+
+def test_hdmi_idle_timeout_description_contract(
+    coordinator_state_factory: CoordinatorStateFactory,
+) -> None:
+    """The idle timeout is a minute count an administrator can change."""
+    description = NUMBERS[3]
+    reported = SimpleNamespace(enabled=True, signal=True, idle_timeout=15)
+    admin = coordinator_state_factory(hdmi_state=reported)
+
+    assert description.native_min_value == 0
+    assert description.native_max_value == HDMI_IDLE_TIMEOUT_MAX_MINUTES == 10080
+    assert description.max_value_fn(admin) == 10080
+    assert description.value_fn(admin) == 15
+    assert description.available_fn(admin) is True
+    # Older firmware reports no timeout; a role=user account cannot set it.
+    older = SimpleNamespace(enabled=True, signal=None, idle_timeout=None)
+    assert description.available_fn(coordinator_state_factory(hdmi_state=older)) is False
+    assert (
+        description.available_fn(
+            coordinator_state_factory(hdmi_state=reported, is_admin=False)
+        )
+        is False
+    )
+    missing = coordinator_state_factory(hdmi_state=None)
+    assert description.available_fn(missing) is False
+    assert description.value_fn(missing) is None

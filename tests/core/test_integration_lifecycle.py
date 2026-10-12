@@ -21,6 +21,7 @@ from custom_components.nanokvm.const import (
     CONF_USE_STATIC_HOST,
     DOMAIN,
 )
+import custom_components.nanokvm.utils as utils_module
 
 
 @dataclass(slots=True)
@@ -86,7 +87,7 @@ def install_setup_client(monkeypatch: pytest.MonkeyPatch):
     def install(*scenarios: SetupScenario) -> type[SetupClient]:
         SetupClient.scenarios = list(scenarios)
         SetupClient.instances = []
-        monkeypatch.setattr(nanokvm_module, "NanoKVMClient", SetupClient)
+        monkeypatch.setattr(utils_module, "NanoKVMClient", SetupClient)
         return SetupClient
 
     return install
@@ -126,8 +127,6 @@ async def test_setup_entry_success_initializes_coordinator_platforms_and_service
     config_entry_mock.data[CONF_USE_STATIC_HOST] = True
     client_type = install_setup_client(SetupScenario())
     coordinator_factory, coordinator = _install_coordinator(monkeypatch)
-    register_services = MagicMock()
-    monkeypatch.setattr(nanokvm_module, "async_register_services", register_services)
 
     assert await async_setup_entry(hass_mock, config_entry_mock) is True
 
@@ -145,14 +144,14 @@ async def test_setup_entry_success_initializes_coordinator_platforms_and_service
         "password": "password",
         "device_info": client.scenario.device_info
         or SimpleNamespace(device_key="device-key", application="1.0.0"),
+        "ssh_known_hosts": None,
     }
     coordinator.async_config_entry_first_refresh.assert_awaited_once_with()
-    assert hass_mock.data[DOMAIN][config_entry_mock.entry_id] is coordinator
+    assert config_entry_mock.runtime_data is coordinator
     hass_mock.config_entries.async_forward_entry_setups.assert_awaited_once_with(
         config_entry_mock,
         PLATFORMS,
     )
-    register_services.assert_called_once_with(hass_mock)
 
 
 @pytest.mark.asyncio
@@ -168,7 +167,6 @@ async def test_setup_entry_explicit_https_passes_stored_fingerprint(
     config_entry_mock.data[CONF_SSL_FINGERPRINT] = "AABB"
     client_type = install_setup_client(SetupScenario())
     _install_coordinator(monkeypatch)
-    monkeypatch.setattr(nanokvm_module, "async_register_services", MagicMock())
 
     assert await async_setup_entry(hass_mock, config_entry_mock) is True
     assert len(client_type.instances) == 1
@@ -192,7 +190,6 @@ async def test_setup_entry_persists_approved_ssh_host_key(
     )
     install_setup_client(SetupScenario())
     coordinator_factory, _ = _install_coordinator(monkeypatch)
-    monkeypatch.setattr(nanokvm_module, "async_register_services", MagicMock())
 
     assert await async_setup_entry(hass_mock, config_entry_mock) is True
 
@@ -242,7 +239,6 @@ async def test_setup_entry_http_certificate_error_falls_back_to_https(
         SetupScenario(),
     )
     coordinator_factory, _ = _install_coordinator(monkeypatch)
-    monkeypatch.setattr(nanokvm_module, "async_register_services", MagicMock())
 
     assert await async_setup_entry(hass_mock, config_entry_mock) is True
     assert [client.url.scheme for client in client_type.instances] == ["http", "https"]
@@ -347,114 +343,36 @@ async def test_setup_entry_first_refresh_failure_stops_platform_forwarding(
     install_setup_client(SetupScenario())
     refresh_error = ConfigEntryNotReady("poll failed")
     _install_coordinator(monkeypatch, refresh_error=refresh_error)
-    register_services = MagicMock()
-    monkeypatch.setattr(nanokvm_module, "async_register_services", register_services)
 
     with pytest.raises(ConfigEntryNotReady, match="poll failed"):
         await async_setup_entry(hass_mock, config_entry_mock)
 
-    assert DOMAIN not in hass_mock.data
     hass_mock.config_entries.async_forward_entry_setups.assert_not_awaited()
-    register_services.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_setup_entry_preserves_existing_domain_coordinators(
-    hass_mock: MagicMock,
-    config_entry_mock: MagicMock,
-    install_setup_client,
-    monkeypatch: pytest.MonkeyPatch,
+async def test_setup_registers_services_once(
+    hass_mock: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Adding a second entry does not replace already configured coordinators."""
-    _prepare_hass(hass_mock)
-    existing = object()
-    hass_mock.data = {DOMAIN: {"existing-entry": existing}}
-    install_setup_client(SetupScenario())
-    _, coordinator = _install_coordinator(monkeypatch)
-    monkeypatch.setattr(nanokvm_module, "async_register_services", MagicMock())
+    """Services belong to the integration, not to one config entry."""
+    register_services = MagicMock()
+    monkeypatch.setattr(nanokvm_module, "async_register_services", register_services)
 
-    assert await async_setup_entry(hass_mock, config_entry_mock) is True
-    assert hass_mock.data[DOMAIN] == {
-        "existing-entry": existing,
-        config_entry_mock.entry_id: coordinator,
-    }
+    assert await nanokvm_module.async_setup(hass_mock, {}) is True
+    register_services.assert_called_once_with(hass_mock)
 
 
 @pytest.mark.asyncio
-async def test_unload_failure_keeps_entry_and_services(
-    hass_mock: MagicMock,
-    config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("unloaded", [True, False])
+async def test_unload_reports_the_platform_unload_result(
+    hass_mock: MagicMock, config_entry_mock: MagicMock, unloaded: bool
 ) -> None:
-    """A failed platform unload leaves integration ownership untouched."""
+    """Unload is exactly the platform unload; nothing else is owned by the entry."""
     _prepare_hass(hass_mock)
-    coordinator = object()
-    hass_mock.data = {DOMAIN: {config_entry_mock.entry_id: coordinator}}
-    hass_mock.config_entries.async_unload_platforms.return_value = False
-    unregister = MagicMock()
-    monkeypatch.setattr(nanokvm_module, "async_unregister_services", unregister)
+    hass_mock.config_entries.async_unload_platforms.return_value = unloaded
 
-    assert await async_unload_entry(hass_mock, config_entry_mock) is False
-    assert hass_mock.data[DOMAIN][config_entry_mock.entry_id] is coordinator
-    unregister.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_unload_one_of_multiple_entries_keeps_global_services(
-    hass_mock: MagicMock,
-    config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Global services remain registered while another NanoKVM entry exists."""
-    _prepare_hass(hass_mock)
-    remaining = object()
-    hass_mock.data = {
-        DOMAIN: {
-            config_entry_mock.entry_id: object(),
-            "remaining-entry": remaining,
-        }
-    }
-    unregister = MagicMock()
-    monkeypatch.setattr(nanokvm_module, "async_unregister_services", unregister)
-
-    assert await async_unload_entry(hass_mock, config_entry_mock) is True
+    assert await async_unload_entry(hass_mock, config_entry_mock) is unloaded
     hass_mock.config_entries.async_unload_platforms.assert_awaited_once_with(
         config_entry_mock,
         PLATFORMS,
     )
-    assert hass_mock.data[DOMAIN] == {"remaining-entry": remaining}
-    unregister.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_unload_last_entry_unregisters_services_and_domain(
-    hass_mock: MagicMock,
-    config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The final unload removes global services and the integration data bucket."""
-    _prepare_hass(hass_mock)
-    hass_mock.data = {DOMAIN: {config_entry_mock.entry_id: object()}}
-    unregister = MagicMock()
-    monkeypatch.setattr(nanokvm_module, "async_unregister_services", unregister)
-
-    assert await async_unload_entry(hass_mock, config_entry_mock) is True
-    assert DOMAIN not in hass_mock.data
-    unregister.assert_called_once_with(hass_mock)
-
-
-@pytest.mark.asyncio
-async def test_unload_missing_domain_is_idempotent(
-    hass_mock: MagicMock,
-    config_entry_mock: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A repeated unload safely applies the empty-domain cleanup path."""
-    _prepare_hass(hass_mock)
-    hass_mock.data = {}
-    unregister = MagicMock()
-    monkeypatch.setattr(nanokvm_module, "async_unregister_services", unregister)
-
-    assert await async_unload_entry(hass_mock, config_entry_mock) is True
-    unregister.assert_called_once_with(hass_mock)
-    assert DOMAIN not in hass_mock.data

@@ -27,25 +27,39 @@ The integration follows the standard structure for a Home Assistant
 ### Core Files
 
 - **`__init__.py`**: Main entry point.
+  - **`async_setup`**: Registers the integration services once.
   - **`async_setup_entry`**: Initializes the integration from a config entry.
     Creates/authenticates the client, fetches initial device info, creates the
-    coordinator, forwards setup to platform files, and registers services.
-  - **`async_unload_entry`**: Unloads platforms, disconnects SSH collector, and
-    unregisters services when the last entry is removed.
+    coordinator, stores it in `entry.runtime_data`, and forwards setup to
+    platform files.
+  - **`async_unload_entry`**: Unloads platforms. The config entry shuts the
+    coordinator down, which disconnects the SSH collector.
 
 - **`coordinator.py`**: Hosts `NanoKVMDataUpdateCoordinator`.
   - Central polling logic (`_async_update_data`) and API fetch helpers.
+  - Fetches independent core endpoints a few at a time and publishes their
+    results together, so a failed poll keeps the previous state.
+  - Keeps the device registry name and firmware version current.
   - Handles reauthentication, storage-state fetches, optional NanoKVM Pro
     state, dynamic media/network/SSH entities, and SSH metric refresh.
   - Gates non-Pro-only endpoints such as swap size, CD-ROM state, HDMI output,
     and non-Pro virtual disk controls.
+  - Checks a fallback Pro entry's saved preferred host at most once per minute,
+    backing off to hourly while it is unreachable, and restores it only after
+    authenticating and verifying its device key. Forgets a preferred host that
+    answers with another device key.
 
 - **`entity.py`**: Defines `NanoKVMEntity` base class.
   - Shared entity behavior (`unique_id`, `device_info`) for all platforms.
+  - `async_add_entities_as_supported` adds each described entity once, at
+    setup or on a later coordinator update, when the device supports it.
+  - `_async_device_action` wraps client access for actions and reports device
+    failures as `HomeAssistantError`.
 
 - **`services.py`**: Service schemas, registration, and handlers.
-  - Implements all `nanokvm.*` service behavior, response services, and
-    unregister logic.
+  - Implements all `nanokvm.*` service behavior and response services.
+  - Targets a device by `device_id`, or by `host` matched against the entry's
+    current and preferred hosts.
 
 - **`config_flow.py`**: Manages the user configuration flow in Home Assistant.
   - Implements `ConfigFlow` for manual setup and zeroconf discovery.
@@ -53,19 +67,33 @@ The integration follows the standard structure for a Home Assistant
     creating the config entry.
   - Handles auth step, SSL fingerprint confirmation, static-host option, and
     legacy/new unique-id matching.
+  - Matches Pro discovery across advertised addresses and API-reported device
+    hostnames and reuses saved TLS trust. Saves the chosen host as preferred,
+    keeps working fallbacks, and returns to the preferred host when verified.
+  - Asks for TLS trust on SSH discovery only after the host answers like a
+    NanoKVM, and treats a different device at a saved address as its own device.
 
 - **`const.py`**: Central repository for shared constants (domain, service
-  names, attributes, defaults, icons, and signal names).
+  names, attributes, and defaults).
 
 - **`utils.py`**: Shared helpers for host normalization and SSH host extraction.
-  - Resolves HTTP/HTTPS API candidates, HTTPS probe URLs, and normalized host
-    matching keys.
+  - Resolves HTTP/HTTPS API candidates, HTTPS probe URLs, scheme-preserving
+    verification URLs, and normalized host matching keys.
+  - `async_connect` is the one place that tries those candidates in order and
+    authenticates. Setup, the config flow, reauthentication, and transport
+    failover all call it and translate its three errors (`InvalidAuth`,
+    `SSLCertificateChanged`, `CannotConnect`).
 
 - **`ssh_metrics.py`**: SSH metrics collection implementation used by the
   coordinator.
 
 - **`led.py`**: Shared NanoKVM Pro LED strip validation and config helpers.
   - Enforces LED brightness and bead-count constraints for entities/services.
+  - `async_set_led_strip` is the single write path. It remembers the requested
+    brightness, because the Pro can report a lower value than it stores; the
+    coordinator saves it in the config entry so it survives a restart.
+  - Rejects brightness and bead-count changes while the strip is off, because
+    the Pro ignores them.
 
 - **`manifest.json`**: Integration metadata.
   - Domain, name, version, dependencies (including `zeroconf`).
@@ -94,6 +122,8 @@ Each platform follows a similar pattern:
 1. **Entity descriptions**:
    A tuple of dataclass instances (for example,
    `NanoKVMSwitchEntityDescription`) declaratively defines entities.
+   Names come from `translations/*.json` and icons from `icons.json`, both
+   keyed by `translation_key`; descriptions set neither inline.
 2. **`value_fn`**:
    The description includes a lambda/function that reads entity state from
    coordinator data.
@@ -104,8 +134,8 @@ Each platform follows a similar pattern:
    Platform setup iterates entity descriptions and creates entity instances.
 5. **Entity class**:
    Entity classes inherit a Home Assistant base class plus `NanoKVMEntity`.
-   Action methods wrap client calls in `async with self.coordinator.client:`
-   for correct session handling.
+   Action methods wrap client calls in `async with self._async_device_action():`
+   for serialized client access and consistent error reporting.
 
 ### Services
 
@@ -123,7 +153,14 @@ Each platform follows a similar pattern:
   entities.
 - **Optional and dynamic entities**:
   Some entities are created only after the coordinator sees supporting state,
-  such as mounted media, active wired/wireless connections, or SSH metrics.
+  such as mounted media, active wired/wireless connections, or enabled SSH.
+  Platforms re-check their descriptions on every coordinator update.
+- **Account roles**:
+  Non-Pro firmware 2.5.1 and newer has `admin` and `user` accounts. The
+  coordinator reads the role every poll (`is_admin`; no role means admin),
+  skips administrator-only endpoints for a `user` account, and reloads the
+  entry when the role changes. Entities such an account cannot use are not
+  created; gate new ones on `coordinator.is_admin`.
 - **NanoKVM Pro compatibility**:
   Pro devices expose several APIs with different schemas from non-Pro models.
   Keep Pro-specific polling optional and keep non-Pro-only entities gated by
@@ -153,6 +190,7 @@ Run these checks locally before pushing:
 3. Validate JSON metadata, strings, and translations:
    - `python -m json.tool hacs.json`
    - `python -m json.tool custom_components/nanokvm/manifest.json`
+   - `python -m json.tool custom_components/nanokvm/icons.json`
    - `python -m json.tool custom_components/nanokvm/strings.json`
    - `python -m json.tool custom_components/nanokvm/translations/en.json`
    - `python -m json.tool custom_components/nanokvm/translations/fr.json`

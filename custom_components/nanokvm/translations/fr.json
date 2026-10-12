@@ -99,6 +99,18 @@
       },
       "time_synchronized": {
         "name": "Heure synchronisée"
+      },
+      "num_lock": {
+        "name": "Verr. num"
+      },
+      "caps_lock": {
+        "name": "Verr. maj"
+      },
+      "scroll_lock": {
+        "name": "Arrêt défil"
+      },
+      "hdmi_signal": {
+        "name": "Signal HDMI"
       }
     },
     "sensor": {
@@ -183,6 +195,9 @@
             "name": "Total en Mo"
           }
         }
+      },
+      "account_role": {
+        "name": "Rôle du compte"
       }
     },
     "switch": {
@@ -287,6 +302,9 @@
       },
       "led_vertical_beads": {
         "name": "LED perles verticales"
+      },
+      "hdmi_idle_timeout": {
+        "name": "Délai d'inactivité HDMI"
       }
     },
     "button": {
@@ -325,6 +343,10 @@
       "name": "Appuyer sur un bouton",
       "description": "Simuler l'appui sur un bouton matériel de l'appareil NanoKVM.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -343,6 +365,10 @@
       "name": "Coller du texte",
       "description": "Coller du texte via la simulation de clavier HID.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -357,6 +383,10 @@
       "name": "Redémarrer le système",
       "description": "Redémarrer l'appareil NanoKVM.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -367,6 +397,10 @@
       "name": "Réinitialiser HDMI",
       "description": "Réinitialiser la connexion HDMI (pertinent pour la version PCIe).",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -377,6 +411,10 @@
       "name": "Réinitialiser HID",
       "description": "Réinitialiser le sous-système HID.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -387,6 +425,10 @@
       "name": "Wake on LAN",
       "description": "Envoyer un paquet Wake-on-LAN à l'adresse MAC spécifiée.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -401,6 +443,10 @@
       "name": "Définir l'agitateur de souris",
       "description": "Configurer l'état et le mode de l'agitateur de souris.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -419,6 +465,10 @@
       "name": "Définir la bande LED",
       "description": "Configurer les paramètres de la bande LED du NanoKVM Pro.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -445,6 +495,10 @@
       "name": "Scanner le Wi-Fi",
       "description": "Rechercher les réseaux Wi-Fi à proximité et retourner la réponse du NanoKVM Pro.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -455,6 +509,10 @@
       "name": "Lister les images",
       "description": "Lister les images disponibles sur le NanoKVM.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -465,6 +523,10 @@
       "name": "Téléchargement d'images activé",
       "description": "Retourner si le téléchargement d'images est activé sur le NanoKVM.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -475,6 +537,10 @@
       "name": "Obtenir l'état du téléchargement d'image",
       "description": "Retourner l'état actuel du téléchargement d'image du NanoKVM.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
@@ -485,6 +551,10 @@
       "name": "Lister les EDID personnalisés",
       "description": "Lister les EDID personnalisés disponibles sur un NanoKVM Pro.",
       "fields": {
+        "device_id": {
+          "name": "Appareil",
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+        },
         "host": {
           "name": "Hôte",
           "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."

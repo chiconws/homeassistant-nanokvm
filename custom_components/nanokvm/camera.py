@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
-from dataclasses import dataclass
 
 import aiohttp
 from aiohttp import BodyPartReader, MultipartReader
@@ -20,34 +18,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from webrtc_models import RTCIceCandidateInit
 
 from .coordinator import NanoKVMDataUpdateCoordinator
-from .const import DOMAIN, ICON_HDMI
 from .entity import NanoKVMEntity
-from .media.client import NanoKVMStreamClientProvider
 from .media.signaling import NanoKVMWebRTCManager
 
 _LOGGER = logging.getLogger(__name__)
 
-LOGIN_TIMEOUT_SECONDS = 15
-WEBSOCKET_HEARTBEAT_SECONDS = 30.0
-MAX_PENDING_ICE_CANDIDATES = 64
 SNAPSHOT_TIMEOUT_SECONDS = 20
-
-
-@dataclass(frozen=True, kw_only=True)
-class NanoKVMCameraEntityDescription(CameraEntityDescription):
-    """Describes NanoKVM camera entity."""
-
-    available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
-
-
-CAMERAS: tuple[NanoKVMCameraEntityDescription, ...] = (
-    NanoKVMCameraEntityDescription(
-        key="hdmi",
-        name="HDMI Stream",
-        translation_key="hdmi",
-        icon=ICON_HDMI,
-    ),
-)
 
 
 async def async_setup_entry(
@@ -56,48 +32,27 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM camera based on a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
 
-    async_add_entities(
-        NanoKVMCamera(
-            coordinator=coordinator,
-            description=description,
-        )
-        for description in CAMERAS
-        if description.available_fn(coordinator)
-    )
+    async_add_entities([NanoKVMCamera(coordinator)])
 
 
 class NanoKVMCamera(NanoKVMEntity, Camera):
     """Defines a NanoKVM camera."""
 
-    entity_description: NanoKVMCameraEntityDescription
+    entity_description = CameraEntityDescription(
+        key="hdmi",
+        translation_key="hdmi",
+    )
 
-    def __init__(
-        self,
-        coordinator: NanoKVMDataUpdateCoordinator,
-        description: NanoKVMCameraEntityDescription,
-    ) -> None:
+    def __init__(self, coordinator: NanoKVMDataUpdateCoordinator) -> None:
         """Initialize NanoKVM camera."""
-        self.entity_description = description
-        super().__init__(
-            coordinator=coordinator,
-            unique_id_suffix=f"camera_{description.key}",
-        )
+        super().__init__(coordinator=coordinator, unique_id_suffix="camera_hdmi")
         Camera.__init__(self)
         self._attr_supported_features = CameraEntityFeature.STREAM
         self._attr_is_streaming = False
-        self._client_provider = NanoKVMStreamClientProvider(self.coordinator)
         self._webrtc = NanoKVMWebRTCManager(
-            logger=_LOGGER,
-            hass_provider=lambda: self.hass,
-            client_factory=self._client_provider.create_client,
-            authenticate_client=self._client_provider.async_authenticate,
-            is_pro_hardware=lambda: self.coordinator.is_pro_hardware,
-            session_state_callback=self._handle_streaming_state,
-            login_timeout_seconds=LOGIN_TIMEOUT_SECONDS,
-            websocket_heartbeat_seconds=WEBSOCKET_HEARTBEAT_SECONDS,
-            max_pending_ice_candidates=MAX_PENDING_ICE_CANDIDATES,
+            coordinator, self._handle_streaming_state
         )
 
     @callback
@@ -115,14 +70,11 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
             )
             return None
 
-        client = self._client_provider.create_client()
-        if client is None:
-            return None
-
+        client = self.coordinator.clone_client()
         async with client:
-            await self._client_provider.async_authenticate(client)
+            await self.coordinator.async_ensure_authenticated(client)
             # Reuse NanoKVMClient's authenticated session and SSL config for MJPEG.
-            async with client._request(
+            async with client._session.request(
                 aiohttp.hdrs.METH_GET,
                 "/stream/mjpeg",
             ) as upstream:
@@ -150,7 +102,7 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         try:
             return await self._async_read_snapshot_frame()
         except Exception as err:
-            _LOGGER.error("Error fetching still image: %s", err)
+            _LOGGER.warning("Error fetching still image: %s", err)
             return None
 
     async def async_handle_async_webrtc_offer(

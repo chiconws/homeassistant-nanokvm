@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 from pathlib import Path
 import socket
 from unittest.mock import MagicMock
@@ -34,9 +33,10 @@ class _FakeKey:
         """Return the OpenSSH public-key payload."""
         return base64.b64encode(self.raw).decode()
 
-    def asbytes(self) -> bytes:
-        """Return the canonical key bytes used for fingerprints."""
-        return self.raw
+    @property
+    def fingerprint(self) -> str:
+        """Return the OpenSSH fingerprint Paramiko computes for the key."""
+        return f"SHA256:{self.raw.decode()}"
 
 
 class _FakeTransport:
@@ -82,12 +82,7 @@ async def test_probe_host_key_only_performs_unauthenticated_handshake(
     assert result == SSHHostKey(
         host="nanokvm.local",
         known_hosts_line="nanokvm.local ssh-ed25519 a25vd24tcHVibGljLWtleQ==",
-        fingerprint=(
-            "SHA256:"
-            + base64.b64encode(hashlib.sha256(b"known-public-key").digest())
-            .decode()
-            .rstrip("=")
-        ),
+        fingerprint="SHA256:known-public-key",
     )
     transport = _FakeTransport.instances[0]
     create_connection.assert_called_once_with(

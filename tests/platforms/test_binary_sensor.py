@@ -11,16 +11,15 @@ from nanokvm.models import HWVersion, IPInfo
 
 from custom_components.nanokvm.binary_sensor import (
     BINARY_SENSORS,
+    KEYBOARD_LED_BINARY_SENSORS,
     MEDIA_BINARY_SENSORS,
-    _cdrom_supported,
-    _has_connection_type,
-    _has_mounted_image,
     _is_alpha_hardware,
     _static_ip_available,
     _time_status_available,
     _wifi_supported,
     _wired_active,
 )
+from custom_components.nanokvm.entity import has_connection_type, has_mounted_image
 
 CoordinatorStateFactory = Callable[..., SimpleNamespace]
 
@@ -94,7 +93,7 @@ def test_wifi_supported(
         (SimpleNamespace(file="images/rescue.iso"), True),
     ],
 )
-def test_has_mounted_image(
+def testhas_mounted_image(
     coordinator_state_factory: CoordinatorStateFactory,
     mounted_image: SimpleNamespace | None,
     expected: bool,
@@ -102,18 +101,7 @@ def test_has_mounted_image(
     """Only a non-empty mounted image path is considered mounted."""
     coordinator = coordinator_state_factory(mounted_image=mounted_image)
 
-    assert _has_mounted_image(coordinator) is expected
-
-
-@pytest.mark.parametrize("supported", [False, True])
-def test_cdrom_supported_uses_coordinator_capability(
-    coordinator_state_factory: CoordinatorStateFactory,
-    supported: bool,
-) -> None:
-    """CD-ROM entity creation follows the coordinator capability."""
-    coordinator = coordinator_state_factory(supports_cdrom_endpoint=supported)
-
-    assert _cdrom_supported(coordinator) is supported
+    assert has_mounted_image(coordinator) is expected
 
 
 def test_connection_type_is_case_insensitive_and_requires_an_address(
@@ -134,9 +122,9 @@ def test_connection_type_is_case_insensitive_and_requires_an_address(
         )
     )
 
-    assert _has_connection_type(active, "wired") is True
+    assert has_connection_type(active, "wired") is True
     assert _wired_active(active) is True
-    assert _has_connection_type(empty, "wired") is False
+    assert has_connection_type(empty, "wired") is False
     assert _wired_active(wireless) is False
 
 
@@ -274,15 +262,15 @@ def test_cdrom_description_contract(
     expected_available: bool,
     expected_value: bool,
 ) -> None:
-    """CD-ROM state is created by capability and available only while mounted."""
+    """CD-ROM state is created and available only while an image is mounted."""
     coordinator = coordinator_state_factory(
-        supports_cdrom_endpoint=True,
+        is_non_pro_hardware=True,
         mounted_image=SimpleNamespace(file=mounted_file),
         cdrom_status=SimpleNamespace(cdrom=cdrom),
     )
     description = MEDIA_BINARY_SENSORS[0]
 
-    assert description.should_create_fn(coordinator) is True
+    assert description.should_create_fn(coordinator) is expected_available
     assert description.available_fn(coordinator) is expected_available
     assert description.value_fn(coordinator) is expected_value
 
@@ -299,3 +287,59 @@ def test_binary_sensor_description_inventory_contracts() -> None:
     assert all(callable(description.value_fn) for description in descriptions)
     assert all(callable(description.available_fn) for description in descriptions)
     assert all(callable(description.should_create_fn) for description in descriptions)
+
+
+def test_keyboard_led_sensors_follow_the_host_report(
+    coordinator_state_factory: CoordinatorStateFactory,
+) -> None:
+    """Each lock sensor reads its own LED and needs a report from the host."""
+    by_key = {description.key: description for description in KEYBOARD_LED_BINARY_SENSORS}
+    reported = coordinator_state_factory(
+        keyboard_leds=SimpleNamespace(
+            num_lock=True, caps_lock=False, scroll_lock=True, known=True
+        )
+    )
+    unknown = coordinator_state_factory(
+        keyboard_leds=SimpleNamespace(
+            num_lock=False, caps_lock=False, scroll_lock=False, known=False
+        )
+    )
+    unsupported = coordinator_state_factory(keyboard_leds=None)
+
+    assert {key: d.value_fn(reported) for key, d in by_key.items()} == {
+        "num_lock": True,
+        "caps_lock": False,
+        "scroll_lock": True,
+    }
+    for description in by_key.values():
+        assert description.should_create_fn(reported) is True
+        assert description.available_fn(reported) is True
+        assert description.should_create_fn(unknown) is True
+        assert description.available_fn(unknown) is False
+        assert description.should_create_fn(unsupported) is False
+        assert description.value_fn(unsupported) is False
+
+
+@pytest.mark.parametrize(
+    ("hdmi_state", "created", "is_on"),
+    [
+        (None, False, False),
+        # Older firmware answers without the signal field.
+        (SimpleNamespace(enabled=True, signal=None), False, False),
+        (SimpleNamespace(enabled=True, signal=False), True, False),
+        (SimpleNamespace(enabled=True, signal=True), True, True),
+    ],
+)
+def test_hdmi_signal_sensor_needs_a_reported_signal(
+    coordinator_state_factory: CoordinatorStateFactory,
+    hdmi_state: SimpleNamespace | None,
+    created: bool,
+    is_on: bool,
+) -> None:
+    """The signal sensor exists only where the device reports the HDMI input."""
+    description = _description("hdmi_signal")
+    coordinator = coordinator_state_factory(hdmi_state=hdmi_state)
+
+    assert description.should_create_fn(coordinator) is created
+    assert description.available_fn(coordinator) is created
+    assert description.value_fn(coordinator) is is_on

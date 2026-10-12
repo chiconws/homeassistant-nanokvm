@@ -12,7 +12,6 @@ from nanokvm.models import GpioType
 from pytest import MonkeyPatch
 
 from custom_components.nanokvm import async_unload_entry
-from custom_components.nanokvm.const import DOMAIN
 from custom_components.nanokvm.coordinator import NanoKVMDataUpdateCoordinator
 from custom_components.nanokvm.switch import (
     SWITCHES,
@@ -105,7 +104,7 @@ def test_power_turn_on_uses_coordinator_client_access(
 def _coordinator() -> tuple[NanoKVMDataUpdateCoordinator, MagicMock]:
     """Create a coordinator with mocked Home Assistant dependencies."""
     hass = MagicMock()
-    entry = MagicMock(spec=ConfigEntry)
+    entry = MagicMock(spec=ConfigEntry, data={})
     coordinator = NanoKVMDataUpdateCoordinator(
         hass,
         entry,
@@ -155,12 +154,10 @@ def test_integration_unload_leaves_coordinator_shutdown_to_config_entry() -> Non
         entry = MagicMock(spec=ConfigEntry)
         entry.entry_id = "test-entry"
         coordinator = SimpleNamespace(async_shutdown=AsyncMock())
-        hass.data = {DOMAIN: {entry.entry_id: coordinator}}
-        hass.services.has_service.return_value = False
+        entry.runtime_data = coordinator
 
         assert await async_unload_entry(hass, entry) is True
 
         coordinator.async_shutdown.assert_not_awaited()
-        assert DOMAIN not in hass.data
 
     asyncio.run(run_unload())
