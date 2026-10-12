@@ -11,7 +11,6 @@ from yarl import URL
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from nanokvm.client import NanoKVMClient, NanoKVMAuthenticationFailure, NanoKVMError
@@ -40,6 +39,7 @@ from .utils import (
     SSLCertificateChanged,
     api_connection_options,
     async_connect,
+    async_get_entry_device,
     extract_ssh_host,
     https_probe_url,
     normalize_host,
@@ -189,8 +189,8 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         for entry in hostname_candidates:
             if entry.unique_id is None:
                 continue
-            device = dr.async_get(self.hass).async_get_device(
-                identifiers={(DOMAIN, entry.unique_id)}
+            device = async_get_entry_device(
+                self.hass, entry.entry_id, (DOMAIN, entry.unique_id)
             )
             if device is None or not device.name:
                 continue

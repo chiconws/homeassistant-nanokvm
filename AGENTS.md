@@ -86,6 +86,8 @@ The integration follows the standard structure for a Home Assistant
     authenticates. Setup, the config flow, reauthentication, and transport
     failover all call it and translate its three errors (`InvalidAuth`,
     `SSLCertificateChanged`, `CannotConnect`).
+  - `async_get_entry_device` looks a device up within its config entry, using
+    the per-entry registry lookup where Home Assistant has it.
 
 - **`ssh_metrics.py`**: SSH metrics collection implementation used by the
   coordinator.

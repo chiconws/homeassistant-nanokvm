@@ -1667,7 +1667,7 @@ def _prepare_configured_pro_discovery(
     flow._async_current_entries = MagicMock(return_value=[entry])
     flow.async_set_unique_id = AsyncMock()
     registry = MagicMock()
-    registry.async_get_device.return_value = SimpleNamespace(
+    registry.async_get_device_by_identifier.return_value = SimpleNamespace(
         name=hostname,
         name_by_user="My renamed NanoKVM",
     )
