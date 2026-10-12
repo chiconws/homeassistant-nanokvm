@@ -204,13 +204,6 @@ def test_number_entity_exposes_dynamic_value_bounds_and_availability() -> None:
             (LcdTimeFormat.TWELVE_HOUR,),
             {},
         ),
-        (
-            "virtual_disk_type",
-            "sdcard",
-            "update_virtual_device",
-            (VirtualDevice.DISK,),
-            {"disk_type": DiskType.SDCARD},
-        ),
     ],
 )
 async def test_select_actions_map_options_and_refresh(
@@ -235,6 +228,59 @@ async def test_select_actions_map_options_and_refresh(
     coordinator.async_request_refresh.assert_awaited_once_with()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mounted_disk", "option", "expected_disk_type"),
+    [
+        ("", "sdcard", DiskType.SDCARD),
+        ("emmc", "sdcard", DiskType.SDCARD),
+        ("emmc", "disable", None),
+    ],
+)
+async def test_pro_disk_select_mounts_and_unmounts(
+    mounted_disk: str, option: str, expected_disk_type: DiskType | None
+) -> None:
+    """A disk type mounts that disk and the disabled option unmounts it."""
+    coordinator = _coordinator()
+    coordinator.client.get_virtual_device_status = AsyncMock(
+        return_value=SimpleNamespace(mounted_disk=mounted_disk)
+    )
+    coordinator.client.update_virtual_device = AsyncMock()
+    entity = select_module.NanoKVMSelect(
+        coordinator,
+        _description(select_module.SELECTS, "virtual_disk_type"),
+    )
+
+    await entity.async_select_option(option)
+
+    coordinator.client.update_virtual_device.assert_awaited_once_with(
+        VirtualDevice.DISK, disk_type=expected_disk_type
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mounted_disk", "option"), [("emmc", "emmc"), ("", "disable")]
+)
+async def test_pro_disk_select_does_not_toggle_the_current_state(
+    mounted_disk: str, option: str
+) -> None:
+    """Requesting the mounted disk again would make the Pro unmount it."""
+    coordinator = _coordinator()
+    coordinator.client.get_virtual_device_status = AsyncMock(
+        return_value=SimpleNamespace(mounted_disk=mounted_disk)
+    )
+    coordinator.client.update_virtual_device = AsyncMock()
+    entity = select_module.NanoKVMSelect(
+        coordinator,
+        _description(select_module.SELECTS, "virtual_disk_type"),
+    )
+
+    await entity.async_select_option(option)
+
+    coordinator.client.update_virtual_device.assert_not_awaited()
+
+
 def test_select_entity_exposes_static_and_dynamic_options() -> None:
     """Select entities must expose description values and runtime disk options."""
     static = select_module.NanoKVMSelect(
@@ -255,7 +301,7 @@ def test_select_entity_exposes_static_and_dynamic_options() -> None:
     assert static.current_option == "hid_only"
     assert static.options == ["normal", "hid_only"]
     assert dynamic.current_option == "emmc"
-    assert dynamic.options == ["emmc"]
+    assert dynamic.options == ["disable", "emmc"]
 
 
 def test_binary_sensor_and_sensor_entities_expose_coordinator_data() -> None:

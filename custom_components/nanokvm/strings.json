@@ -129,6 +129,7 @@
       "virtual_disk_type": {
         "name": "Virtual Disk Type",
         "state": {
+          "disable": "Disabled",
           "emmc": "eMMC",
           "sdcard": "SD Card"
         }

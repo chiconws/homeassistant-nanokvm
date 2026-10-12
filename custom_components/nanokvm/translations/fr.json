@@ -288,6 +288,7 @@
       "virtual_disk_type": {
         "name": "Type de disque virtuel",
         "state": {
+          "disable": "Désactivé",
           "emmc": "eMMC",
           "sdcard": "Carte SD"
         }
