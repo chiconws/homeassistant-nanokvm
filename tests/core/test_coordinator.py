@@ -285,7 +285,7 @@ def test_device_registry_follows_firmware_and_hostname_changes(
 ) -> None:
     """An updated application or hostname reaches the device registry without a reload."""
     registry = MagicMock()
-    registry.async_get_device.return_value = SimpleNamespace(id="device-id")
+    registry.async_get_device_by_identifier.return_value = SimpleNamespace(id="device-id")
     monkeypatch.setattr(coordinator_module.dr, "async_get", lambda hass: registry)
     coordinator.device_info = SimpleNamespace(
         device_key="test-device", application="2.3.4", image="2026-07-01"
@@ -297,11 +297,11 @@ def test_device_registry_follows_firmware_and_hostname_changes(
     registry.async_update_device.assert_not_called()
 
     coordinator.device_info.application = "2.4.0"
-    registry.async_get_device.return_value = None
+    registry.async_get_device_by_identifier.return_value = None
     coordinator._async_sync_device_registry()
     registry.async_update_device.assert_not_called()
 
-    registry.async_get_device.return_value = SimpleNamespace(id="device-id")
+    registry.async_get_device_by_identifier.return_value = SimpleNamespace(id="device-id")
     coordinator._async_sync_device_registry()
     coordinator._async_sync_device_registry()
     registry.async_update_device.assert_called_once_with(

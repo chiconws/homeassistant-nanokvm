@@ -98,13 +98,19 @@ def test_lcd_time_format_availability_requires_pro_state(
 @pytest.mark.parametrize(
     ("virtual_device_info", "expected"),
     [
-        (None, []),
-        (SimpleNamespace(is_emmc_exist=False, is_sd_card_exist=False), []),
-        (SimpleNamespace(is_emmc_exist=True, is_sd_card_exist=False), ["emmc"]),
-        (SimpleNamespace(is_emmc_exist=False, is_sd_card_exist=True), ["sdcard"]),
+        (None, ["disable"]),
+        (SimpleNamespace(is_emmc_exist=False, is_sd_card_exist=False), ["disable"]),
+        (
+            SimpleNamespace(is_emmc_exist=True, is_sd_card_exist=False),
+            ["disable", "emmc"],
+        ),
+        (
+            SimpleNamespace(is_emmc_exist=False, is_sd_card_exist=True),
+            ["disable", "sdcard"],
+        ),
         (
             SimpleNamespace(is_emmc_exist=True, is_sd_card_exist=True),
-            ["emmc", "sdcard"],
+            ["disable", "emmc", "sdcard"],
         ),
     ],
 )
@@ -265,7 +271,7 @@ def test_lcd_time_format_value_maps_device_format(
                 is_emmc_exist=True,
                 is_sd_card_exist=True,
             ),
-            None,
+            "disable",
         ),
         (
             SimpleNamespace(
@@ -290,7 +296,7 @@ def test_pro_disk_value_requires_mounted_available_media(
     virtual_device_info: SimpleNamespace | None,
     expected: str | None,
 ) -> None:
-    """Mounted media is a current option only while that medium exists."""
+    """No mounted disk reads as disabled; mounted media must still exist."""
     coordinator = coordinator_state_factory(virtual_device_info=virtual_device_info)
 
     assert _pro_disk_value(coordinator) == expected

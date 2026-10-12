@@ -11,7 +11,6 @@ from yarl import URL
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from nanokvm.client import NanoKVMClient, NanoKVMAuthenticationFailure, NanoKVMError
@@ -40,6 +39,7 @@ from .utils import (
     SSLCertificateChanged,
     api_connection_options,
     async_connect,
+    async_get_entry_device,
     extract_ssh_host,
     https_probe_url,
     normalize_host,
@@ -189,8 +189,8 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         for entry in hostname_candidates:
             if entry.unique_id is None:
                 continue
-            device = dr.async_get(self.hass).async_get_device(
-                identifiers={(DOMAIN, entry.unique_id)}
+            device = async_get_entry_device(
+                self.hass, entry.entry_id, (DOMAIN, entry.unique_id)
             )
             if device is None or not device.name:
                 continue
@@ -737,23 +737,32 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         discovery_hostname = normalize_mdns(discovery_info.hostname)
         discovery_host = discovery_info.host
         is_ssh_service = discovery_info.type == "_ssh._tcp.local."
-        existing_entry = (
-            self._async_find_entry_by_discovery_host(
-                discovery_host,
-                discovery_hostname,
-                *discovery_info.addresses,
-            )
-            if is_ssh_service
-            else None
+        existing_entry = self._async_find_entry_by_discovery_host(
+            discovery_host,
+            discovery_hostname,
+            *discovery_info.addresses,
         )
         if existing_entry and existing_entry.data.get(CONF_USE_STATIC_HOST, False):
             return self.async_abort(reason="already_configured")
 
-        ssl_fingerprint = (
-            existing_entry.data.get(CONF_SSL_FINGERPRINT)
-            if existing_entry
+        # SSH discovery is verified by the saved certificate pin. A workstation
+        # announcement is plain HTTP, so saved credentials only go to an address
+        # the entry already uses, never to one that merely claims its hostname.
+        trusted_entry = (
+            existing_entry
+            if is_ssh_service
+            or self._async_find_entry_by_discovery_host(discovery_host)
+            is existing_entry
             else None
         )
+        ssl_fingerprint = (
+            existing_entry.data.get(CONF_SSL_FINGERPRINT)
+            if existing_entry and is_ssh_service
+            else None
+        )
+        if ":" in discovery_host:
+            # An IPv6 address needs brackets to form a URL.
+            discovery_host = f"[{discovery_host}]"
         self.context["title_placeholders"] = {
             "name": discovery_info.hostname.rstrip(".")
         }
@@ -768,11 +777,11 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             else normalize_host(discovery_host)
         )
         self.data = {CONF_HOST: host_for_flow}
-        if existing_entry:
-            self.data[CONF_USERNAME] = existing_entry.data.get(
+        if trusted_entry:
+            self.data[CONF_USERNAME] = trusted_entry.data.get(
                 CONF_USERNAME, DEFAULT_USERNAME
             )
-            self.data[CONF_PASSWORD] = existing_entry.data.get(
+            self.data[CONF_PASSWORD] = trusted_entry.data.get(
                 CONF_PASSWORD, DEFAULT_PASSWORD
             )
         if ssl_fingerprint:
