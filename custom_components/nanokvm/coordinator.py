@@ -268,12 +268,11 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         return await self._async_fetch_once()
 
     async def _async_restore_preferred_host(self) -> bool:
-        """Restore a verified preferred Pro endpoint without requiring another mDNS event."""
+        """Restore a verified preferred endpoint without requiring another mDNS event."""
         data = dict(self.config_entry.data)
         preferred_host = data.get(CONF_PREFERRED_HOST)
         if (
-            not self.is_pro_hardware
-            or data.get(CONF_USE_STATIC_HOST, False)
+            data.get(CONF_USE_STATIC_HOST, False)
             or not isinstance(preferred_host, str)
             or preferred_host == data[CONF_HOST]
         ):

@@ -356,6 +356,32 @@ async def test_periodic_update_returns_to_preferred_host_without_mdns(
     assert factory.call_args.kwargs["ssl_fingerprint"] == "AA" * 32
 
 
+async def test_periodic_update_returns_non_pro_to_preferred_http_host(
+    coordinator: NanoKVMDataUpdateCoordinator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-Pro on its fallback address returns to the preferred one over HTTP."""
+    coordinator.hardware_info = GetHardwareRsp(version=HWVersion.PCIE)
+    coordinator.config_entry.data.update(
+        {CONF_HOST: "192.0.2.21", "preferred_host": "192.0.2.20"}
+    )
+    coordinator.client.url = URL("http://192.0.2.21/api/")
+    preferred = _candidate_client("http://192.0.2.20/api/")
+    preferred.get_info.return_value = _device_info()
+    factory = MagicMock(return_value=preferred)
+    monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
+
+    await coordinator._async_update_data()
+
+    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+    assert updated[CONF_HOST] == "192.0.2.20"
+    coordinator.hass.config_entries.async_schedule_reload.assert_called_once_with(
+        coordinator.config_entry.entry_id
+    )
+    assert factory.call_args.args == ("http://192.0.2.20/api/",)
+    assert factory.call_args.kwargs["ssl_fingerprint"] is None
+
+
 @pytest.mark.parametrize("without_ssh_key", [True, False])
 async def test_periodic_preferred_host_recovery_preserves_optional_ssh(
     coordinator: NanoKVMDataUpdateCoordinator,
@@ -588,18 +614,16 @@ async def test_periodic_preferred_host_restore_does_not_reload_an_unchanged_entr
     coordinator.hass.config_entries.async_schedule_reload.assert_not_called()
 
 
-@pytest.mark.parametrize("reason", ["static", "non_pro", "no_preference", "already_preferred"])
-async def test_periodic_preferred_host_probe_only_runs_for_pro_fallbacks(
+@pytest.mark.parametrize("reason", ["static", "no_preference", "already_preferred"])
+async def test_periodic_preferred_host_probe_only_runs_for_fallbacks(
     coordinator: NanoKVMDataUpdateCoordinator,
     monkeypatch: pytest.MonkeyPatch,
     reason: str,
 ) -> None:
-    """Static entries, other hardware, and the preferred connection incur no extra probe."""
+    """Static entries and the preferred connection incur no extra probe."""
     _use_wifi_with_preferred_ethernet(coordinator)
     if reason == "static":
         coordinator.config_entry.data["use_static_host"] = True
-    elif reason == "non_pro":
-        coordinator.hardware_info = GetHardwareRsp(version=HWVersion.PCIE)
     elif reason == "no_preference":
         coordinator.config_entry.data.pop("preferred_host")
     else:

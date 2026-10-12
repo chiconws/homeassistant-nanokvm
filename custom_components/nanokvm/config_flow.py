@@ -206,6 +206,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         entry: ConfigEntry,
         discovery_host: str,
         device_key: str,
+        verified_url: str,
     ) -> tuple[str, str]:
         """Prefer the chosen host, then the working fallback, after identity checks.
 
@@ -216,8 +217,9 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         selected_host = discovery_host
         preferred_host_reassigned = False
         for host in dict.fromkeys((preferred_host, current_host)):
-            probe_url = verification_url(host)
-            if probe_url == https_probe_url(discovery_host):
+            # A scheme-less host is reached like the discovery request was.
+            probe_url = verification_url(host, URL(verified_url).scheme)
+            if probe_url == verified_url:
                 # The discovery request has already verified this endpoint.
                 selected_host = host
                 break
@@ -806,15 +808,12 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 if entry := self._async_find_matching_entry(
                     device_key, discovery_hostname
                 ):
-                    if (
-                        is_ssh_service
-                        and not entry.data.get(CONF_USE_STATIC_HOST, False)
-                    ):
+                    if not entry.data.get(CONF_USE_STATIC_HOST, False):
                         (
                             selected_host,
                             preferred_host,
                         ) = await self._async_select_discovery_host(
-                            entry, discovery_host, device_key
+                            entry, discovery_host, device_key, api_url
                         )
                         current_host = entry.data[CONF_HOST]
                         if selected_host != current_host or preferred_host != (
