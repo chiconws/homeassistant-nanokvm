@@ -1468,8 +1468,11 @@ async def test_zeroconf_verified_existing_entry_updates_by_device_key(
     config_entry_mock: MagicMock,
     install_client,
 ) -> None:
-    """Authenticated discovery updates an existing device using verified identity."""
-    install_client(ClientScenario(device_key="verified-key"))
+    """Authenticated discovery replaces an unreachable host using verified identity."""
+    install_client(
+        ClientScenario(device_key="verified-key"),
+        ClientScenario(auth_error=asyncio.TimeoutError()),
+    )
     flow.async_set_unique_id = AsyncMock()
     flow._async_find_matching_entry = MagicMock(return_value=config_entry_mock)
     flow._async_handle_existing_entry = AsyncMock(return_value={"updated": True})
@@ -1483,7 +1486,35 @@ async def test_zeroconf_verified_existing_entry_updates_by_device_key(
         config_entry_mock,
         "192.0.2.20",
         device_key="verified-key",
+        preferred_host="nanokvm.local",
     )
+
+
+@pytest.mark.asyncio
+async def test_zeroconf_non_pro_wifi_keeps_working_ethernet_entry(
+    flow: NanoKVMConfigFlow,
+    config_entry_mock: MagicMock,
+    install_client,
+) -> None:
+    """A non-Pro announced on a second interface keeps its working HTTP host."""
+    config_entry_mock.unique_id = "verified-key"
+    config_entry_mock.data[CONF_HOST] = "192.0.2.20"
+    flow.context = {"source": "zeroconf"}
+    flow.async_set_unique_id = AsyncMock()
+    flow._async_find_matching_entry = MagicMock(return_value=config_entry_mock)
+    client_type = install_client(
+        ClientScenario(device_key="verified-key"),
+        ClientScenario(device_key="verified-key"),
+    )
+
+    result = await flow.async_step_zeroconf(_discovery_info(host="192.0.2.21"))
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    flow.hass.config_entries.async_update_entry.assert_not_called()
+    assert [str(client.url) for client in client_type.instances] == [
+        "http://192.0.2.21/api/", "http://192.0.2.20/api/"
+    ]
 
 
 @pytest.mark.asyncio
@@ -2146,7 +2177,7 @@ async def test_select_discovery_host_verifies_http_entry_over_http(
     client_type = install_client(ClientScenario(device_key="verified-key"))
 
     assert await flow._async_select_discovery_host(
-        config_entry_mock, "192.0.2.22", "verified-key"
+        config_entry_mock, "192.0.2.22", "verified-key", "https://192.0.2.22/api/"
     ) == ("http://192.0.2.20", "http://192.0.2.20")
     assert client_type.instances[0].url == URL("http://192.0.2.20/api/")
     assert client_type.instances[0].ssl_fingerprint is None

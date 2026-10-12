@@ -44,7 +44,7 @@ The integration follows the standard structure for a Home Assistant
     state, dynamic media/network/SSH entities, and SSH metric refresh.
   - Gates non-Pro-only endpoints such as swap size, CD-ROM state, HDMI output,
     and non-Pro virtual disk controls.
-  - Checks a fallback Pro entry's saved preferred host at most once per minute,
+  - Checks a fallback entry's saved preferred host at most once per minute,
     backing off to hourly while it is unreachable, and restores it only after
     authenticating and verifying its device key. Forgets a preferred host that
     answers with another device key.
