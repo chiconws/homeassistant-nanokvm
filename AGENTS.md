@@ -67,9 +67,12 @@ The integration follows the standard structure for a Home Assistant
     creating the config entry.
   - Handles auth step, SSL fingerprint confirmation, static-host option, and
     legacy/new unique-id matching.
-  - Matches Pro discovery across advertised addresses and API-reported device
-    hostnames and reuses saved TLS trust. Saves the chosen host as preferred,
-    keeps working fallbacks, and returns to the preferred host when verified.
+  - Matches discovery to an entry across advertised addresses and API-reported
+    device hostnames. Pro discovery reuses saved TLS trust and credentials;
+    non-Pro discovery sends saved credentials only to an address the entry
+    already uses, and a hostname-only match is dropped without them.
+  - Saves the chosen host as preferred, keeps working fallbacks, and returns to
+    the preferred host when verified.
   - Asks for TLS trust on SSH discovery only after the host answers like a
     NanoKVM, and treats a different device at a saved address as its own device.
 

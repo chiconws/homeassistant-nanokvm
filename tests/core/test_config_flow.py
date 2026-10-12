@@ -1728,6 +1728,72 @@ async def test_zeroconf_pro_wifi_keeps_working_ethernet_entry(
 
 
 @pytest.mark.asyncio
+async def test_zeroconf_non_pro_at_saved_address_uses_saved_credentials(
+    flow: NanoKVMConfigFlow,
+    config_entry_mock: MagicMock,
+    install_client,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A configured non-Pro with changed credentials is not offered again."""
+    _prepare_configured_pro_discovery(flow, config_entry_mock, monkeypatch)
+    flow.async_step_user = AsyncMock()
+    client_type = install_client(ClientScenario(device_key="verified-key"))
+
+    result = await flow.async_step_zeroconf(_discovery_info())
+
+    assert result["reason"] == "already_configured"
+    flow.async_step_user.assert_not_awaited()
+    assert str(client_type.instances[0].url) == "http://192.0.2.20/api/"
+    assert client_type.instances[0].ssl_fingerprint is None
+    assert client_type.instances[0].authenticate_calls == [
+        ("operator", "saved-password")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_zeroconf_non_pro_hostname_match_keeps_saved_credentials_private(
+    flow: NanoKVMConfigFlow,
+    config_entry_mock: MagicMock,
+    install_client,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hostname claim hides the discovery but never receives saved credentials."""
+    _prepare_configured_pro_discovery(flow, config_entry_mock, monkeypatch)
+    flow.async_step_user = AsyncMock()
+    client_type = install_client(
+        ClientScenario(auth_error=NanoKVMAuthenticationFailure("changed"))
+    )
+
+    result = await flow.async_step_zeroconf(_discovery_info(host="192.0.2.21"))
+
+    assert result["reason"] == "already_configured"
+    flow.async_step_user.assert_not_awaited()
+    flow.hass.config_entries.async_update_entry.assert_not_called()
+    assert client_type.instances[0].authenticate_calls == [
+        (DEFAULT_USERNAME, DEFAULT_PASSWORD)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_zeroconf_ipv6_address_forms_a_valid_url(
+    flow: NanoKVMConfigFlow,
+    install_client,
+) -> None:
+    """An IPv6-only announcement is bracketed instead of failing URL parsing."""
+    client_type = install_client(ClientScenario(device_key="verified-key"))
+    _prepare_new_discovery(flow)
+    flow._async_current_entries = MagicMock(return_value=[])
+
+    assert await flow.async_step_zeroconf(
+        _discovery_info(host="2001:db8::1")
+    ) == {"user": True}
+    flow.async_step_user.assert_awaited_once_with(
+        user_input={CONF_HOST: "[2001:db8::1]"}
+    )
+    assert str(client_type.instances[0].url) == "http://[2001:db8::1]/api/"
+
+
+@pytest.mark.asyncio
 async def test_zeroconf_pro_wifi_respects_static_ethernet_entry(
     flow: NanoKVMConfigFlow,
     config_entry_mock: MagicMock,
