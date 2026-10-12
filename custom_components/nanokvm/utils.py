@@ -102,7 +102,9 @@ def async_get_entry_device(
     registry = dr.async_get(hass)
     if hasattr(registry, "async_get_device_by_identifier"):
         return registry.async_get_device_by_identifier(identifier, entry_id)
-    # Home Assistant releases without the per-entry lookup.
+    # TODO: Home Assistant added the per-entry lookup in 2026.8.0 and removes
+    # async_get_device in 2027.8.0. Before then, raise "homeassistant" in
+    # hacs.json to 2026.8.0 and drop this fallback and the hasattr check.
     return registry.async_get_device(identifiers={identifier})
 
 
