@@ -67,7 +67,7 @@ Notes:
 
 - Host updates from discovery are disabled when **Use static host only** is enabled.
 - Camera stream availability depends on HDMI input/source status.
-- NanoKVM Pro still snapshots are skipped to avoid interrupting WebRTC video mode.
+- NanoKVM Pro still snapshots are skipped, because fetching one freezes any stream that is being watched ([sipeed/NanoKVM-Pro#157](https://github.com/sipeed/NanoKVM-Pro/issues/157)).
 - Feature-specific entities only appear when the device reports support for them.
 
 ## Entities

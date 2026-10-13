@@ -64,6 +64,8 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         """Read one JPEG frame from NanoKVM MJPEG endpoint for snapshots."""
         if self.coordinator.is_pro_hardware:
             # NanoKVM Pro shares one encoder mode; opening MJPEG interrupts WebRTC.
+            # TODO: enable once the Pro can serve a frame without switching the
+            # stream type: https://github.com/sipeed/NanoKVM-Pro/issues/157
             _LOGGER.debug(
                 "Skipping NanoKVM Pro still image to avoid switching video mode"
             )
