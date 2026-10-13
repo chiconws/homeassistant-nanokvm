@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager
 import logging
 from types import SimpleNamespace
@@ -142,28 +142,13 @@ async def test_snapshot_is_suppressed_on_pro_hardware(
     entity.coordinator.clone_client.assert_not_called()
 
 
-class _RequestContext(AbstractAsyncContextManager[object]):
-    """Async request context used by snapshot reader tests."""
-
-    def __init__(self, upstream: object) -> None:
-        self.upstream = upstream
-        self.exited = False
-
-    async def __aenter__(self) -> object:
-        return self.upstream
-
-    async def __aexit__(self, *exc_info: object) -> None:
-        self.exited = True
-
-
 class _StreamClient(AbstractAsyncContextManager["_StreamClient"]):
-    """Authenticated-client test double retaining request observations."""
+    """Authenticated-client test double yielding prescribed MJPEG frames."""
 
-    def __init__(self, upstream: object) -> None:
-        self.request_context = _RequestContext(upstream)
-        self.requests: list[tuple[str, str]] = []
+    def __init__(self, frames: list[bytes]) -> None:
+        self.frames = frames
+        self.stream_closed = False
         self.exited = False
-        self._session = self
 
     async def __aenter__(self) -> _StreamClient:
         return self
@@ -171,59 +156,37 @@ class _StreamClient(AbstractAsyncContextManager["_StreamClient"]):
     async def __aexit__(self, *exc_info: object) -> None:
         self.exited = True
 
-    def request(self, method: str, path: str) -> _RequestContext:
-        self.requests.append((method, path))
-        return self.request_context
-
-
-class _Reader:
-    """Multipart reader returning a prescribed sequence of parts."""
-
-    def __init__(self, parts: list[object | None]) -> None:
-        self.parts = iter(parts)
-
-    async def next(self) -> object | None:
-        return next(self.parts)
-
-
-class _BodyPart:
-    """Body part returning one prescribed payload."""
-
-    def __init__(self, payload: bytes) -> None:
-        self.read = AsyncMock(return_value=payload)
+    async def mjpeg_stream_bytes(self) -> AsyncGenerator[bytes, None]:
+        try:
+            for frame in self.frames:
+                yield frame
+        finally:
+            self.stream_closed = True
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("parts", "expected"),
+    ("frames", "expected"),
     [
-        ([None], None),
-        ([object(), _BodyPart(b"jpeg")], b"jpeg"),
-        ([_BodyPart(b""), None], None),
+        ([], None),
+        ([b"jpeg", b"later"], b"jpeg"),
     ],
 )
-async def test_snapshot_scans_multipart_response_for_nonempty_frame(
+async def test_snapshot_returns_first_frame_and_closes_stream(
     monkeypatch: pytest.MonkeyPatch,
-    parts: list[object | None],
+    frames: list[bytes],
     expected: bytes | None,
 ) -> None:
-    """Multipart metadata and empty frames are skipped until JPEG data or EOF."""
+    """The first raw frame is returned, and the stream and client are released."""
     entity, _manager, _manager_factory = _camera(monkeypatch)
-    upstream = object()
-    client = _StreamClient(upstream)
+    client = _StreamClient(frames)
     authenticate = entity.coordinator.async_ensure_authenticated
-    reader = _Reader(parts)
     entity.coordinator.clone_client.return_value = client
-    monkeypatch.setattr(camera_module, "BodyPartReader", _BodyPart)
-    from_response = MagicMock(return_value=reader)
-    monkeypatch.setattr(camera_module.MultipartReader, "from_response", from_response)
 
     assert await entity._async_read_snapshot_frame() == expected
-    assert client.requests == [("GET", "/stream/mjpeg")]
+    assert client.stream_closed is True
     assert client.exited is True
-    assert client.request_context.exited is True
     authenticate.assert_awaited_once_with(client)
-    from_response.assert_called_once_with(upstream)
 
 
 @pytest.mark.asyncio
