@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import aclosing
 
-import aiohttp
-from aiohttp import BodyPartReader, MultipartReader
 from homeassistant.components.camera import (
     Camera,
     CameraEntityDescription,
@@ -73,27 +72,13 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         client = self.coordinator.clone_client()
         async with client:
             await self.coordinator.async_ensure_authenticated(client)
-            # Reuse NanoKVMClient's authenticated session and SSL config for MJPEG.
-            async with client._session.request(
-                aiohttp.hdrs.METH_GET,
-                "/stream/mjpeg",
-            ) as upstream:
-                reader = MultipartReader.from_response(upstream)
-
-                while True:
-                    async with asyncio.timeout(SNAPSHOT_TIMEOUT_SECONDS):
-                        part = await reader.next()
-
-                    if part is None:
-                        return None
-                    if not isinstance(part, BodyPartReader):
-                        continue
-
-                    async with asyncio.timeout(SNAPSHOT_TIMEOUT_SECONDS):
-                        payload = await part.read()
-
-                    if payload:
-                        return payload
+            async with (
+                asyncio.timeout(SNAPSHOT_TIMEOUT_SECONDS),
+                aclosing(client.mjpeg_stream_bytes()) as frames,
+            ):
+                async for frame in frames:
+                    return frame
+        return None
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
