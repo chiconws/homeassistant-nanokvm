@@ -1537,6 +1537,34 @@ async def test_zeroconf_new_default_device_routes_to_user_confirmation(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("service_type", "api_url", "flow_host"),
+    [
+        ("_workstation._tcp.local.", "http://[2001:db8::20]/api/", "[2001:db8::20]"),
+        ("_ssh._tcp.local.", "https://[2001:db8::20]/api/", "https://[2001:db8::20]"),
+    ],
+)
+async def test_zeroconf_ipv6_host_is_bracketed(
+    flow: NanoKVMConfigFlow,
+    install_client,
+    service_type: str,
+    api_url: str,
+    flow_host: str,
+) -> None:
+    """A bare IPv6 discovery address is bracketed before it forms a URL."""
+    client_type = install_client(ClientScenario(device_key="verified-key"))
+    _prepare_new_discovery(flow)
+
+    result = await flow.async_step_zeroconf(
+        _discovery_info(service_type, host="2001:db8::20")
+    )
+
+    assert result == {"user": True}
+    assert client_type.instances[0].url == URL(api_url)
+    flow.async_step_user.assert_awaited_once_with(user_input={CONF_HOST: flow_host})
+
+
+@pytest.mark.asyncio
 async def test_zeroconf_auth_required_uses_legacy_identity_for_new_flow(
     flow: NanoKVMConfigFlow,
     install_client,
