@@ -75,6 +75,10 @@ The integration follows the standard structure for a Home Assistant
     the preferred host when verified.
   - Asks for TLS trust on SSH discovery only after the host answers like a
     NanoKVM, and treats a different device at a saved address as its own device.
+  - After the SSH host key is trusted, checks the SSH login (root with the web
+    UI password unless the entry saved other SSH credentials) and asks for an
+    SSH username and password only when the device rejects it. Reconfigure
+    runs the same steps.
 
 - **`const.py`**: Central repository for shared constants (domain, service
   names, attributes, and defaults).

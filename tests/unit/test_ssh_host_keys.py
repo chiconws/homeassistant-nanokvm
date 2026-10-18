@@ -7,11 +7,17 @@ from pathlib import Path
 import socket
 from unittest.mock import MagicMock
 
+from nanokvm.ssh_client import (
+    NanoKVMSSHAuthenticationError,
+    NanoKVMSSHConnectionError,
+)
+import paramiko
 import pytest
 
 import custom_components.nanokvm.ssh_host_keys as host_keys_module
 from custom_components.nanokvm.ssh_host_keys import (
     SSHHostKey,
+    async_check_ssh_login,
     async_probe_host_key,
     async_write_known_hosts,
     known_hosts_path,
@@ -179,3 +185,57 @@ async def test_write_known_hosts_creates_owner_only_file(tmp_path: Path) -> None
     assert path.read_text() == key.known_hosts_line + "\n"
     assert path.stat().st_mode & 0o777 == 0o600
     assert path.parent.stat().st_mode & 0o777 == 0o700
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("connect_error", "expected"),
+    [
+        (None, None),
+        (paramiko.AuthenticationException("denied"), NanoKVMSSHAuthenticationError),
+        (paramiko.BadHostKeyException("nanokvm.local", MagicMock(), MagicMock()),
+         NanoKVMSSHConnectionError),
+        (OSError("unreachable"), NanoKVMSSHConnectionError),
+    ],
+)
+async def test_check_ssh_login_only_trusts_the_saved_key(
+    monkeypatch: pytest.MonkeyPatch,
+    connect_error: Exception | None,
+    expected: type[Exception] | None,
+) -> None:
+    """The login check pins the trusted key and maps Paramiko failures."""
+    key = paramiko.RSAKey.generate(1024)
+    line = f"nanokvm.local {key.get_name()} {key.get_base64()}"
+    client = MagicMock()
+    client.get_host_keys.return_value = paramiko.HostKeys()
+    client.connect.side_effect = connect_error
+    monkeypatch.setattr(host_keys_module.paramiko, "SSHClient", lambda: client)
+
+    if expected is None:
+        await async_check_ssh_login(line, "root", "secret")
+    else:
+        with pytest.raises(expected):
+            await async_check_ssh_login(line, "root", "secret")
+
+    assert client.get_host_keys().lookup("nanokvm.local")[key.get_name()] == key
+    policy = client.set_missing_host_key_policy.call_args.args[0]
+    assert isinstance(policy, paramiko.RejectPolicy)
+    assert client.connect.call_args.args == ("nanokvm.local",)
+    assert client.connect.call_args.kwargs == {
+        "port": 22,
+        "username": "root",
+        "password": "secret",
+        "timeout": 10,
+        "banner_timeout": 10,
+        "auth_timeout": 10,
+        "allow_agent": False,
+        "look_for_keys": False,
+    }
+    client.close.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_check_ssh_login_rejects_an_unparsable_key_line() -> None:
+    """A malformed trusted key line reports a connection failure."""
+    with pytest.raises(NanoKVMSSHConnectionError):
+        await async_check_ssh_login("# comment", "root", "secret")

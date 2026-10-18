@@ -57,10 +57,15 @@ from nanokvm.models import (
     MouseJigglerMode,
     TailscaleState,
 )
-from nanokvm.ssh_client import NanoKVMSSHConnectionError
+from nanokvm.ssh_client import (
+    NanoKVMSSHAuthenticationError,
+    NanoKVMSSHConnectionError,
+)
 
 import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.const import (
+    CONF_SSH_PASSWORD,
+    CONF_SSH_USERNAME,
     CONF_SSL_FINGERPRINT,
 )
 from custom_components.nanokvm.coordinator import (
@@ -1475,7 +1480,24 @@ async def test_ensure_ssh_collector_creates_once_and_reuses(
     assert coordinator.async_ensure_ssh_metrics_collector() is collector
     assert coordinator.async_ensure_ssh_metrics_collector() is collector
     factory.assert_called_once_with(
-        host="nanokvm.local", password="password", known_hosts=None
+        host="nanokvm.local", username="root", password="password", known_hosts=None
+    )
+
+
+async def test_ensure_ssh_collector_uses_saved_ssh_credentials(
+    coordinator: NanoKVMDataUpdateCoordinator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Saved SSH credentials replace root with the web UI password."""
+    factory = MagicMock()
+    monkeypatch.setattr(coordinator_module, "SSHMetricsCollector", factory)
+    coordinator.config_entry.data[CONF_SSH_USERNAME] = "kvm"
+    coordinator.config_entry.data[CONF_SSH_PASSWORD] = "ssh-secret"
+
+    coordinator.async_ensure_ssh_metrics_collector()
+
+    factory.assert_called_once_with(
+        host="nanokvm.local", username="kvm", password="ssh-secret", known_hosts=None
     )
 
 
@@ -1493,6 +1515,7 @@ async def test_ensure_ssh_collector_forwards_known_hosts_path(
 
     factory.assert_called_once_with(
         host="nanokvm.local",
+        username="root",
         password="password",
         known_hosts="/config/nanokvm/ssh/test-entry.known_hosts",
     )
@@ -1514,6 +1537,29 @@ async def test_ssh_host_key_failure_disconnects_collector(
 
     collector.disconnect.assert_awaited_once_with()
     assert "host-key verification" in caplog.text
+
+
+async def test_ssh_authentication_failure_warns_about_ssh_login(
+    coordinator: NanoKVMDataUpdateCoordinator,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A rejected SSH login warns once instead of failing silently."""
+    collector = SimpleNamespace(
+        collect=AsyncMock(
+            side_effect=NanoKVMSSHAuthenticationError("Authentication failed")
+        ),
+        disconnect=AsyncMock(),
+    )
+    coordinator.ssh_metrics_collector = collector
+
+    await coordinator._async_update_ssh_data()
+    await coordinator._async_update_ssh_data()
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "rejected the SSH login" in warnings[0].getMessage()
+    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+    assert collector.disconnect.await_count == 2
 
 
 async def test_successful_ssh_update_assigns_metrics(

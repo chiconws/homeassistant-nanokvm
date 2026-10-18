@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from homeassistant.util import dt as dt_util
 
-from nanokvm.ssh_client import NanoKVMSSH
+from nanokvm.ssh_client import DEFAULT_SSH_USERNAME, NanoKVMSSH
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,12 +30,13 @@ class SSHMetricsCollector:
         host: str,
         password: str,
         known_hosts: str | None = None,
+        username: str = DEFAULT_SSH_USERNAME,
     ) -> None:
         """Initialize the SSH collector."""
         self._password = password
         self._client = NanoKVMSSH(
             host=host,
-            username="root",
+            username=username,
             known_hosts=known_hosts,
             allow_unknown_host_key=False,
         )
