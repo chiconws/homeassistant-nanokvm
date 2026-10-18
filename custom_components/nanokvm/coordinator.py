@@ -833,8 +833,8 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             elif isinstance(err, NanoKVMSSHAuthenticationError):
                 _LOGGER.warning(
                     "SSH metrics unavailable for %s because the device rejected the "
-                    "SSH login: %s. Reconfigure the NanoKVM entry to enter the SSH "
-                    "username and password.",
+                    "SSH login. Reconfigure the NanoKVM entry to enter the SSH "
+                    "username and password (%s)",
                     self.config_entry.data[CONF_HOST],
                     err,
                 )
