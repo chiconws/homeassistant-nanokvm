@@ -88,7 +88,7 @@ Notes:
 - HDMI output controls, the HDMI signal sensor and the HDMI idle timeout are PCI-E only. The idle timeout (minutes without viewers before capture stops, `0` to disable) needs application `2.5.0` or newer.
 - HDD LED is Alpha-only.
 - Wi-Fi entities only appear when the device reports Wi-Fi support.
-- SSH diagnostics appear after SSH is enabled on the NanoKVM.
+- SSH diagnostics appear after SSH is enabled on the NanoKVM. They sign in as `root` with the web UI password; if the device rejects that, setup asks for the SSH username and password.
 - The watchdog switch requires SSH and NanoKVM application version `2.2.2` or newer.
 - Pro LED bead counts must satisfy `horizontal + (2 * vertical) <= 150`.
 - Num/Caps/Scroll Lock sensors need a non-Pro model on application `2.5.0` or newer, and stay unavailable until the host reports its keyboard LEDs.
@@ -185,7 +185,7 @@ automation:
 | Cannot connect | Confirm host/API URL, DNS, network reachability, and expected HTTP/HTTPS scheme |
 | Authentication fails | Verify NanoKVM credentials |
 | Missing entities | Some entities only appear after the related feature is available (for example SSH enabled or media mounted) |
-| No SSH sensors | Enable SSH on NanoKVM |
+| No SSH sensors | Enable SSH on NanoKVM. If the log says the device rejected the SSH login, reconfigure the entry and enter the SSH username and password |
 | No HDMI controls | HDMI controls only appear on PCI-E hardware |
 | No Pro still image | Pro snapshots are intentionally skipped to avoid interrupting WebRTC video |
 | Missing wired/wireless IP sensor | The sensor appears after the device reports an active address for that connection type |

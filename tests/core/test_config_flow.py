@@ -17,6 +17,10 @@ from nanokvm.client import (
     NanoKVMAuthenticationFailure,
     NanoKVMError,
 )
+from nanokvm.ssh_client import (
+    NanoKVMSSHAuthenticationError,
+    NanoKVMSSHConnectionError,
+)
 import pytest
 from yarl import URL
 
@@ -31,6 +35,8 @@ from custom_components.nanokvm.config_flow import (
 )
 from custom_components.nanokvm.const import (
     CONF_SSH_HOST_KEY,
+    CONF_SSH_PASSWORD,
+    CONF_SSH_USERNAME,
     CONF_SSL_FINGERPRINT,
     CONF_TRUST_SSH_HOST_KEY,
     CONF_USE_STATIC_HOST,
@@ -116,6 +122,14 @@ def install_client(monkeypatch: pytest.MonkeyPatch):
         return ScriptedClient
 
     return install
+
+
+@pytest.fixture(autouse=True)
+def ssh_login(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    """Accept SSH logins unless a test scripts a rejection."""
+    check = AsyncMock(return_value=None)
+    monkeypatch.setattr(config_flow_module, "async_check_ssh_login", check)
+    return check
 
 
 @pytest.fixture
@@ -1070,6 +1084,154 @@ async def test_reconfigure_step_replaces_ssh_host_key(
     flow.async_update_reload_and_abort.assert_called_once_with(
         config_entry_mock,
         data_updates={CONF_SSH_HOST_KEY: "nanokvm.local ssh-ed25519 bmV3LWtleQ=="},
+        reason="reconfigure_successful",
+    )
+
+
+_TRUSTED_KEY_LINE = "nanokvm.local ssh-ed25519 ZHVtbXk="
+
+
+def _prepare_trusted_ssh_key(flow: NanoKVMConfigFlow) -> None:
+    """Stage a new device whose SSH host key the user is about to trust."""
+    flow.data = _connection_data()
+    flow._pending_device_key = "device-key"
+    flow._pending_ssh_host_key = config_flow_module.SSHHostKey(
+        host="nanokvm.local",
+        known_hosts_line=_TRUSTED_KEY_LINE,
+        fingerprint="SHA256:trusted",
+    )
+    flow.add_device = AsyncMock(return_value={"created": True})
+
+
+@pytest.mark.asyncio
+async def test_rejected_ssh_login_asks_for_ssh_credentials(
+    flow: NanoKVMConfigFlow,
+    ssh_login: AsyncMock,
+) -> None:
+    """A device that rejects root with the web UI password asks for SSH credentials."""
+    _prepare_trusted_ssh_key(flow)
+    rejected = NanoKVMSSHAuthenticationError("Authentication failed")
+    ssh_login.side_effect = [rejected, rejected, None]
+
+    result = await flow.async_step_ssh_host_key({CONF_TRUST_SSH_HOST_KEY: True})
+
+    assert result["step_id"] == "ssh_credentials"
+    assert result["description_placeholders"] == {"host": "nanokvm.local"}
+    assert result["data_schema"]({}) == {CONF_SSH_USERNAME: "root"}
+
+    retry = await flow.async_step_ssh_credentials(
+        {CONF_SSH_USERNAME: "root", CONF_SSH_PASSWORD: "wrong"}
+    )
+    assert retry["errors"] == {"base": "invalid_auth"}
+
+    assert await flow.async_step_ssh_credentials(
+        {CONF_SSH_USERNAME: "kvm", CONF_SSH_PASSWORD: "ssh-secret"}
+    ) == {"created": True}
+    assert [call.args for call in ssh_login.await_args_list] == [
+        (_TRUSTED_KEY_LINE, "root", "secret"),
+        (_TRUSTED_KEY_LINE, "root", "wrong"),
+        (_TRUSTED_KEY_LINE, "kvm", "ssh-secret"),
+    ]
+    flow.add_device.assert_awaited_once_with("device-key", flow.data)
+    assert flow.data[CONF_SSH_HOST_KEY] == _TRUSTED_KEY_LINE
+    assert flow.data[CONF_SSH_USERNAME] == "kvm"
+    assert flow.data[CONF_SSH_PASSWORD] == "ssh-secret"
+
+
+@pytest.mark.asyncio
+async def test_ssh_credentials_connection_failure_stays_on_form(
+    flow: NanoKVMConfigFlow,
+    ssh_login: AsyncMock,
+) -> None:
+    """Credentials that cannot be checked are not saved."""
+    _prepare_trusted_ssh_key(flow)
+    flow.data[CONF_SSH_HOST_KEY] = _TRUSTED_KEY_LINE
+    ssh_login.side_effect = NanoKVMSSHConnectionError("timed out")
+
+    result = await flow.async_step_ssh_credentials(
+        {CONF_SSH_USERNAME: "root", CONF_SSH_PASSWORD: "ssh-secret"}
+    )
+
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert CONF_SSH_PASSWORD not in flow.data
+    flow.add_device.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_empty_ssh_password_skips_ssh_credentials(
+    flow: NanoKVMConfigFlow,
+    ssh_login: AsyncMock,
+) -> None:
+    """Leaving the SSH password empty still adds the device and its trusted key."""
+    _prepare_trusted_ssh_key(flow)
+    ssh_login.side_effect = NanoKVMSSHAuthenticationError("Authentication failed")
+
+    await flow.async_step_ssh_host_key({CONF_TRUST_SSH_HOST_KEY: True})
+
+    assert await flow.async_step_ssh_credentials({CONF_SSH_USERNAME: "root"}) == {
+        "created": True
+    }
+    ssh_login.assert_awaited_once()
+    assert flow.data[CONF_SSH_HOST_KEY] == _TRUSTED_KEY_LINE
+    assert CONF_SSH_USERNAME not in flow.data
+    assert CONF_SSH_PASSWORD not in flow.data
+
+
+@pytest.mark.asyncio
+async def test_unreachable_ssh_login_does_not_ask_for_credentials(
+    flow: NanoKVMConfigFlow,
+    ssh_login: AsyncMock,
+) -> None:
+    """Only a rejected login asks for credentials; a connection failure does not."""
+    _prepare_trusted_ssh_key(flow)
+    ssh_login.side_effect = NanoKVMSSHConnectionError("timed out")
+
+    assert await flow.async_step_ssh_host_key({CONF_TRUST_SSH_HOST_KEY: True}) == {
+        "created": True
+    }
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_saves_new_ssh_credentials(
+    flow: NanoKVMConfigFlow,
+    config_entry_mock: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    ssh_login: AsyncMock,
+) -> None:
+    """Reconfigure tries the saved SSH login first and saves corrected credentials."""
+    config_entry_mock.data[CONF_SSH_USERNAME] = "kvm"
+    config_entry_mock.data[CONF_SSH_PASSWORD] = "old-secret"
+    flow.context = {"source": "reconfigure", "entry_id": config_entry_mock.entry_id}
+    flow.hass.config_entries.async_get_known_entry.return_value = config_entry_mock
+    monkeypatch.setattr(
+        config_flow_module,
+        "async_prepare_ssh_host_key",
+        AsyncMock(
+            return_value=config_flow_module.SSHHostKey(
+                host="nanokvm.local",
+                known_hosts_line=_TRUSTED_KEY_LINE,
+                fingerprint="SHA256:trusted",
+            )
+        ),
+    )
+    flow.async_update_reload_and_abort = MagicMock(return_value={"updated": True})
+    ssh_login.side_effect = [NanoKVMSSHAuthenticationError("rejected"), None]
+
+    await flow.async_step_reconfigure()
+    result = await flow.async_step_ssh_host_key({CONF_TRUST_SSH_HOST_KEY: True})
+
+    assert result["data_schema"]({}) == {CONF_SSH_USERNAME: "kvm"}
+    assert await flow.async_step_ssh_credentials(
+        {CONF_SSH_USERNAME: "kvm", CONF_SSH_PASSWORD: "new-secret"}
+    ) == {"updated": True}
+    assert ssh_login.await_args_list[0].args == (_TRUSTED_KEY_LINE, "kvm", "old-secret")
+    flow.async_update_reload_and_abort.assert_called_once_with(
+        config_entry_mock,
+        data_updates={
+            CONF_SSH_HOST_KEY: _TRUSTED_KEY_LINE,
+            CONF_SSH_USERNAME: "kvm",
+            CONF_SSH_PASSWORD: "new-secret",
+        },
         reason="reconfigure_successful",
     )
 

@@ -29,6 +29,7 @@ from nanokvm.client import (
     NanoKVMPermissionError,
 )
 from nanokvm.ssh_client import (
+    DEFAULT_SSH_USERNAME,
     NanoKVMSSHAuthenticationError,
     NanoKVMSSHConnectionError,
 )
@@ -67,6 +68,8 @@ from .const import (
     CONF_LED_BRIGHTNESS,
     CONF_PREFERRED_HOST,
     CONF_SSH_HOST_KEY,
+    CONF_SSH_PASSWORD,
+    CONF_SSH_USERNAME,
     CONF_SSL_FINGERPRINT,
     CONF_USE_STATIC_HOST,
     DEFAULT_SCAN_INTERVAL,
@@ -803,9 +806,11 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
     def async_ensure_ssh_metrics_collector(self) -> SSHMetricsCollector:
         """Return the active SSH collector, creating it when needed."""
         if not self.ssh_metrics_collector:
+            data = self.config_entry.data
             self.ssh_metrics_collector = SSHMetricsCollector(
-                host=extract_ssh_host(self.config_entry.data[CONF_HOST]),
-                password=self.password,
+                host=extract_ssh_host(data[CONF_HOST]),
+                username=data.get(CONF_SSH_USERNAME) or DEFAULT_SSH_USERNAME,
+                password=data.get(CONF_SSH_PASSWORD) or self.password,
                 known_hosts=self.ssh_known_hosts,
             )
         return self.ssh_metrics_collector
@@ -828,8 +833,8 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             elif isinstance(err, NanoKVMSSHAuthenticationError):
                 _LOGGER.warning(
                     "SSH metrics unavailable for %s because the device rejected the "
-                    "root password: %s. SSH signs in as root with the web UI password, "
-                    "so make the two match and reconfigure the NanoKVM entry.",
+                    "SSH login: %s. Reconfigure the NanoKVM entry to enter the SSH "
+                    "username and password.",
                     self.config_entry.data[CONF_HOST],
                     err,
                 )
