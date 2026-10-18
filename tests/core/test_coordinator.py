@@ -57,7 +57,10 @@ from nanokvm.models import (
     MouseJigglerMode,
     TailscaleState,
 )
-from nanokvm.ssh_client import NanoKVMSSHConnectionError
+from nanokvm.ssh_client import (
+    NanoKVMSSHAuthenticationError,
+    NanoKVMSSHConnectionError,
+)
 
 import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.const import (
@@ -1514,6 +1517,29 @@ async def test_ssh_host_key_failure_disconnects_collector(
 
     collector.disconnect.assert_awaited_once_with()
     assert "host-key verification" in caplog.text
+
+
+async def test_ssh_authentication_failure_warns_about_root_password(
+    coordinator: NanoKVMDataUpdateCoordinator,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A rejected root password warns once instead of failing silently."""
+    collector = SimpleNamespace(
+        collect=AsyncMock(
+            side_effect=NanoKVMSSHAuthenticationError("Authentication failed")
+        ),
+        disconnect=AsyncMock(),
+    )
+    coordinator.ssh_metrics_collector = collector
+
+    await coordinator._async_update_ssh_data()
+    await coordinator._async_update_ssh_data()
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "rejected the root password" in warnings[0].getMessage()
+    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+    assert collector.disconnect.await_count == 2
 
 
 async def test_successful_ssh_update_assigns_metrics(

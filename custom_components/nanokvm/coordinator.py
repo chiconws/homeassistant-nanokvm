@@ -28,7 +28,10 @@ from nanokvm.client import (
     NanoKVMNotSupportedError,
     NanoKVMPermissionError,
 )
-from nanokvm.ssh_client import NanoKVMSSHConnectionError
+from nanokvm.ssh_client import (
+    NanoKVMSSHAuthenticationError,
+    NanoKVMSSHConnectionError,
+)
 from nanokvm.models import (
     GetAccountRsp,
     GetCdRomRsp,
@@ -815,13 +818,22 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             self._ssh_connection_warning_logged = False
             self.ssh_metrics = metrics
             _LOGGER.debug("SSH coordinator metrics updated: %s", metrics)
-        except NanoKVMSSHConnectionError as err:
+        except (NanoKVMSSHAuthenticationError, NanoKVMSSHConnectionError) as err:
             if self._ssh_connection_warning_logged:
                 _LOGGER.debug(
                     "SSH metrics remain unavailable for %s: %s",
                     self.config_entry.data[CONF_HOST],
                     err,
                 )
+            elif isinstance(err, NanoKVMSSHAuthenticationError):
+                _LOGGER.warning(
+                    "SSH metrics unavailable for %s because the device rejected the "
+                    "root password: %s. SSH signs in as root with the web UI password, "
+                    "so make the two match and reconfigure the NanoKVM entry.",
+                    self.config_entry.data[CONF_HOST],
+                    err,
+                )
+                self._ssh_connection_warning_logged = True
             else:
                 _LOGGER.warning(
                     "SSH metrics unavailable for %s because host-key verification or "
