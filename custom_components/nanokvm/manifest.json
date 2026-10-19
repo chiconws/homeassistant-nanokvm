@@ -9,6 +9,6 @@
   "issue_tracker": "https://github.com/Wouter0100/homeassistant-nanokvm/issues",
   "loggers": ["nanokvm"],
   "requirements": ["nanokvm==1.4.1"],
-  "version": "2.2.0",
+  "version": "2.3.0",
   "zeroconf": ["_ssh._tcp.local.", "_workstation._tcp.local."]
 }
