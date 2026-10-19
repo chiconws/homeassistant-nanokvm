@@ -44,7 +44,7 @@ The integration follows the standard structure for a Home Assistant
     state, dynamic media/network/SSH entities, and SSH metric refresh.
   - Gates non-Pro-only endpoints such as swap size, CD-ROM state, HDMI output,
     and non-Pro virtual disk controls.
-  - Checks a fallback Pro entry's saved preferred host at most once per minute,
+  - Checks a fallback entry's saved preferred host at most once per minute,
     backing off to hourly while it is unreachable, and restores it only after
     authenticating and verifying its device key. Forgets a preferred host that
     answers with another device key.
@@ -67,11 +67,18 @@ The integration follows the standard structure for a Home Assistant
     creating the config entry.
   - Handles auth step, SSL fingerprint confirmation, static-host option, and
     legacy/new unique-id matching.
-  - Matches Pro discovery across advertised addresses and API-reported device
-    hostnames and reuses saved TLS trust. Saves the chosen host as preferred,
-    keeps working fallbacks, and returns to the preferred host when verified.
+  - Matches discovery to an entry across advertised addresses and API-reported
+    device hostnames. Pro discovery reuses saved TLS trust and credentials;
+    non-Pro discovery sends saved credentials only to an address the entry
+    already uses, and a hostname-only match is dropped without them.
+  - Saves the chosen host as preferred, keeps working fallbacks, and returns to
+    the preferred host when verified.
   - Asks for TLS trust on SSH discovery only after the host answers like a
     NanoKVM, and treats a different device at a saved address as its own device.
+  - After the SSH host key is trusted, checks the SSH login (root with the web
+    UI password unless the entry saved other SSH credentials) and asks for an
+    SSH username and password only when the device rejects it. Reconfigure
+    runs the same steps.
 
 - **`const.py`**: Central repository for shared constants (domain, service
   names, attributes, and defaults).
@@ -83,6 +90,8 @@ The integration follows the standard structure for a Home Assistant
     authenticates. Setup, the config flow, reauthentication, and transport
     failover all call it and translate its three errors (`InvalidAuth`,
     `SSLCertificateChanged`, `CannotConnect`).
+  - `async_get_entry_device` looks a device up within its config entry, using
+    the per-entry registry lookup where Home Assistant has it.
 
 - **`ssh_metrics.py`**: SSH metrics collection implementation used by the
   coordinator.
@@ -204,6 +213,22 @@ Run these checks locally before pushing:
 - Hassfest: `.github/workflows/hassfest.yaml`
 
 All three should be green on the PR branch before merge/release.
+
+## Releases
+
+Feature and fix branches merge into `dev` through pull requests. A release
+always follows the same steps:
+
+1. On `dev`, commit only the `version` change in `manifest.json` as
+   `chore: bump version to X.Y.Z` and push it. The bump gets no pull request
+   of its own and never rides along in a feature pull request.
+2. Open a pull request from `dev` to `main` titled `Release vX.Y.Z`. Its body
+   summarizes the changes with their pull request numbers, calls out breaking
+   changes such as a new minimum Home Assistant version, and ends with
+   `Closes #N` for each fixed issue that is still open. Pull requests into
+   `dev` do not close issues on their own.
+3. After it merges, tag the merge commit on `main` as `vX.Y.Z` and publish a
+   GitHub release from that tag.
 
 [ha-url]: https://www.home-assistant.io/
 [nanokvm-url]: https://github.com/sipeed/NanoKVM

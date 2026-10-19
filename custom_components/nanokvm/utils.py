@@ -9,7 +9,9 @@ from typing import TypeVar, overload
 import aiohttp
 from yarl import URL
 
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 
 from nanokvm.client import NanoKVMAuthenticationFailure, NanoKVMClient, NanoKVMError
 
@@ -91,6 +93,19 @@ def verification_url(host: str, default_scheme: str = "https") -> str:
     return _api_base_url(
         origin, origin.scheme if has_explicit_scheme else default_scheme
     )
+
+
+def async_get_entry_device(
+    hass: HomeAssistant, entry_id: str, identifier: tuple[str, str]
+) -> dr.DeviceEntry | None:
+    """Return the device with the identifier that the config entry owns."""
+    registry = dr.async_get(hass)
+    if hasattr(registry, "async_get_device_by_identifier"):
+        return registry.async_get_device_by_identifier(identifier, entry_id)
+    # TODO: Home Assistant added the per-entry lookup in 2026.8.0 and removes
+    # async_get_device in 2027.8.0. Before then, raise "homeassistant" in
+    # hacs.json to 2026.8.0 and drop this fallback and the hasattr check.
+    return registry.async_get_device(identifiers={identifier})
 
 
 def api_base_url_to_web_url(base_url: str) -> str:

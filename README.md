@@ -60,14 +60,14 @@ Notes:
 - If no scheme is provided, the integration tries `http` first and then `https`.
 - Self-signed HTTPS certificates are supported by confirming the presented fingerprint during setup or reauthentication.
 - When **Use static host only** is disabled, zeroconf rediscovery can refresh the stored host/IP.
-- NanoKVM Pro keeps the address chosen during setup as its preferred address. If discovery switches to another interface, it checks for the preferred address once per minute, backing off to once per hour while it stays unreachable, and returns when the same device is reachable there. If another NanoKVM takes over that address, it is no longer preferred.
+- A NanoKVM reachable over both Ethernet and Wi-Fi keeps the address chosen during setup as its preferred address. If discovery switches to another interface, it checks for the preferred address once per minute, backing off to once per hour while it stays unreachable, and returns when the same device is reachable there. If another NanoKVM takes over that address, it is no longer preferred.
 - Coordinator polling interval is 30 seconds.
 
 ## Known Limitations
 
 - Host updates from discovery are disabled when **Use static host only** is enabled.
 - Camera stream availability depends on HDMI input/source status.
-- NanoKVM Pro still snapshots are skipped to avoid interrupting WebRTC video mode.
+- NanoKVM Pro still snapshots are skipped, because fetching one freezes any stream that is being watched ([sipeed/NanoKVM-Pro#157](https://github.com/sipeed/NanoKVM-Pro/issues/157)).
 - Feature-specific entities only appear when the device reports support for them.
 
 ## Entities
@@ -88,7 +88,7 @@ Notes:
 - HDMI output controls, the HDMI signal sensor and the HDMI idle timeout are PCI-E only. The idle timeout (minutes without viewers before capture stops, `0` to disable) needs application `2.5.0` or newer.
 - HDD LED is Alpha-only.
 - Wi-Fi entities only appear when the device reports Wi-Fi support.
-- SSH diagnostics appear after SSH is enabled on the NanoKVM.
+- SSH diagnostics appear after SSH is enabled on the NanoKVM. They sign in as `root` with the web UI password; if the device rejects that, setup asks for the SSH username and password.
 - The watchdog switch requires SSH and NanoKVM application version `2.2.2` or newer.
 - Pro LED bead counts must satisfy `horizontal + (2 * vertical) <= 150`.
 - Num/Caps/Scroll Lock sensors need a non-Pro model on application `2.5.0` or newer, and stay unavailable until the host reports its keyboard LEDs.
@@ -185,7 +185,7 @@ automation:
 | Cannot connect | Confirm host/API URL, DNS, network reachability, and expected HTTP/HTTPS scheme |
 | Authentication fails | Verify NanoKVM credentials |
 | Missing entities | Some entities only appear after the related feature is available (for example SSH enabled or media mounted) |
-| No SSH sensors | Enable SSH on NanoKVM |
+| No SSH sensors | Enable SSH on NanoKVM. If the log says the device rejected the SSH login, reconfigure the entry and enter the SSH username and password |
 | No HDMI controls | HDMI controls only appear on PCI-E hardware |
 | No Pro still image | Pro snapshots are intentionally skipped to avoid interrupting WebRTC video |
 | Missing wired/wireless IP sensor | The sensor appears after the device reports an active address for that connection type |

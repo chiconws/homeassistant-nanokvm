@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import aclosing
 
-import aiohttp
-from aiohttp import BodyPartReader, MultipartReader
 from homeassistant.components.camera import (
     Camera,
     CameraEntityDescription,
@@ -65,6 +64,8 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         """Read one JPEG frame from NanoKVM MJPEG endpoint for snapshots."""
         if self.coordinator.is_pro_hardware:
             # NanoKVM Pro shares one encoder mode; opening MJPEG interrupts WebRTC.
+            # TODO: enable once the Pro can serve a frame without switching the
+            # stream type: https://github.com/sipeed/NanoKVM-Pro/issues/157
             _LOGGER.debug(
                 "Skipping NanoKVM Pro still image to avoid switching video mode"
             )
@@ -73,27 +74,13 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         client = self.coordinator.clone_client()
         async with client:
             await self.coordinator.async_ensure_authenticated(client)
-            # Reuse NanoKVMClient's authenticated session and SSL config for MJPEG.
-            async with client._session.request(
-                aiohttp.hdrs.METH_GET,
-                "/stream/mjpeg",
-            ) as upstream:
-                reader = MultipartReader.from_response(upstream)
-
-                while True:
-                    async with asyncio.timeout(SNAPSHOT_TIMEOUT_SECONDS):
-                        part = await reader.next()
-
-                    if part is None:
-                        return None
-                    if not isinstance(part, BodyPartReader):
-                        continue
-
-                    async with asyncio.timeout(SNAPSHOT_TIMEOUT_SECONDS):
-                        payload = await part.read()
-
-                    if payload:
-                        return payload
+            async with (
+                asyncio.timeout(SNAPSHOT_TIMEOUT_SECONDS),
+                aclosing(client.mjpeg_stream_bytes()) as frames,
+            ):
+                async for frame in frames:
+                    return frame
+        return None
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None

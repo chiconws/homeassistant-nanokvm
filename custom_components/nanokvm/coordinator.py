@@ -28,7 +28,11 @@ from nanokvm.client import (
     NanoKVMNotSupportedError,
     NanoKVMPermissionError,
 )
-from nanokvm.ssh_client import NanoKVMSSHConnectionError
+from nanokvm.ssh_client import (
+    DEFAULT_SSH_USERNAME,
+    NanoKVMSSHAuthenticationError,
+    NanoKVMSSHConnectionError,
+)
 from nanokvm.models import (
     GetAccountRsp,
     GetCdRomRsp,
@@ -64,6 +68,8 @@ from .const import (
     CONF_LED_BRIGHTNESS,
     CONF_PREFERRED_HOST,
     CONF_SSH_HOST_KEY,
+    CONF_SSH_PASSWORD,
+    CONF_SSH_USERNAME,
     CONF_SSL_FINGERPRINT,
     CONF_USE_STATIC_HOST,
     DEFAULT_SCAN_INTERVAL,
@@ -82,6 +88,7 @@ from .utils import (
     SSLCertificateChanged,
     api_connection_options,
     async_connect,
+    async_get_entry_device,
     device_sw_version,
     extract_ssh_host,
     is_auth_failure,
@@ -268,12 +275,11 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         return await self._async_fetch_once()
 
     async def _async_restore_preferred_host(self) -> bool:
-        """Restore a verified preferred Pro endpoint without requiring another mDNS event."""
+        """Restore a verified preferred endpoint without requiring another mDNS event."""
         data = dict(self.config_entry.data)
         preferred_host = data.get(CONF_PREFERRED_HOST)
         if (
-            not self.is_pro_hardware
-            or data.get(CONF_USE_STATIC_HOST, False)
+            data.get(CONF_USE_STATIC_HOST, False)
             or not isinstance(preferred_host, str)
             or preferred_host == data[CONF_HOST]
         ):
@@ -426,8 +432,10 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return
 
         registry = dr.async_get(self.hass)
-        device = registry.async_get_device(
-            identifiers={(DOMAIN, self.device_info.device_key)}
+        device = async_get_entry_device(
+            self.hass,
+            self.config_entry.entry_id,
+            (DOMAIN, self.device_info.device_key),
         )
         if device is None:
             return
@@ -798,9 +806,11 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
     def async_ensure_ssh_metrics_collector(self) -> SSHMetricsCollector:
         """Return the active SSH collector, creating it when needed."""
         if not self.ssh_metrics_collector:
+            data = self.config_entry.data
             self.ssh_metrics_collector = SSHMetricsCollector(
-                host=extract_ssh_host(self.config_entry.data[CONF_HOST]),
-                password=self.password,
+                host=extract_ssh_host(data[CONF_HOST]),
+                username=data.get(CONF_SSH_USERNAME) or DEFAULT_SSH_USERNAME,
+                password=data.get(CONF_SSH_PASSWORD) or self.password,
                 known_hosts=self.ssh_known_hosts,
             )
         return self.ssh_metrics_collector
@@ -813,13 +823,22 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             self._ssh_connection_warning_logged = False
             self.ssh_metrics = metrics
             _LOGGER.debug("SSH coordinator metrics updated: %s", metrics)
-        except NanoKVMSSHConnectionError as err:
+        except (NanoKVMSSHAuthenticationError, NanoKVMSSHConnectionError) as err:
             if self._ssh_connection_warning_logged:
                 _LOGGER.debug(
                     "SSH metrics remain unavailable for %s: %s",
                     self.config_entry.data[CONF_HOST],
                     err,
                 )
+            elif isinstance(err, NanoKVMSSHAuthenticationError):
+                _LOGGER.warning(
+                    "SSH metrics unavailable for %s because the device rejected the "
+                    "SSH login. Reconfigure the NanoKVM entry to enter the SSH "
+                    "username and password (%s)",
+                    self.config_entry.data[CONF_HOST],
+                    err,
+                )
+                self._ssh_connection_warning_logged = True
             else:
                 _LOGGER.warning(
                     "SSH metrics unavailable for %s because host-key verification or "

@@ -20,7 +20,6 @@ from homeassistant.components.camera.webrtc import (
 from homeassistant.exceptions import HomeAssistantError
 from nanokvm.client import NanoKVMClient
 from webrtc_models import RTCIceCandidateInit
-from yarl import URL
 
 from .pro_sdp import (
     MediaKind,
@@ -97,12 +96,6 @@ class NanoKVMWebRTCManager:
                 streaming,
             )
 
-    def _webrtc_stream_url(self, base_url: URL, *, pro: bool) -> str:
-        """Build NanoKVM h264 WebRTC websocket URL from API base URL."""
-        ws_scheme = "wss" if base_url.scheme == "https" else "ws"
-        stream_path = "stream/h264/webrtc" if pro else "stream/h264"
-        return str(base_url.with_scheme(ws_scheme) / stream_path)
-
     async def async_handle_async_webrtc_offer(
         self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
     ) -> None:
@@ -125,18 +118,9 @@ class NanoKVMWebRTCManager:
             await client.__aenter__()
             await self._coordinator.async_ensure_authenticated(client)
 
-            if client.token is None:
-                raise RuntimeError("NanoKVM client authentication did not produce a token")
-            # The library has no public websocket for the stream endpoints.
-            transport = client._session
-            if transport._http_session is None or transport._ssl_config is None:
-                raise RuntimeError("NanoKVM client transport is not initialized")
-
-            websocket = await transport._http_session.ws_connect(
-                self._webrtc_stream_url(client.url, pro=is_pro),
-                headers={"Cookie": f"nano-kvm-token={client.token}"},
+            websocket = await client.open_ws(
+                "stream/h264/webrtc" if is_pro else "stream/h264",
                 heartbeat=None if is_pro else _WEBSOCKET_HEARTBEAT_SECONDS,
-                ssl=transport._ssl_config,
                 timeout=aiohttp.ClientWSTimeout(ws_close=_LOGIN_TIMEOUT_SECONDS),
             )
 

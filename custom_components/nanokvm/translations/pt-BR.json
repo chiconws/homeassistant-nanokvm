@@ -39,13 +39,21 @@
         "data": {
           "trust_ssh_host_key": "Eu confio nesta chave de host SSH"
         }
+      },
+      "ssh_credentials": {
+        "title": "Credenciais SSH",
+        "description": "O dispositivo NanoKVM em **{host}** recusou o login SSH. O SSH coleta a temperatura da CPU, a memória, o armazenamento e o tempo de atividade.\n\nInforme o usuário e a senha do SSH ou deixe a senha em branco para pular as métricas SSH.",
+        "data": {
+          "ssh_username": "Usuário",
+          "ssh_password": "Senha"
+        }
       }
     },
     "abort": {
       "already_configured": "Este dispositivo NanoKVM já está configurado",
       "cannot_connect": "Falha ao conectar ao dispositivo NanoKVM",
       "reauth_successful": "A reautenticação foi concluída com sucesso",
-      "reconfigure_successful": "A verificação da chave de host SSH foi atualizada",
+      "reconfigure_successful": "As configurações de SSH foram atualizadas",
       "ssh_host_key_not_trusted": "A chave de host SSH não foi confiada",
       "ssh_host_key_unavailable": "Não foi possível verificar a chave de host SSH"
     },
@@ -288,6 +296,7 @@
       "virtual_disk_type": {
         "name": "Tipo de Disco Virtual",
         "state": {
+          "disable": "Desativado",
           "emmc": "eMMC",
           "sdcard": "Cartão SD"
         }

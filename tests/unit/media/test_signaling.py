@@ -156,9 +156,9 @@ class FakeTransport:
         self.connect_started = asyncio.Event()
         self.connect_release: asyncio.Event | None = None
 
-    async def ws_connect(self, url: str, **kwargs: object) -> FakeWebSocket:
+    async def open_ws(self, path: str, **kwargs: object) -> FakeWebSocket:
         """Record the WebSocket request and return or fail the connection."""
-        self.calls.append((url, kwargs))
+        self.calls.append((path, kwargs))
         self.connect_started.set()
         if self.connect_release is not None:
             await self.connect_release.wait()
@@ -180,9 +180,7 @@ class FakeClient:
         self.token: str | None = "stream-token"
         self.websocket = websocket or FakeWebSocket()
         self.transport = FakeTransport(self.websocket)
-        self._session = SimpleNamespace(
-            _http_session=self.transport, _ssl_config=object()
-        )
+        self.open_ws = self.transport.open_ws
         self.enter_calls = 0
         self.exit_calls = 0
         self.exit_error: Exception | None = None
@@ -329,11 +327,10 @@ async def test_non_pro_session_signals_offer_answer_candidate_and_cleanup(
     assert client.enter_calls == 1
     assert harness.authenticated == [client]
     assert len(client.transport.calls) == 1
-    url, kwargs = client.transport.calls[0]
-    assert url == "wss://nanokvm.local/api/stream/h264"
-    assert kwargs["headers"] == {"Cookie": "nano-kvm-token=stream-token"}
+    path, kwargs = client.transport.calls[0]
+    assert path == "stream/h264"
+    assert set(kwargs) == {"heartbeat", "timeout"}
     assert kwargs["heartbeat"] == 30.0
-    assert kwargs["ssl"] is client._session._ssl_config
     timeout = kwargs["timeout"]
     assert isinstance(timeout, webrtc_module.aiohttp.ClientWSTimeout)
     assert timeout.ws_close == 15
@@ -445,7 +442,7 @@ async def test_pro_session_splits_offer_and_merges_answers_and_candidates(
         "video-offer",
         "audio-offer",
     ]
-    assert client.transport.calls[0][0].endswith("/api/stream/h264/webrtc")
+    assert client.transport.calls[0][0] == "stream/h264/webrtc"
     assert client.transport.calls[0][1]["heartbeat"] is None
     client.websocket.feed_signal(
         "video-candidate",
@@ -702,18 +699,6 @@ async def test_pro_offer_without_supported_media_is_rejected_before_client_entry
             "bad credentials",
         ),
         (
-            lambda harness, client: setattr(client, "token", None),
-            "NanoKVM client authentication did not produce a token",
-        ),
-        (
-            lambda harness, client: setattr(client._session, "_http_session", None),
-            "NanoKVM client transport is not initialized",
-        ),
-        (
-            lambda harness, client: setattr(client._session, "_ssl_config", None),
-            "NanoKVM client transport is not initialized",
-        ),
-        (
             lambda harness, client: setattr(
                 client.transport, "error", TimeoutError("connect timed out")
             ),
@@ -932,12 +917,9 @@ async def test_invalid_device_candidate_is_ignored(
     assert messages == []
 
 
-@pytest.mark.asyncio
-async def test_real_client_exposes_the_transport_used_for_streams() -> None:
-    """The stream paths reach into the library client; fail if it moves again."""
+def test_real_client_exposes_the_stream_methods() -> None:
+    """The stream paths call these library methods; fail if they move."""
     from nanokvm.client import NanoKVMClient
 
-    async with NanoKVMClient("http://nanokvm.local/api/") as client:
-        assert callable(client._session.request)
-        assert client._session._http_session is not None
-        assert client._session._ssl_config is not None
+    assert callable(NanoKVMClient.open_ws)
+    assert callable(NanoKVMClient.mjpeg_stream_bytes)

@@ -9,7 +9,12 @@ import socket
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util.file import write_utf8_file_atomic
+from nanokvm.ssh_client import (
+    NanoKVMSSHAuthenticationError,
+    NanoKVMSSHConnectionError,
+)
 import paramiko
+from paramiko.hostkeys import HostKeyEntry
 
 
 _SSH_PORT = 22
@@ -62,6 +67,43 @@ def _probe_host_key(host: str) -> SSHHostKey:
 async def async_probe_host_key(host: str) -> SSHHostKey:
     """Probe a server key off the Home Assistant event loop."""
     return await asyncio.to_thread(_probe_host_key, host)
+
+
+def _check_login(known_hosts_line: str, username: str, password: str) -> None:
+    """Sign in to the one host the trusted key line names, then disconnect."""
+    entry = HostKeyEntry.from_line(known_hosts_line)
+    if entry is None:
+        raise paramiko.SSHException("known_hosts_line is not a host-key entry")
+    client = paramiko.SSHClient()
+    try:
+        for hostname in entry.hostnames:
+            client.get_host_keys().add(hostname, entry.key.get_name(), entry.key)
+        client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        client.connect(
+            entry.hostnames[0],
+            port=_SSH_PORT,
+            username=username,
+            password=password,
+            timeout=_SSH_PROBE_TIMEOUT_SECONDS,
+            banner_timeout=_SSH_PROBE_TIMEOUT_SECONDS,
+            auth_timeout=_SSH_PROBE_TIMEOUT_SECONDS,
+            allow_agent=False,
+            look_for_keys=False,
+        )
+    finally:
+        client.close()
+
+
+async def async_check_ssh_login(
+    known_hosts_line: str, username: str, password: str
+) -> None:
+    """Check SSH credentials against a host that must present the trusted key."""
+    try:
+        await asyncio.to_thread(_check_login, known_hosts_line, username, password)
+    except paramiko.AuthenticationException as err:
+        raise NanoKVMSSHAuthenticationError(f"SSH authentication failed: {err}") from err
+    except (paramiko.SSHException, OSError) as err:
+        raise NanoKVMSSHConnectionError(f"SSH connection failed: {err}") from err
 
 
 def known_hosts_path(config_dir: str | Path, entry_id: str) -> Path:

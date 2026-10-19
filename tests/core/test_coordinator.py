@@ -57,10 +57,15 @@ from nanokvm.models import (
     MouseJigglerMode,
     TailscaleState,
 )
-from nanokvm.ssh_client import NanoKVMSSHConnectionError
+from nanokvm.ssh_client import (
+    NanoKVMSSHAuthenticationError,
+    NanoKVMSSHConnectionError,
+)
 
 import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.const import (
+    CONF_SSH_PASSWORD,
+    CONF_SSH_USERNAME,
     CONF_SSL_FINGERPRINT,
 )
 from custom_components.nanokvm.coordinator import (
@@ -285,7 +290,7 @@ def test_device_registry_follows_firmware_and_hostname_changes(
 ) -> None:
     """An updated application or hostname reaches the device registry without a reload."""
     registry = MagicMock()
-    registry.async_get_device.return_value = SimpleNamespace(id="device-id")
+    registry.async_get_device_by_identifier.return_value = SimpleNamespace(id="device-id")
     monkeypatch.setattr(coordinator_module.dr, "async_get", lambda hass: registry)
     coordinator.device_info = SimpleNamespace(
         device_key="test-device", application="2.3.4", image="2026-07-01"
@@ -297,11 +302,11 @@ def test_device_registry_follows_firmware_and_hostname_changes(
     registry.async_update_device.assert_not_called()
 
     coordinator.device_info.application = "2.4.0"
-    registry.async_get_device.return_value = None
+    registry.async_get_device_by_identifier.return_value = None
     coordinator._async_sync_device_registry()
     registry.async_update_device.assert_not_called()
 
-    registry.async_get_device.return_value = SimpleNamespace(id="device-id")
+    registry.async_get_device_by_identifier.return_value = SimpleNamespace(id="device-id")
     coordinator._async_sync_device_registry()
     coordinator._async_sync_device_registry()
     registry.async_update_device.assert_called_once_with(
@@ -354,6 +359,32 @@ async def test_periodic_update_returns_to_preferred_host_without_mdns(
     preferred.__aexit__.assert_awaited_once()
     assert factory.call_args.args == ("https://192.0.2.20/api/",)
     assert factory.call_args.kwargs["ssl_fingerprint"] == "AA" * 32
+
+
+async def test_periodic_update_returns_non_pro_to_preferred_http_host(
+    coordinator: NanoKVMDataUpdateCoordinator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-Pro on its fallback address returns to the preferred one over HTTP."""
+    coordinator.hardware_info = GetHardwareRsp(version=HWVersion.PCIE)
+    coordinator.config_entry.data.update(
+        {CONF_HOST: "192.0.2.21", "preferred_host": "192.0.2.20"}
+    )
+    coordinator.client.url = URL("http://192.0.2.21/api/")
+    preferred = _candidate_client("http://192.0.2.20/api/")
+    preferred.get_info.return_value = _device_info()
+    factory = MagicMock(return_value=preferred)
+    monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
+
+    await coordinator._async_update_data()
+
+    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+    assert updated[CONF_HOST] == "192.0.2.20"
+    coordinator.hass.config_entries.async_schedule_reload.assert_called_once_with(
+        coordinator.config_entry.entry_id
+    )
+    assert factory.call_args.args == ("http://192.0.2.20/api/",)
+    assert factory.call_args.kwargs["ssl_fingerprint"] is None
 
 
 @pytest.mark.parametrize("without_ssh_key", [True, False])
@@ -588,18 +619,16 @@ async def test_periodic_preferred_host_restore_does_not_reload_an_unchanged_entr
     coordinator.hass.config_entries.async_schedule_reload.assert_not_called()
 
 
-@pytest.mark.parametrize("reason", ["static", "non_pro", "no_preference", "already_preferred"])
-async def test_periodic_preferred_host_probe_only_runs_for_pro_fallbacks(
+@pytest.mark.parametrize("reason", ["static", "no_preference", "already_preferred"])
+async def test_periodic_preferred_host_probe_only_runs_for_fallbacks(
     coordinator: NanoKVMDataUpdateCoordinator,
     monkeypatch: pytest.MonkeyPatch,
     reason: str,
 ) -> None:
-    """Static entries, other hardware, and the preferred connection incur no extra probe."""
+    """Static entries and the preferred connection incur no extra probe."""
     _use_wifi_with_preferred_ethernet(coordinator)
     if reason == "static":
         coordinator.config_entry.data["use_static_host"] = True
-    elif reason == "non_pro":
-        coordinator.hardware_info = GetHardwareRsp(version=HWVersion.PCIE)
     elif reason == "no_preference":
         coordinator.config_entry.data.pop("preferred_host")
     else:
@@ -1451,7 +1480,24 @@ async def test_ensure_ssh_collector_creates_once_and_reuses(
     assert coordinator.async_ensure_ssh_metrics_collector() is collector
     assert coordinator.async_ensure_ssh_metrics_collector() is collector
     factory.assert_called_once_with(
-        host="nanokvm.local", password="password", known_hosts=None
+        host="nanokvm.local", username="root", password="password", known_hosts=None
+    )
+
+
+async def test_ensure_ssh_collector_uses_saved_ssh_credentials(
+    coordinator: NanoKVMDataUpdateCoordinator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Saved SSH credentials replace root with the web UI password."""
+    factory = MagicMock()
+    monkeypatch.setattr(coordinator_module, "SSHMetricsCollector", factory)
+    coordinator.config_entry.data[CONF_SSH_USERNAME] = "kvm"
+    coordinator.config_entry.data[CONF_SSH_PASSWORD] = "ssh-secret"
+
+    coordinator.async_ensure_ssh_metrics_collector()
+
+    factory.assert_called_once_with(
+        host="nanokvm.local", username="kvm", password="ssh-secret", known_hosts=None
     )
 
 
@@ -1469,6 +1515,7 @@ async def test_ensure_ssh_collector_forwards_known_hosts_path(
 
     factory.assert_called_once_with(
         host="nanokvm.local",
+        username="root",
         password="password",
         known_hosts="/config/nanokvm/ssh/test-entry.known_hosts",
     )
@@ -1490,6 +1537,29 @@ async def test_ssh_host_key_failure_disconnects_collector(
 
     collector.disconnect.assert_awaited_once_with()
     assert "host-key verification" in caplog.text
+
+
+async def test_ssh_authentication_failure_warns_about_ssh_login(
+    coordinator: NanoKVMDataUpdateCoordinator,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A rejected SSH login warns once instead of failing silently."""
+    collector = SimpleNamespace(
+        collect=AsyncMock(
+            side_effect=NanoKVMSSHAuthenticationError("Authentication failed")
+        ),
+        disconnect=AsyncMock(),
+    )
+    coordinator.ssh_metrics_collector = collector
+
+    await coordinator._async_update_ssh_data()
+    await coordinator._async_update_ssh_data()
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "rejected the SSH login" in warnings[0].getMessage()
+    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+    assert collector.disconnect.await_count == 2
 
 
 async def test_successful_ssh_update_assigns_metrics(

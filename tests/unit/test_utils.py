@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
+
+from custom_components.nanokvm import utils
 
 from custom_components.nanokvm.utils import (
     NanoKVMAPIConnectionOption,
@@ -188,3 +192,25 @@ def test_normalize_mdns_adds_exactly_one_trailing_dot(
 ) -> None:
     """mDNS names must end with exactly the existing or newly added dot."""
     assert normalize_mdns(hostname) == expected
+
+
+def test_entry_device_lookup_supports_old_and_new_registries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The per-entry lookup is used when the registry has it, else the old one."""
+    identifier = ("nanokvm", "device-key")
+    new = MagicMock()
+    old = MagicMock(spec=["async_get_device"])
+    registries = iter((new, old))
+    monkeypatch.setattr(utils.dr, "async_get", lambda hass: next(registries))
+
+    assert (
+        utils.async_get_entry_device(MagicMock(), "entry-id", identifier)
+        is new.async_get_device_by_identifier.return_value
+    )
+    new.async_get_device_by_identifier.assert_called_once_with(identifier, "entry-id")
+    assert (
+        utils.async_get_entry_device(MagicMock(), "entry-id", identifier)
+        is old.async_get_device.return_value
+    )
+    old.async_get_device.assert_called_once_with(identifiers={identifier})

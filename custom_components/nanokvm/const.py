@@ -10,6 +10,9 @@ CONF_USE_STATIC_HOST = "use_static_host"
 CONF_SSL_FINGERPRINT = "ssl_fingerprint"
 CONF_SSH_HOST_KEY = "ssh_host_key"
 CONF_TRUST_SSH_HOST_KEY = "trust_ssh_host_key"
+# Saved only when the SSH login differs from root with the web UI password.
+CONF_SSH_USERNAME = "ssh_username"
+CONF_SSH_PASSWORD = "ssh_password"
 
 # Default values
 DEFAULT_USERNAME = "admin"

@@ -39,13 +39,21 @@
         "data": {
           "trust_ssh_host_key": "Je fais confiance à cette clé d'hôte SSH"
         }
+      },
+      "ssh_credentials": {
+        "title": "Identifiants SSH",
+        "description": "L'appareil NanoKVM à l'adresse **{host}** a refusé la connexion SSH. SSH collecte la température du processeur, la mémoire, le stockage et la durée de fonctionnement.\n\nSaisissez le nom d'utilisateur et le mot de passe SSH, ou laissez le mot de passe vide pour ignorer les métriques SSH.",
+        "data": {
+          "ssh_username": "Nom d'utilisateur",
+          "ssh_password": "Mot de passe"
+        }
       }
     },
     "abort": {
       "already_configured": "Cet appareil NanoKVM est déjà configuré",
       "cannot_connect": "Échec de la connexion à l’appareil NanoKVM",
       "reauth_successful": "La réauthentification a réussi",
-      "reconfigure_successful": "La vérification de la clé d'hôte SSH a été mise à jour",
+      "reconfigure_successful": "Les paramètres SSH ont été mis à jour",
       "ssh_host_key_not_trusted": "La clé d'hôte SSH n'a pas été approuvée",
       "ssh_host_key_unavailable": "Impossible de vérifier la clé d'hôte SSH"
     },
@@ -288,6 +296,7 @@
       "virtual_disk_type": {
         "name": "Type de disque virtuel",
         "state": {
+          "disable": "Désactivé",
           "emmc": "eMMC",
           "sdcard": "Carte SD"
         }

@@ -67,6 +67,7 @@ LCD_TIME_FORMAT_OPTIONS = {
 }
 
 DISK_TYPE_OPTIONS = {
+    "disable": None,
     "emmc": DiskType.EMMC,
     "sdcard": DiskType.SDCARD,
 }
@@ -97,22 +98,27 @@ def _has_lcd_time_format(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     return coordinator.is_pro_hardware and coordinator.lcd_time_format is not None
 
 
-def _pro_disk_options(coordinator: NanoKVMDataUpdateCoordinator) -> list[str]:
-    """Return available Pro virtual disk type options."""
+def _pro_disk_media(coordinator: NanoKVMDataUpdateCoordinator) -> list[str]:
+    """Return the storage media the Pro can expose as a virtual disk."""
     if coordinator.virtual_device_info is None:
         return []
 
-    options: list[str] = []
+    media: list[str] = []
     if coordinator.virtual_device_info.is_emmc_exist:
-        options.append(DiskType.EMMC.value)
+        media.append(DiskType.EMMC.value)
     if coordinator.virtual_device_info.is_sd_card_exist:
-        options.append(DiskType.SDCARD.value)
-    return options
+        media.append(DiskType.SDCARD.value)
+    return media
+
+
+def _pro_disk_options(coordinator: NanoKVMDataUpdateCoordinator) -> list[str]:
+    """Return available Pro virtual disk type options."""
+    return ["disable", *_pro_disk_media(coordinator)]
 
 
 def _has_pro_disk_options(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether Pro virtual disk type options are available."""
-    return coordinator.is_pro_hardware and bool(_pro_disk_options(coordinator))
+    return coordinator.is_pro_hardware and bool(_pro_disk_media(coordinator))
 
 
 def _hid_mode_value(coordinator: NanoKVMDataUpdateCoordinator) -> str:
@@ -196,18 +202,26 @@ def _pro_disk_value(coordinator: NanoKVMDataUpdateCoordinator) -> str | None:
         return None
 
     mounted_disk = coordinator.virtual_device_info.mounted_disk
-    if mounted_disk not in _pro_disk_options(coordinator):
+    if not mounted_disk:
+        return "disable"
+    if mounted_disk not in _pro_disk_media(coordinator):
         return None
     return mounted_disk
 
 
-def _set_pro_disk(
+async def _set_pro_disk(
     coordinator: NanoKVMDataUpdateCoordinator, option: str
-) -> Awaitable[Any]:
+) -> None:
     """Set Pro virtual disk type."""
-    return coordinator.client.update_virtual_device(
+    disk_type = DISK_TYPE_OPTIONS[option]
+    # The Pro unmounts a disk that is requested again, so compare with its
+    # live state instead of toggling on a stale poll.
+    status = await coordinator.client.get_virtual_device_status()
+    if (status.mounted_disk or None) == disk_type:
+        return
+    await coordinator.client.update_virtual_device(
         VirtualDevice.DISK,
-        disk_type=DISK_TYPE_OPTIONS[option],
+        disk_type=disk_type,
     )
 
 

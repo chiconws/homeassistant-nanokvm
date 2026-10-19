@@ -11,15 +11,21 @@ from yarl import URL
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from nanokvm.client import NanoKVMClient, NanoKVMAuthenticationFailure, NanoKVMError
+from nanokvm.ssh_client import (
+    DEFAULT_SSH_USERNAME,
+    NanoKVMSSHAuthenticationError,
+    NanoKVMSSHConnectionError,
+)
 from nanokvm.utils import async_fetch_remote_fingerprint
 
 from .const import (
     CONF_PREFERRED_HOST,
     CONF_SSH_HOST_KEY,
+    CONF_SSH_PASSWORD,
+    CONF_SSH_USERNAME,
     CONF_SSL_FINGERPRINT,
     CONF_TRUST_SSH_HOST_KEY,
     CONF_USE_STATIC_HOST,
@@ -31,6 +37,7 @@ from .const import (
 )
 from .ssh_host_keys import (
     SSHHostKey,
+    async_check_ssh_login,
     async_probe_host_key,
     retarget_known_hosts_line,
 )
@@ -40,6 +47,7 @@ from .utils import (
     SSLCertificateChanged,
     api_connection_options,
     async_connect,
+    async_get_entry_device,
     extract_ssh_host,
     https_probe_url,
     normalize_host,
@@ -189,8 +197,8 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         for entry in hostname_candidates:
             if entry.unique_id is None:
                 continue
-            device = dr.async_get(self.hass).async_get_device(
-                identifiers={(DOMAIN, entry.unique_id)}
+            device = async_get_entry_device(
+                self.hass, entry.entry_id, (DOMAIN, entry.unique_id)
             )
             if device is None or not device.name:
                 continue
@@ -206,6 +214,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         entry: ConfigEntry,
         discovery_host: str,
         device_key: str,
+        verified_url: str,
     ) -> tuple[str, str]:
         """Prefer the chosen host, then the working fallback, after identity checks.
 
@@ -216,8 +225,9 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         selected_host = discovery_host
         preferred_host_reassigned = False
         for host in dict.fromkeys((preferred_host, current_host)):
-            probe_url = verification_url(host)
-            if probe_url == https_probe_url(discovery_host):
+            # A scheme-less host is reached like the discovery request was.
+            probe_url = verification_url(host, URL(verified_url).scheme)
+            if probe_url == verified_url:
                 # The discovery request has already verified this endpoint.
                 selected_host = host
                 break
@@ -471,10 +481,75 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         self.data[CONF_SSH_HOST_KEY] = host_key.known_hosts_line
         self._pending_ssh_host_key = None
 
+        try:
+            await async_check_ssh_login(
+                host_key.known_hosts_line, *self._ssh_credentials()
+            )
+        except NanoKVMSSHAuthenticationError:
+            return await self.async_step_ssh_credentials()
+        except NanoKVMSSHConnectionError as err:
+            # SSH metrics are optional and report their own failures later.
+            _LOGGER.debug("Unable to check the SSH login for %s: %s", host_key.host, err)
+        return await self._async_finish_ssh_setup()
+
+    def _ssh_credentials(self) -> tuple[str, str]:
+        """Return the SSH username and password the entry signs in with."""
+        return (
+            self.data.get(CONF_SSH_USERNAME) or DEFAULT_SSH_USERNAME,
+            self.data.get(CONF_SSH_PASSWORD) or self.data[CONF_PASSWORD],
+        )
+
+    async def async_step_ssh_credentials(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for SSH credentials after the device rejected the saved ones.
+
+        An empty password skips SSH metrics and keeps the saved credentials.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if not user_input.get(CONF_SSH_PASSWORD):
+                return await self._async_finish_ssh_setup()
+            try:
+                await async_check_ssh_login(
+                    self.data[CONF_SSH_HOST_KEY],
+                    user_input[CONF_SSH_USERNAME],
+                    user_input[CONF_SSH_PASSWORD],
+                )
+            except NanoKVMSSHAuthenticationError:
+                errors["base"] = "invalid_auth"
+            except NanoKVMSSHConnectionError:
+                errors["base"] = "cannot_connect"
+            else:
+                self.data[CONF_SSH_USERNAME] = user_input[CONF_SSH_USERNAME]
+                self.data[CONF_SSH_PASSWORD] = user_input[CONF_SSH_PASSWORD]
+                return await self._async_finish_ssh_setup()
+
+        return self.async_show_form(
+            step_id="ssh_credentials",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SSH_USERNAME, default=self._ssh_credentials()[0]
+                    ): str,
+                    vol.Optional(CONF_SSH_PASSWORD): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "host": extract_ssh_host(self.data[CONF_HOST]),
+            },
+        )
+
+    async def _async_finish_ssh_setup(self) -> ConfigFlowResult:
+        """Save the trusted SSH host key and any SSH credentials."""
         if self._reconfigure_entry is not None:
             entry = self._reconfigure_entry
             self._reconfigure_entry = None
-            data_updates = {CONF_SSH_HOST_KEY: host_key.known_hosts_line}
+            data_updates = {CONF_SSH_HOST_KEY: self.data[CONF_SSH_HOST_KEY]}
+            for key in (CONF_SSH_USERNAME, CONF_SSH_PASSWORD):
+                if key in self.data:
+                    data_updates[key] = self.data[key]
             if self.data.get(CONF_HOST) != entry.data.get(CONF_HOST):
                 data_updates[CONF_HOST] = self.data[CONF_HOST]
             if CONF_PREFERRED_HOST in self.data:
@@ -735,23 +810,32 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         discovery_hostname = normalize_mdns(discovery_info.hostname)
         discovery_host = discovery_info.host
         is_ssh_service = discovery_info.type == "_ssh._tcp.local."
-        existing_entry = (
-            self._async_find_entry_by_discovery_host(
-                discovery_host,
-                discovery_hostname,
-                *discovery_info.addresses,
-            )
-            if is_ssh_service
-            else None
+        existing_entry = self._async_find_entry_by_discovery_host(
+            discovery_host,
+            discovery_hostname,
+            *discovery_info.addresses,
         )
         if existing_entry and existing_entry.data.get(CONF_USE_STATIC_HOST, False):
             return self.async_abort(reason="already_configured")
 
-        ssl_fingerprint = (
-            existing_entry.data.get(CONF_SSL_FINGERPRINT)
-            if existing_entry
+        # SSH discovery is verified by the saved certificate pin. A workstation
+        # announcement is plain HTTP, so saved credentials only go to an address
+        # the entry already uses, never to one that merely claims its hostname.
+        trusted_entry = (
+            existing_entry
+            if is_ssh_service
+            or self._async_find_entry_by_discovery_host(discovery_host)
+            is existing_entry
             else None
         )
+        ssl_fingerprint = (
+            existing_entry.data.get(CONF_SSL_FINGERPRINT)
+            if existing_entry and is_ssh_service
+            else None
+        )
+        if ":" in discovery_host:
+            # An IPv6 address needs brackets to form a URL.
+            discovery_host = f"[{discovery_host}]"
         self.context["title_placeholders"] = {
             "name": discovery_info.hostname.rstrip(".")
         }
@@ -766,11 +850,11 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             else normalize_host(discovery_host)
         )
         self.data = {CONF_HOST: host_for_flow}
-        if existing_entry:
-            self.data[CONF_USERNAME] = existing_entry.data.get(
+        if trusted_entry:
+            self.data[CONF_USERNAME] = trusted_entry.data.get(
                 CONF_USERNAME, DEFAULT_USERNAME
             )
-            self.data[CONF_PASSWORD] = existing_entry.data.get(
+            self.data[CONF_PASSWORD] = trusted_entry.data.get(
                 CONF_PASSWORD, DEFAULT_PASSWORD
             )
         if ssl_fingerprint:
@@ -806,15 +890,12 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 if entry := self._async_find_matching_entry(
                     device_key, discovery_hostname
                 ):
-                    if (
-                        is_ssh_service
-                        and not entry.data.get(CONF_USE_STATIC_HOST, False)
-                    ):
+                    if not entry.data.get(CONF_USE_STATIC_HOST, False):
                         (
                             selected_host,
                             preferred_host,
                         ) = await self._async_select_discovery_host(
-                            entry, discovery_host, device_key
+                            entry, discovery_host, device_key, api_url
                         )
                         current_host = entry.data[CONF_HOST]
                         if selected_host != current_host or preferred_host != (
