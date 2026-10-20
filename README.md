@@ -209,7 +209,8 @@ automation:
 
 ## Acknowledgements
 
-- This project started as an experiment built with an LLM (Google Gemini) using Cline.
+- [Wouter0100](https://github.com/Wouter0100) for creating and maintaining
+  this integration before handing it over.
 - [Sipeed](https://sipeed.com/) for creating the NanoKVM device.
 - [puddly](https://github.com/puddly) for creating
   [`python-nanokvm`](https://github.com/puddly/python-nanokvm).
