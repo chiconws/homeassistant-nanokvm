@@ -30,7 +30,7 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 1. Ensure [HACS](https://hacs.xyz/) is installed.
 2. Open this repository directly in your HACS instance:
 
-   [![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Wouter0100&repository=homeassistant-nanokvm)
+   [![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=chiconws&repository=homeassistant-nanokvm)
 
 3. Click **Download** in HACS.
 4. Restart Home Assistant.
@@ -38,7 +38,7 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 ### Manual
 
 1. Download the latest release from
-   [releases](https://github.com/Wouter0100/homeassistant-nanokvm/releases).
+   [releases](https://github.com/chiconws/homeassistant-nanokvm/releases).
 2. Copy the `nanokvm` folder to
    `<config>/custom_components/nanokvm`.
 3. Restart Home Assistant.
@@ -198,8 +198,8 @@ automation:
 
 ## Links
 
-- Documentation: <https://github.com/Wouter0100/homeassistant-nanokvm>
-- Issues: <https://github.com/Wouter0100/homeassistant-nanokvm/issues>
+- Documentation: <https://github.com/chiconws/homeassistant-nanokvm>
+- Issues: <https://github.com/chiconws/homeassistant-nanokvm/issues>
 - Service examples: [`SERVICES.md`](SERVICES.md)
 - Contributing guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Agent/dev notes: [`AGENTS.md`](AGENTS.md)
@@ -215,10 +215,10 @@ automation:
   [`python-nanokvm`](https://github.com/puddly/python-nanokvm).
 
 [badge-hacs]: https://img.shields.io/badge/HACS-Default-41BDF5.svg
-[badge-tests]: https://github.com/Wouter0100/homeassistant-nanokvm/actions/workflows/tests.yaml/badge.svg
-[badge-hacs-validation]: https://github.com/Wouter0100/homeassistant-nanokvm/actions/workflows/hacs.yaml/badge.svg
-[badge-hassfest]: https://github.com/Wouter0100/homeassistant-nanokvm/actions/workflows/hassfest.yaml/badge.svg
+[badge-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml/badge.svg
+[badge-hacs-validation]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hacs.yaml/badge.svg
+[badge-hassfest]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hassfest.yaml/badge.svg
 [link-hacs]: https://github.com/custom-components/hacs
-[link-tests]: https://github.com/Wouter0100/homeassistant-nanokvm/actions/workflows/tests.yaml
-[link-hacs-validation]: https://github.com/Wouter0100/homeassistant-nanokvm/actions/workflows/hacs.yaml
-[link-hassfest]: https://github.com/Wouter0100/homeassistant-nanokvm/actions/workflows/hassfest.yaml
+[link-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml
+[link-hacs-validation]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hacs.yaml
+[link-hassfest]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hassfest.yaml
