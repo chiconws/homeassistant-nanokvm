@@ -123,8 +123,8 @@ Assistant entity type:
 - `binary_sensor.py`
 - `button.py`
 - `camera.py`
-- `media/signaling.py` (WebRTC helper used by the camera platform)
-- `media/pro_sdp.py` (NanoKVM Pro SDP split/merge helpers)
+- `media/signaling.py` (bridges HA WebRTC sessions to the library's
+  `nanokvm.webrtc` signaling, which owns the Pro SDP split/merge)
 - `number.py`
 - `select.py`
 - `sensor.py`
