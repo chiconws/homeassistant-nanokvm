@@ -110,6 +110,11 @@ The integration follows the standard structure for a Home Assistant
   - `iot_class` as `local_polling`.
   - `zeroconf` discovery trigger.
 
+- **`brand/`**: Integration icons (`icon.png`, `icon@2x.png`), copied from
+  `custom_integrations/nanokvm` in the Home Assistant brands repository.
+  Home Assistant 2026.3 and newer serve them from here; earlier versions use
+  the brands repository. Keep both copies identical.
+
 ### Entity Platforms
 
 The integration is split into platform files, each responsible for one Home
