@@ -35,6 +35,7 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 
 On Home Assistant 2026.10 or older, install [HACS](https://hacs.xyz/) first, then use:
 [![Open your Home Assistant instance and open this repository in HACS.][badge-my-hacs]][link-my-hacs]
+Then download **Sipeed NanoKVM** in HACS and restart Home Assistant.
 
 ### Manual
 
