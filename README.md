@@ -23,6 +23,10 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 | SSH diagnostics | Uptime, CPU temp, memory/storage usage when SSH is enabled |
 | Camera | HDMI still snapshots on non-Pro models and native WebRTC streaming |
 
+## Requirements
+
+- Home Assistant 2025.2.0 or newer
+
 ## Installation
 
 ### Marketplace (recommended)
