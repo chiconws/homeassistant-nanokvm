@@ -29,8 +29,8 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 
 [![Open your Home Assistant instance and open this repository in the Marketplace.][badge-my-marketplace]][link-my-marketplace]
 
-1. Click the button above. If Home Assistant asks, confirm adding the repository.
-2. Download **Sipeed NanoKVM** in **Settings → Marketplace**.
+1. Click the button above, or search for **Sipeed NanoKVM** in **Settings → Marketplace**.
+2. Click **Download**.
 3. Restart Home Assistant.
 
 On Home Assistant 2026.10 or older, install [HACS](https://hacs.xyz/) first, then use:
