@@ -1,6 +1,6 @@
 # Sipeed NanoKVM Integration for Home Assistant
 
-[![HACS][badge-hacs]][link-hacs]
+[![Marketplace][badge-marketplace]][link-marketplace]
 [![Tests][badge-tests]][link-tests]
 [![HACS Validation][badge-hacs-validation]][link-hacs-validation]
 [![Hassfest][badge-hassfest]][link-hassfest]
@@ -25,15 +25,16 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 
 ## Installation
 
-### HACS (recommended)
+### Marketplace (recommended)
 
-1. Ensure [HACS](https://hacs.xyz/) is installed.
-2. Open this repository directly in your HACS instance:
+[![Open your Home Assistant instance and open this repository in the Marketplace.][badge-my-marketplace]][link-my-marketplace]
 
-   [![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=chiconws&repository=homeassistant-nanokvm)
+1. Click the button above, or search for **Sipeed NanoKVM** in **Settings → Marketplace**.
+2. Click **Download**.
+3. Restart Home Assistant.
 
-3. Click **Download** in HACS.
-4. Restart Home Assistant.
+On Home Assistant 2026.10 or older, use HACS instead:
+[![Open your Home Assistant instance and open this repository in HACS.][badge-my-hacs]][link-my-hacs]
 
 ### Manual
 
@@ -215,11 +216,15 @@ automation:
 - [puddly](https://github.com/puddly) for creating
   [`python-nanokvm`](https://github.com/puddly/python-nanokvm).
 
-[badge-hacs]: https://img.shields.io/badge/HACS-Default-41BDF5.svg
+[badge-marketplace]: https://img.shields.io/badge/Marketplace-Default-41BDF5.svg
+[badge-my-marketplace]: https://my.home-assistant.io/badges/marketplace_repository.svg
+[badge-my-hacs]: https://my.home-assistant.io/badges/hacs_repository.svg
 [badge-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml/badge.svg
 [badge-hacs-validation]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hacs.yaml/badge.svg
 [badge-hassfest]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hassfest.yaml/badge.svg
-[link-hacs]: https://github.com/custom-components/hacs
+[link-marketplace]: https://www.home-assistant.io/integrations/marketplace/
+[link-my-marketplace]: https://my.home-assistant.io/redirect/marketplace_repository/?owner=chiconws&repository=homeassistant-nanokvm&category=integration
+[link-my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=chiconws&repository=homeassistant-nanokvm&category=integration
 [link-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml
 [link-hacs-validation]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hacs.yaml
 [link-hassfest]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hassfest.yaml
