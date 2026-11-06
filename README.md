@@ -196,6 +196,13 @@ automation:
 | No Pro still image | Pro snapshots are intentionally skipped to avoid interrupting WebRTC video |
 | Missing wired/wireless IP sensor | The sensor appears after the device reports an active address for that connection type |
 
+## Removal
+
+1. Go to **Settings → Devices & services → Sipeed NanoKVM**, open ⋮ and select **Delete**.
+2. Remove it in **Settings → Marketplace** (or HACS), or delete
+   `custom_components/nanokvm` if you installed it manually.
+3. Restart Home Assistant.
+
 ## Supported Languages
 
 - English (`en`)
