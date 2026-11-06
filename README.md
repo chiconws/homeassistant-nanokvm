@@ -23,6 +23,10 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 | SSH diagnostics | Uptime, CPU temp, memory/storage usage when SSH is enabled |
 | Camera | HDMI still snapshots on non-Pro models and native WebRTC streaming |
 
+## Requirements
+
+- Home Assistant 2025.2.0 or newer
+
 ## Installation
 
 ### Marketplace (recommended)
@@ -35,6 +39,7 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 
 On Home Assistant 2026.10 or older, install [HACS](https://hacs.xyz/) first, then use:
 [![Open your Home Assistant instance and open this repository in HACS.][badge-my-hacs]][link-my-hacs]
+Then download **Sipeed NanoKVM** in HACS and restart Home Assistant.
 
 ### Manual
 
