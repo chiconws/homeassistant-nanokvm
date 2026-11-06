@@ -97,6 +97,12 @@ The integration follows the standard structure for a Home Assistant
   when it drops. Metrics and the watchdog come from the library's
   `NanoKVMSSH`.
 
+- **`diagnostics.py`**: Config-entry diagnostics: the entry and every device
+  reply the coordinator holds, with credentials, hosts, addresses, device keys
+  and Wi-Fi names redacted.
+
+- **`quality_scale.yaml`**: Integration quality scale status (target Silver).
+
 - **`led.py`**: Shared NanoKVM Pro LED strip validation and config helpers.
   - Enforces LED brightness and bead-count constraints for entities/services.
   - `async_set_led_strip` is the single write path. It remembers the requested
@@ -110,11 +116,14 @@ The integration follows the standard structure for a Home Assistant
   - PyPI requirement (`nanokvm`).
   - `iot_class` as `local_polling`.
   - `zeroconf` discovery trigger.
+  - `integration_type` as `device`.
 
 - **`brand/`**: Integration icons (`icon.png`, `icon@2x.png`), copied from
   `custom_integrations/nanokvm` in the Home Assistant brands repository.
   Home Assistant 2026.3 and newer serve them from here; earlier versions use
-  the brands repository. Keep both copies identical.
+  the brands repository. Keep both copies identical. The red tile reads on
+  dark backgrounds and the brand has no wordmark, so `dark_icon`, `logo` and
+  `dark_logo` are copies of the icon.
 
 ### Entity Platforms
 
@@ -193,39 +202,30 @@ Each platform follows a similar pattern:
   When the configured host has no scheme, the integration will try HTTP first
   and then HTTPS, supporting self-signed certificates via stored fingerprints.
 
-## Local Validation (Pre-Push)
+## Commands
 
-Run these checks locally before pushing:
+Setup, the lint and type checks (ruff, codespell, yamllint, prettier, zizmor,
+markdownlint, mypy, Pyright via `prek`) and the tests are in
+[CONTRIBUTING.md](CONTRIBUTING.md). CI runs the same commands
+(`.github/workflows/tests.yaml`), plus `hacs.yaml` and `hassfest.yaml`; all
+three must be green before merge.
 
-1. Automated tests with branch coverage:
-   - `python -m coverage erase`
-   - `python -m coverage run -m pytest -q`
-   - `python -m coverage report`
-2. Python checks:
-   - `python -m ruff check custom_components/nanokvm`
-   - `python -m py_compile custom_components/nanokvm/*.py`
-3. Validate JSON metadata, strings, and translations:
-   - `python -m json.tool hacs.json`
-   - `python -m json.tool custom_components/nanokvm/manifest.json`
-   - `python -m json.tool custom_components/nanokvm/icons.json`
-   - `python -m json.tool custom_components/nanokvm/strings.json`
-   - `python -m json.tool custom_components/nanokvm/translations/en.json`
-   - `python -m json.tool custom_components/nanokvm/translations/fr.json`
-   - `python -m json.tool custom_components/nanokvm/translations/pt-BR.json`
-4. Verify the integration against a Home Assistant test instance and inspect logs.
+Verify behaviour changes against a Home Assistant test instance and inspect
+its logs.
 
-## Required GitHub Workflows
+## Conventions
 
-- Tests: `.github/workflows/tests.yaml`
-- HACS: `.github/workflows/hacs.yaml`
-- Hassfest: `.github/workflows/hassfest.yaml`
-
-All three should be green on the PR branch before merge/release.
+- Update README, `SERVICES.md`, `strings.json` and the translations together
+  when behaviour, services, entities or user-facing text change.
+- Add tests for bug fixes and new behaviour. Test doubles use `Fake` from
+  `tests/common.py`.
+- The minimum Home Assistant is 2025.2.0 (Python 3.13), so code must not use
+  Python 3.14-only syntax; ruff, mypy and Pyright target 3.13. Annotations
+  that name a class defined later or imported under `TYPE_CHECKING` are quoted.
 
 ## Releases
 
-Feature and fix branches merge into `dev` through pull requests. A release
-always follows the same steps:
+Feature and fix branches merge into `dev` through pull requests. A release:
 
 1. On a `chore/bump-X.Y.Z` branch, commit only the `version` change in
    `manifest.json` as `chore: bump version to X.Y.Z` and merge it into `dev`
@@ -236,8 +236,22 @@ always follows the same steps:
    changes such as a new minimum Home Assistant version, and ends with
    `Closes #N` for each fixed issue that is still open. Pull requests into
    `dev` do not close issues on their own.
-3. After it merges, tag the merge commit on `main` as `vX.Y.Z` and publish a
-   GitHub release from that tag.
+3. After it merges, push the tag `vX.Y.Z` on the merge commit on `main`.
+   `release.yaml` checks the tag matches the manifest, runs the checks and
+   opens a draft release with generated notes; the maintainer publishes it.
+
+## Deviations from standard
+
+- Repository name, domain `nanokvm` and the name "Sipeed NanoKVM" stay:
+  renaming breaks existing config entries and the default HACS listing.
+- `voluptuous` instead of `probatio` (`# noqa: TID251` on each import):
+  probatio ships with Home Assistant 2026.9, and the minimum is 2025.2.0.
+- `config_flow.py`, `coordinator.py` and `switch.py` are over ~400 lines;
+  splitting them is deferred.
+- Tests drive the integration with `MagicMock` and duck-typed fakes instead of
+  the `hass` fixture, so they also run on the 2025.2 minimum.
+- French (`translations/fr.json`) is kept in addition to English and Brazilian
+  Portuguese.
 
 [ha-url]: https://www.home-assistant.io/
 [nanokvm-url]: https://github.com/sipeed/NanoKVM
