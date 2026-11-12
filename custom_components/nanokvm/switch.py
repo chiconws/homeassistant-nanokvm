@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from nanokvm.client import NanoKVMError
+from nanokvm.client import NanoKVMError, NanoKVMNotSupportedError
 from nanokvm.models import GpioType, Permission, VirtualDevice
 
 from .coordinator import NanoKVMDataUpdateCoordinator
@@ -384,18 +384,29 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
 
 
 class NanoKVMVirtualDeviceSwitch(NanoKVMSwitch):
-    """Defines a virtual device switch backed by a toggle-only API."""
+    """Defines a virtual device switch.
+
+    Non-Pro 2.5.3 sets the device on or off; older firmware and the Pro only
+    toggle it.
+    """
 
     async def _async_set(self, enabled: bool) -> None:
-        """Refresh first, then toggle only when the requested state differs."""
-        await self.coordinator.async_refresh()
-        if self.is_on == enabled:
-            return
-
+        """Set the state, or toggle only when the refreshed state differs."""
         device = self.entity_description.virtual_device
         assert device is not None
         async with self._async_device_action() as client:
-            await client.update_virtual_device(device)
+            try:
+                await client.update_virtual_device(device, enable=enabled)
+            except NanoKVMNotSupportedError:
+                toggle_only = True
+            else:
+                toggle_only = False
+        if toggle_only:
+            await self.coordinator.async_refresh()
+            if self.is_on == enabled:
+                return
+            async with self._async_device_action() as client:
+                await client.update_virtual_device(device)
         await self.coordinator.async_request_refresh()
 
 

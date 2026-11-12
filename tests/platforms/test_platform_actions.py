@@ -10,7 +10,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
-from nanokvm.client import NanoKVMError, NanoKVMPermissionError
+from nanokvm.client import (
+    NanoKVMError,
+    NanoKVMNotSupportedError,
+    NanoKVMPermissionError,
+)
 from nanokvm.ssh_client import NanoKVMSSHError
 from nanokvm.models import (
     DiskType,
@@ -500,10 +504,10 @@ async def test_power_turn_off_sleeps_between_unsuccessful_polls(
 
 
 @pytest.mark.asyncio
-async def test_virtual_device_switch_toggles_only_when_state_differs() -> None:
-    """Toggle-only virtual device APIs must not be called for an achieved state."""
+async def test_virtual_device_switch_sets_the_state_from_2_5_3() -> None:
+    """Non-Pro 2.5.3 takes the wanted state, so nothing is refreshed first."""
     coordinator = _coordinator(
-        virtual_device_info=SimpleNamespace(network=False, disk=False, mic=False)
+        virtual_device_info=SimpleNamespace(network=True, disk=False, mic=False)
     )
     coordinator.client.update_virtual_device = AsyncMock()
     entity = switch_module.NanoKVMVirtualDeviceSwitch(
@@ -513,25 +517,48 @@ async def test_virtual_device_switch_toggles_only_when_state_differs() -> None:
 
     await entity.async_turn_on()
     coordinator.client.update_virtual_device.assert_awaited_once_with(
-        VirtualDevice.NETWORK
+        VirtualDevice.NETWORK, enable=True
     )
+    coordinator.async_refresh.assert_not_awaited()
+    coordinator.async_request_refresh.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_virtual_device_switch_toggles_only_when_state_differs() -> None:
+    """Before non-Pro 2.5.3 the API only toggles; skip it for an achieved state."""
+    coordinator = _coordinator(
+        virtual_device_info=SimpleNamespace(network=False, disk=False, mic=False)
+    )
+
+    toggled: list[VirtualDevice] = []
+
+    async def toggle_only(device: VirtualDevice, *, enable: bool | None = None) -> None:
+        if enable is not None:
+            raise NanoKVMNotSupportedError("needs non-Pro 2.5.3")
+        toggled.append(device)
+
+    coordinator.client.update_virtual_device = AsyncMock(side_effect=toggle_only)
+    entity = switch_module.NanoKVMVirtualDeviceSwitch(
+        coordinator,
+        _description(switch_module.SWITCHES, "virtual_network"),
+    )
+
+    await entity.async_turn_on()
+    assert toggled == [VirtualDevice.NETWORK]
     assert coordinator.async_refresh.await_count == 1
     assert coordinator.async_request_refresh.await_count == 1
 
     coordinator.async_refresh.reset_mock()
     coordinator.async_request_refresh.reset_mock()
-    coordinator.client.update_virtual_device.reset_mock()
+    toggled.clear()
     coordinator.virtual_device_info.network = True
     await entity.async_turn_on()
-    coordinator.client.update_virtual_device.assert_not_awaited()
+    assert toggled == []
     coordinator.async_refresh.assert_awaited_once_with()
     coordinator.async_request_refresh.assert_not_awaited()
 
-    coordinator.virtual_device_info.network = True
     await entity.async_turn_off()
-    coordinator.client.update_virtual_device.assert_awaited_once_with(
-        VirtualDevice.NETWORK
-    )
+    assert toggled == [VirtualDevice.NETWORK]
 
 
 @pytest.mark.asyncio
