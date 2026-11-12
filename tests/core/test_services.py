@@ -690,11 +690,15 @@ async def test_pro_services_reject_non_pro_devices(
                 status=DownloadStatus.IN_PROGRESS,
                 file="installer.iso",
                 percentage="25",
+                loaded=25,
+                total=100,
             ),
             {
                 "status": "in_progress",
                 "file": "installer.iso",
                 "percentage": "25",
+                "loaded": 25,
+                "total": 100,
             },
         ),
         (

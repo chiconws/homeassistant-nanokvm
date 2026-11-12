@@ -229,7 +229,8 @@ response_variable: image_download_enabled
 
 ## `nanokvm.get_image_download_status`
 
-Return the current NanoKVM image download status.
+Return the current NanoKVM image download status: `status`, `file` and
+`percentage`, plus `loaded` and `total` bytes from non-Pro firmware 2.5.3.
 
 Parameters:
 
