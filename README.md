@@ -101,16 +101,20 @@ Notes:
 
 ### Non-administrator accounts
 
-Non-Pro application `2.5.1` and newer has user accounts with the roles `admin` and `user`. The integration works with either and reports the role in the **Account role** diagnostic sensor. A `user` account only gets the entities the device lets it use:
+Non-Pro application `2.5.1` and newer has user accounts with the roles `admin` and `user`. The integration works with either and reports the role in the **Account role** diagnostic sensor. An `admin` account gets every entity. A `user` account only gets the entities its permissions cover:
 
-| Works with a `user` account | Needs an `admin` account |
+| Permission | Entities and services |
 | --- | --- |
-| Camera, Power switch, Power/Reset buttons, Reset HDMI button | SSH, mDNS, virtual network/disk and HDMI output switches, HDMI idle timeout |
-| Power LED, HDMI signal, Num/Caps/Scroll Lock, wired connected | Reboot and Reset HID buttons |
-| IP address sensors, account role | HID mode, Mouse Jiggler, OLED timeout and Swap size selects |
-| `push_button`, `paste_text`, `wake_on_lan`, `reset_hdmi` services | Mounted image, CD-ROM mode, Wi-Fi, Tailscale, SSH diagnostics, watchdog, application update |
+| Any account | Camera, Reset HDMI button, HDMI signal, Num/Caps/Scroll Lock, wired connected, IP address sensors, account role; `reset_hdmi` service |
+| `console.control` | `paste_text` service |
+| `power` | Power switch, Power/Reset buttons, Power and HDD LEDs; `push_button` and `wake_on_lan` services |
+| `device` | SSH, mDNS, virtual network/disk and HDMI output switches, HDMI idle timeout, Reboot and Reset HID buttons, HID mode, Mouse Jiggler, OLED timeout and Swap size selects, SSH diagnostics, watchdog |
+| `library.read` | Mounted image, CD-ROM mode |
+| `network` | Wi-Fi |
+| `tailscale` | Tailscale |
+| `update` | Application update |
 
-Changing the account's role on the device reloads the integration so the entities match.
+From application `2.5.3` the device's web UI sets each `user` account's permissions. Before `2.5.3`, a `user` account holds `power` and the console permissions only. Changing the account's role or permissions on the device reloads the integration so the entities match.
 
 ## Hardware Compatibility
 

@@ -169,12 +169,14 @@ Each platform follows a similar pattern:
   Some entities are created only after the coordinator sees supporting state,
   such as mounted media, active wired/wireless connections, or enabled SSH.
   Platforms re-check their descriptions on every coordinator update.
-- **Account roles**:
-  Non-Pro firmware 2.5.1 and newer has `admin` and `user` accounts. The
-  coordinator reads the role every poll (`is_admin`; no role means admin),
-  skips administrator-only endpoints for a `user` account, and reloads the
-  entry when the role changes. Entities such an account cannot use are not
-  created; gate new ones on `coordinator.is_admin`.
+- **Account roles and permissions**:
+  Non-Pro firmware 2.5.1 and newer has `admin` and `user` accounts; from
+  2.5.3 a `user` account holds explicit grants (`Permission`). The
+  coordinator reads the account every poll, polls only the endpoints its
+  grants allow (`coordinator.can(Permission.X)`; an admin, or no role, holds
+  all; a `user` before 2.5.3 holds console and `power`), and reloads the entry
+  when the role or the grants change. Entities such an account cannot use are
+  not created; gate new ones on the grant the device's route requires.
 - **NanoKVM Pro compatibility**:
   Pro devices expose several APIs with different schemas from non-Pro models.
   Keep Pro-specific polling optional and keep non-Pro-only entities gated by

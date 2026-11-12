@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from homeassistant.const import CONF_HOST
 import pytest
-from nanokvm.models import HidMode, HWVersion
+from nanokvm.models import HidMode, HWVersion, Permission
 from yarl import URL
 
 import custom_components.nanokvm.binary_sensor as binary_sensor_module
@@ -34,7 +34,7 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "account": None,
         "gpio_info": SimpleNamespace(pwr=False, hdd=False),
         "hardware_info": None,
-        "is_admin": True,
+        "can": lambda _permission: True,
         "keyboard_leds": None,
         "hdmi_capture": None,
         "hdmi_passthrough": None,
@@ -401,7 +401,8 @@ async def test_non_admin_account_gets_only_the_entities_it_may_use(
     """
     coordinator = _coordinator(
         account=SimpleNamespace(username="guest", role="user"),
-        is_admin=False,
+        can=lambda permission: permission
+        in {Permission.CONSOLE_VIEW, Permission.CONSOLE_CONTROL, Permission.POWER},
         hardware_info=SimpleNamespace(version=HWVersion.PCIE),
         is_non_pro_hardware=True,
         supports_hdmi_endpoint=True,

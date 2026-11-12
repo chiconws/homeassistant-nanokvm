@@ -61,6 +61,7 @@ from nanokvm.models import (
     GetWifiRsp,
     HidMode,
     HWVersion,
+    Permission,
     UserRole,
 )
 
@@ -119,6 +120,10 @@ _GATED_CORE_ATTRIBUTES = (
     "lcd_time_format",
     "time_status",
     "static_ip",
+)
+# What a `user` account could do before non-Pro 2.5.3 listed its grants.
+_LEGACY_USER_PERMISSIONS = frozenset(
+    {Permission.CONSOLE_VIEW, Permission.CONSOLE_CONTROL, Permission.POWER}
 )
 _INVALID_FILE_CONTENT_CODE = -2
 _INVALID_FILE_CONTENT_MESSAGE = "invalid file content"
@@ -585,7 +590,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         client = self.client
         # Hardware identity gates the endpoints below and never changes per device.
         self.hardware_info = await client.get_hardware()
-        # The account role gates the administrator-only endpoints below.
+        # The account's role and grants gate the endpoints below.
         previous_account = self.account
         self.account = (
             await self._fetch_optional("/auth/account", client.get_account)
@@ -594,9 +599,10 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         if (
             previous_account is not None
             and self.account is not None
-            and previous_account.role != self.account.role
+            and (previous_account.role, previous_account.permissions)
+            != (self.account.role, self.account.permissions)
         ):
-            # Entities are created per role, so build them again.
+            # Entities are created per grant, so build them again.
             self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 
         def optional(
@@ -607,17 +613,20 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         calls: dict[str, Callable[[], Awaitable[Any]]] = {
             "device_info": client.get_info,
             "hostname_info": client.get_hostname,
-            "gpio_info": client.get_gpio,
             "hid_mode": client.get_hid_mode,
         }
-        if self.is_admin:
+        if self.can(Permission.POWER):
+            calls["gpio_info"] = client.get_gpio
+        if self.can(Permission.NETWORK):
+            calls["wifi_status"] = client.get_wifi_status
+        if self.can(Permission.TAILSCALE):
+            calls["tailscale_status"] = client.get_tailscale_status
+        if self.can(Permission.DEVICE):
             calls |= {
                 "ssh_state": client.get_ssh_state,
                 "mdns_state": client.get_mdns_state,
                 "oled_info": self._fetch_oled_info,
-                "wifi_status": client.get_wifi_status,
                 "mouse_jiggler_state": client.get_mouse_jiggler_state,
-                "tailscale_status": client.get_tailscale_status,
             }
             if self.hardware_info is not None:
                 calls["virtual_device_info"] = optional(
@@ -629,7 +638,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             calls["keyboard_leds"] = optional(
                 "/hid/leds", client.get_keyboard_led_status
             )
-            if self.is_admin:
+            if self.can(Permission.DEVICE):
                 calls["swap_size"] = optional("/vm/swap", client.get_swap_size)
         if self.is_pro_hardware:
             calls |= {
@@ -670,7 +679,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
     def _async_schedule_app_version_refresh(self) -> None:
         """Refresh application version info outside the critical poll path."""
-        if not self.is_admin:
+        if not self.can(Permission.UPDATE):
             return
         if (
             self._app_version_fetch_task is not None
@@ -721,7 +730,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
     async def _async_fetch_storage_data(self) -> None:
         """Fetch storage-specific state (mounted image and CD-ROM mode)."""
-        if not self.is_admin:
+        if not self.can(Permission.LIBRARY_READ):
             return
         mounted_image = GetMountedImageRsp(file="", cdrom=False, readOnly=False)
         cdrom_status = GetCdRomRsp(cdrom=0) if self.is_non_pro_hardware else None
@@ -782,6 +791,18 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         Devices without user roles report none; their one account is an admin.
         """
         return self.account is None or self.account.role in (None, UserRole.ADMIN)
+
+    def can(self, permission: Permission) -> bool:
+        """Return whether the account holds a permission.
+
+        Non-Pro 2.5.3 reports a `user` account's grants; before that the role
+        alone set them, and an administrator always holds all of them.
+        """
+        if self.is_admin:
+            return True
+        assert self.account is not None
+        granted = self.account.permissions
+        return permission in (_LEGACY_USER_PERMISSIONS if granted is None else granted)
 
     @property
     def is_pro_hardware(self) -> bool:

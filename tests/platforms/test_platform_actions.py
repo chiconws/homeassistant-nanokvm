@@ -580,7 +580,7 @@ async def test_watchdog_switch_translates_ssh_failures() -> None:
         (TimeoutError(), "TimeoutError"),
         (
             NanoKVMPermissionError(method="POST", path="/vm/system/reboot"),
-            "needs a NanoKVM administrator account",
+            "lacks the permission for this action",
         ),
     ],
 )
