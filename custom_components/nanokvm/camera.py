@@ -1,9 +1,7 @@
 """Camera platform for Sipeed NanoKVM."""
 from __future__ import annotations
 
-import asyncio
 import logging
-from contextlib import aclosing
 
 from homeassistant.components.camera import (
     Camera,
@@ -74,13 +72,7 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         client = self.coordinator.clone_client()
         async with client:
             await self.coordinator.async_ensure_authenticated(client)
-            async with (
-                asyncio.timeout(SNAPSHOT_TIMEOUT_SECONDS),
-                aclosing(client.mjpeg_stream_bytes()) as frames,
-            ):
-                async for frame in frames:
-                    return frame
-        return None
+            return await client.get_snapshot(SNAPSHOT_TIMEOUT_SECONDS)
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
