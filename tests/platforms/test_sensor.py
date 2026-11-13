@@ -307,7 +307,7 @@ def test_ssh_sensor_descriptions_treat_zero_as_available(
 ) -> None:
     """Valid zero-valued SSH measurements remain available."""
     values = {
-        "uptime": datetime(2026, 1, 1, tzinfo=UTC),
+        "boot_time": datetime(2026, 1, 1, tzinfo=UTC),
         "cpu_temperature": 0.0,
         "memory_used_percent": 0.0,
         "storage_used_percent": 0.0,
@@ -316,4 +316,5 @@ def test_ssh_sensor_descriptions_treat_zero_as_available(
     for description in SSH_SENSORS:
         coordinator = coordinator_state_factory(ssh_metrics=SimpleNamespace(**values))
         assert description.available_fn(coordinator) is True
-        assert description.value_fn(coordinator) == values[description.key]
+        attribute = "boot_time" if description.key == "uptime" else description.key
+        assert description.value_fn(coordinator) == values[attribute]

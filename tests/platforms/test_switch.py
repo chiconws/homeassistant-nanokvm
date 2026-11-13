@@ -143,23 +143,16 @@ def test_watchdog_value_normalizes_optional_state(
 
 
 @pytest.mark.parametrize(
-    ("supports_watchdog", "watchdog_enabled", "expected"),
-    [
-        (False, None, False),
-        (False, False, False),
-        (True, None, False),
-        (True, False, True),
-    ],
+    ("watchdog_enabled", "expected"),
+    [(None, False), (False, True), (True, True)],
 )
-def test_watchdog_availability_requires_support_and_known_state(
+def test_watchdog_availability_requires_known_state(
     coordinator_state_factory: Callable[..., SimpleNamespace],
-    supports_watchdog: bool,
     watchdog_enabled: bool | None,
     expected: bool,
 ) -> None:
-    """A known false watchdog value must remain available when supported."""
+    """The library reports None without a watchdog; a known false stays available."""
     coordinator = coordinator_state_factory(
-        supports_watchdog=supports_watchdog,
         ssh_metrics=SimpleNamespace(watchdog_enabled=watchdog_enabled),
     )
 

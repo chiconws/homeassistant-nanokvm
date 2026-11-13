@@ -95,7 +95,7 @@ Notes:
 - HDD LED is Alpha-only.
 - Wi-Fi entities only appear when the device reports Wi-Fi support.
 - SSH diagnostics appear after SSH is enabled on the NanoKVM. They sign in as `root` with the web UI password; if the device rejects that, setup asks for the SSH username and password.
-- The watchdog switch requires SSH and NanoKVM application version `2.2.2` or newer.
+- The watchdog switch requires SSH and non-Pro firmware that has the watchdog (application `2.2.2` or newer).
 - Pro LED bead counts must satisfy `horizontal + (2 * vertical) <= 150`.
 - Num/Caps/Scroll Lock sensors need a non-Pro model on application `2.5.0` or newer, and stay unavailable until the host reports its keyboard LEDs.
 
