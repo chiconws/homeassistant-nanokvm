@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 import logging
 from types import SimpleNamespace
@@ -142,49 +142,32 @@ async def test_snapshot_is_suppressed_on_pro_hardware(
     entity.coordinator.clone_client.assert_not_called()
 
 
-class _StreamClient(AbstractAsyncContextManager["_StreamClient"]):
-    """Authenticated-client test double yielding prescribed MJPEG frames."""
+class _SnapshotClient(AbstractAsyncContextManager["_SnapshotClient"]):
+    """Authenticated-client test double serving one snapshot."""
 
-    def __init__(self, frames: list[bytes]) -> None:
-        self.frames = frames
-        self.stream_closed = False
+    def __init__(self) -> None:
+        self.get_snapshot = AsyncMock(return_value=b"jpeg")
         self.exited = False
 
-    async def __aenter__(self) -> _StreamClient:
+    async def __aenter__(self) -> _SnapshotClient:
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:
         self.exited = True
 
-    async def mjpeg_stream_bytes(self) -> AsyncGenerator[bytes, None]:
-        try:
-            for frame in self.frames:
-                yield frame
-        finally:
-            self.stream_closed = True
-
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("frames", "expected"),
-    [
-        ([], None),
-        ([b"jpeg", b"later"], b"jpeg"),
-    ],
-)
-async def test_snapshot_returns_first_frame_and_closes_stream(
+async def test_snapshot_uses_the_library_and_releases_the_client(
     monkeypatch: pytest.MonkeyPatch,
-    frames: list[bytes],
-    expected: bytes | None,
 ) -> None:
-    """The first raw frame is returned, and the stream and client are released."""
+    """The library's snapshot is returned from an authenticated, closed client."""
     entity, _manager, _manager_factory = _camera(monkeypatch)
-    client = _StreamClient(frames)
+    client = _SnapshotClient()
     authenticate = entity.coordinator.async_ensure_authenticated
     entity.coordinator.clone_client.return_value = client
 
-    assert await entity._async_read_snapshot_frame() == expected
-    assert client.stream_closed is True
+    assert await entity._async_read_snapshot_frame() == b"jpeg"
+    client.get_snapshot.assert_awaited_once_with(camera_module.SNAPSHOT_TIMEOUT_SECONDS)
     assert client.exited is True
     authenticate.assert_awaited_once_with(client)
 
