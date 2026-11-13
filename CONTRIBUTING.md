@@ -25,5 +25,5 @@ SKIP=no-commit-to-branch .venv/bin/prek run --all-files --hook-stage manual
 
 - Branch from `dev` and open the PR against `dev` (`main` only receives releases).
 - One topic per PR; use conventional commit titles (`feat:`, `fix:`, `chore:`, `docs:`).
-- User-facing text goes through `strings.json` and `translations/` (English and Brazilian Portuguese).
+- When changing user-facing text, update `strings.json` and the English, Brazilian Portuguese, and French translations (`translations/en.json`, `translations/pt-BR.json`, and `translations/fr.json`).
 - Code structure and conventions are in [AGENTS.md](AGENTS.md).
