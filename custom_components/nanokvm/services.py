@@ -296,8 +296,8 @@ def async_register_services(hass: HomeAssistant) -> None:
                 raise
             except NanoKVMPermissionError as err:
                 raise HomeAssistantError(
-                    f"The {service.name} service needs a NanoKVM administrator "
-                    f"account on {host}"
+                    f"The NanoKVM account on {host} lacks the permission for "
+                    f"the {service.name} service"
                 ) from err
             except Exception as err:
                 _LOGGER.error(

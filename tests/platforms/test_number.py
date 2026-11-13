@@ -174,7 +174,7 @@ def test_hdmi_idle_timeout_description_contract(
     assert description.available_fn(coordinator_state_factory(hdmi_state=older)) is False
     assert (
         description.available_fn(
-            coordinator_state_factory(hdmi_state=reported, is_admin=False)
+            coordinator_state_factory(hdmi_state=reported, can=lambda _: False)
         )
         is False
     )

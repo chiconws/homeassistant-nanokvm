@@ -96,7 +96,7 @@ class NanoKVMEntity(CoordinatorEntity[NanoKVMDataUpdateCoordinator]):
                 yield client
         except NanoKVMPermissionError as err:
             raise HomeAssistantError(
-                "This needs a NanoKVM administrator account"
+                "The NanoKVM account lacks the permission for this action"
             ) from err
         except (NanoKVMError, aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise HomeAssistantError(

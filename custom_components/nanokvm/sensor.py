@@ -16,6 +16,8 @@ from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from nanokvm.models import Permission
+
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import (
     NanoKVMEntity,
@@ -160,7 +162,7 @@ SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_tailscale_state_value,
         attributes_fn=_tailscale_attributes,
-        should_create_fn=lambda coordinator: coordinator.is_admin,
+        should_create_fn=lambda coordinator: coordinator.can(Permission.TAILSCALE),
     ),
     NanoKVMSensorEntityDescription(
         key="account_role",
