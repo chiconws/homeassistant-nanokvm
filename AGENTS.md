@@ -93,8 +93,9 @@ The integration follows the standard structure for a Home Assistant
   - `async_get_entry_device` looks a device up within its config entry, using
     the per-entry registry lookup where Home Assistant has it.
 
-- **`ssh_metrics.py`**: SSH metrics collection implementation used by the
-  coordinator.
+- **`ssh_metrics.py`**: Keeps one SSH session per device and reconnects it
+  when it drops. Metrics and the watchdog come from the library's
+  `NanoKVMSSH`.
 
 - **`led.py`**: Shared NanoKVM Pro LED strip validation and config helpers.
   - Enforces LED brightness and bead-count constraints for entities/services.

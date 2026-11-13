@@ -54,7 +54,6 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "static_ip": None,
         "is_non_pro_hardware": False,
         "supports_hdmi_endpoint": False,
-        "supports_watchdog": False,
         "swap_size": None,
         "tailscale_status": None,
         "time_status": None,
@@ -348,7 +347,6 @@ async def test_switch_setup_uses_specialized_entities_and_dynamic_watchdog(
     _notify(coordinator)
     assert len(batches) == 1
 
-    coordinator.supports_watchdog = True
     coordinator.ssh_metrics = SimpleNamespace(watchdog_enabled=False)
     _notify(coordinator)
     _notify(coordinator)
@@ -363,9 +361,7 @@ async def test_switch_setup_handles_initial_watchdog_state(
     config_entry_mock: MagicMock,
 ) -> None:
     """An already available watchdog must be registered during setup."""
-    coordinator = _coordinator(
-        supports_watchdog=True, ssh_metrics=SimpleNamespace(watchdog_enabled=True)
-    )
+    coordinator = _coordinator(ssh_metrics=SimpleNamespace(watchdog_enabled=True))
     _configure_hass(hass_mock, config_entry_mock, coordinator)
     add_entities, batches = _entity_collector()
 

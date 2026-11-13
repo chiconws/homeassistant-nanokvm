@@ -12,7 +12,7 @@ from pytest import MonkeyPatch, raises
 
 import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.coordinator import NanoKVMDataUpdateCoordinator
-from custom_components.nanokvm.ssh_metrics import SSHMetricsSnapshot
+from nanokvm.ssh_client import SSHMetrics
 
 
 def _coordinator() -> NanoKVMDataUpdateCoordinator:
@@ -41,8 +41,7 @@ def test_stalled_ssh_metrics_do_not_block_coordinator_refresh(
         stalled = asyncio.Event()
         collect_started = asyncio.Event()
 
-        async def collect(*, include_watchdog: bool) -> None:
-            del include_watchdog
+        async def collect() -> None:
             collect_started.set()
             await stalled.wait()
 
@@ -51,7 +50,7 @@ def test_stalled_ssh_metrics_do_not_block_coordinator_refresh(
             disconnect=AsyncMock(),
         )
         coordinator.ssh_metrics_collector = collector
-        coordinator.ssh_metrics = SSHMetricsSnapshot(cpu_temperature=55.0)
+        coordinator.ssh_metrics = SSHMetrics(cpu_temperature=55.0)
         monkeypatch.setattr(
             coordinator_module,
             "_SSH_METRICS_TIMEOUT_SECONDS",
@@ -61,7 +60,7 @@ def test_stalled_ssh_metrics_do_not_block_coordinator_refresh(
         await asyncio.wait_for(coordinator._async_refresh_ssh_data(), timeout=0.2)
 
         assert collect_started.is_set()
-        assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+        assert coordinator.ssh_metrics == SSHMetrics()
         collector.disconnect.assert_awaited_once_with()
 
     asyncio.run(run_test())
@@ -74,8 +73,7 @@ def test_cancelled_ssh_metrics_disconnect_before_propagating() -> None:
         coordinator = _coordinator()
         collect_started = asyncio.Event()
 
-        async def collect(*, include_watchdog: bool) -> None:
-            del include_watchdog
+        async def collect() -> None:
             collect_started.set()
             await asyncio.Event().wait()
 
@@ -84,7 +82,7 @@ def test_cancelled_ssh_metrics_disconnect_before_propagating() -> None:
             disconnect=AsyncMock(),
         )
         coordinator.ssh_metrics_collector = collector
-        coordinator.ssh_metrics = SSHMetricsSnapshot(cpu_temperature=55.0)
+        coordinator.ssh_metrics = SSHMetrics(cpu_temperature=55.0)
         task = asyncio.create_task(coordinator._async_refresh_ssh_data())
         await collect_started.wait()
 
@@ -92,7 +90,7 @@ def test_cancelled_ssh_metrics_disconnect_before_propagating() -> None:
         with raises(asyncio.CancelledError):
             await task
 
-        assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+        assert coordinator.ssh_metrics == SSHMetrics()
         collector.disconnect.assert_awaited_once_with()
 
     asyncio.run(run_test())

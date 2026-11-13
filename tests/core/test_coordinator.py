@@ -61,6 +61,7 @@ from nanokvm.models import (
 from nanokvm.ssh_client import (
     NanoKVMSSHAuthenticationError,
     NanoKVMSSHConnectionError,
+    SSHMetrics,
 )
 
 import custom_components.nanokvm.coordinator as coordinator_module
@@ -74,7 +75,6 @@ from custom_components.nanokvm.coordinator import (
     _format_timeout_error,
     _is_invalid_file_content_error,
 )
-from custom_components.nanokvm.ssh_metrics import SSHMetricsSnapshot
 import custom_components.nanokvm.utils as utils_module
 
 
@@ -1491,28 +1491,6 @@ async def test_storage_fetch_uses_defaults_outside_normal_hid_mode(
 
 
 @pytest.mark.parametrize(
-    ("application", "expected"),
-    [
-        ("", False),
-        (" ", False),
-        ("2.2.1", False),
-        ("2.2.2", True),
-        ("2.3.0", True),
-        ("not a version", False),
-    ],
-)
-def test_watchdog_capability_uses_application_version(
-    coordinator: NanoKVMDataUpdateCoordinator,
-    application: str,
-    expected: bool,
-) -> None:
-    """Watchdog support begins at firmware 2.2.2 and rejects invalid versions."""
-    coordinator.device_info = _device_info(application=application)
-
-    assert coordinator.supports_watchdog is expected
-
-
-@pytest.mark.parametrize(
     (
         "hardware",
         "is_pro",
@@ -1645,7 +1623,7 @@ async def test_ssh_authentication_failure_warns_about_ssh_login(
     warnings = [r for r in caplog.records if r.levelname == "WARNING"]
     assert len(warnings) == 1
     assert "rejected the SSH login" in warnings[0].getMessage()
-    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+    assert coordinator.ssh_metrics == SSHMetrics()
     assert collector.disconnect.await_count == 2
 
 
@@ -1653,8 +1631,8 @@ async def test_successful_ssh_update_assigns_metrics(
     coordinator: NanoKVMDataUpdateCoordinator,
 ) -> None:
     """Successful SSH collection stores the collected metrics snapshot."""
-    metrics = SSHMetricsSnapshot(
-        uptime=datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
+    metrics = SSHMetrics(
+        boot_time=datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
         cpu_temperature=51.5,
         memory_total=512.0,
         memory_used_percent=25.0,
@@ -1685,11 +1663,11 @@ async def test_failed_ssh_update_clears_metrics_and_disconnects(
         disconnect=AsyncMock(),
     )
     coordinator.ssh_metrics_collector = collector
-    coordinator.ssh_metrics = SSHMetricsSnapshot(watchdog_enabled=True)
+    coordinator.ssh_metrics = SSHMetrics(watchdog_enabled=True)
 
     await coordinator._async_update_ssh_data()
 
-    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+    assert coordinator.ssh_metrics == SSHMetrics()
     collector.disconnect.assert_awaited_once_with()
 
 
@@ -1698,8 +1676,8 @@ async def test_ssh_connection_warning_logs_once_per_failure_streak(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Repeated SSH failures warn once and a successful poll resets the streak."""
-    metrics = SSHMetricsSnapshot(
-        uptime=datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
+    metrics = SSHMetrics(
+        boot_time=datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
         cpu_temperature=51.5,
         memory_total=512.0,
         memory_used_percent=25.0,
@@ -1748,11 +1726,11 @@ async def test_disabled_ssh_refresh_clears_collector_and_metrics(
     collector = SimpleNamespace(disconnect=AsyncMock())
     coordinator.ssh_metrics_collector = collector
     coordinator.ssh_state = GetSSHStateRsp(enabled=False)
-    coordinator.ssh_metrics = SSHMetricsSnapshot(cpu_temperature=50.0)
+    coordinator.ssh_metrics = SSHMetrics(cpu_temperature=50.0)
 
     await coordinator._async_refresh_ssh_data()
 
-    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+    assert coordinator.ssh_metrics == SSHMetrics()
     assert coordinator.ssh_metrics_collector is None
     collector.disconnect.assert_awaited_once_with()
 

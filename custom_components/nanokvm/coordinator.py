@@ -10,8 +10,6 @@ from time import monotonic
 from typing import Any, TypeVar
 
 import aiohttp
-from awesomeversion import AwesomeVersion, AwesomeVersionException
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
@@ -32,6 +30,7 @@ from nanokvm.ssh_client import (
     DEFAULT_SSH_USERNAME,
     NanoKVMSSHAuthenticationError,
     NanoKVMSSHConnectionError,
+    SSHMetrics,
 )
 from nanokvm.models import (
     GetAccountRsp,
@@ -81,7 +80,7 @@ from .const import (
     PREFERRED_HOST_TIMEOUT_SECONDS,
 )
 from .led import LedBrightnessRequest, note_reported_led_strip
-from .ssh_metrics import SSHMetricsCollector, SSHMetricsSnapshot
+from .ssh_metrics import SSHMetricsCollector
 from .ssh_host_keys import retarget_known_hosts_line
 from .utils import (
     CannotConnect,
@@ -106,7 +105,6 @@ _SSH_METRICS_TIMEOUT_SECONDS = 15
 _APP_VERSION_REQUEST_TIMEOUT_SECONDS = 45
 _APP_VERSION_CACHE_SECONDS = 300
 _APP_VERSION_FAILURE_CACHE_SECONDS = 60
-_WATCHDOG_MIN_VERSION = AwesomeVersion("2.2.2")
 _MAX_CONCURRENT_REQUESTS = 4
 _GATED_CORE_ATTRIBUTES = (
     "virtual_device_info",
@@ -173,7 +171,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
     static_ip: GetStaticIPRsp | None = None
     swap_size: int | None = None
     tailscale_status: GetTailscaleStatusRsp | None = None
-    ssh_metrics: SSHMetricsSnapshot = SSHMetricsSnapshot()
+    ssh_metrics: SSHMetrics = SSHMetrics()
     ssh_metrics_collector: SSHMetricsCollector | None = None
 
     def __init__(
@@ -769,22 +767,6 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             await self._async_clear_ssh_data()
 
     @property
-    def supports_watchdog(self) -> bool:
-        """Return whether NanoKVM watchdog support is available."""
-        application_version = self.device_info.application.strip()
-        if not application_version:
-            return False
-
-        try:
-            return AwesomeVersion(application_version) >= _WATCHDOG_MIN_VERSION
-        except AwesomeVersionException:
-            _LOGGER.debug(
-                "Unable to determine watchdog support from NanoKVM application version %r",
-                application_version,
-            )
-            return False
-
-    @property
     def is_admin(self) -> bool:
         """Return whether the account may use administrator-only endpoints.
 
@@ -840,7 +822,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
         """Fetch data via SSH."""
         try:
             collector = self.async_ensure_ssh_metrics_collector()
-            metrics = await collector.collect(include_watchdog=self.supports_watchdog)
+            metrics = await collector.collect()
             self._ssh_connection_warning_logged = False
             self.ssh_metrics = metrics
             _LOGGER.debug("SSH coordinator metrics updated: %s", metrics)
@@ -869,18 +851,18 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
                     err,
                 )
                 self._ssh_connection_warning_logged = True
-            self.ssh_metrics = SSHMetricsSnapshot()
+            self.ssh_metrics = SSHMetrics()
             if self.ssh_metrics_collector:
                 await self.ssh_metrics_collector.disconnect()
         except Exception as err:
             _LOGGER.debug("Failed to fetch data via SSH: %s", err)
-            self.ssh_metrics = SSHMetricsSnapshot()
+            self.ssh_metrics = SSHMetrics()
             if self.ssh_metrics_collector:
                 await self.ssh_metrics_collector.disconnect()
 
     async def _async_clear_ssh_data(self) -> None:
         """Clear SSH data and disconnect client."""
-        self.ssh_metrics = SSHMetricsSnapshot()
+        self.ssh_metrics = SSHMetrics()
         if self.ssh_metrics_collector:
             await self.ssh_metrics_collector.disconnect()
             self.ssh_metrics_collector = None

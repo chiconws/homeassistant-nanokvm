@@ -214,9 +214,9 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         device_class=SensorDeviceClass.TIMESTAMP,
         should_create_fn=_ssh_enabled,
-        value_fn=lambda coordinator: coordinator.ssh_metrics.uptime,
+        value_fn=lambda coordinator: coordinator.ssh_metrics.boot_time,
         available_fn=lambda coordinator: (
-            coordinator.ssh_metrics.uptime is not None
+            coordinator.ssh_metrics.boot_time is not None
         ),
     ),
     NanoKVMSensorEntityDescription(
