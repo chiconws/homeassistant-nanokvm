@@ -55,6 +55,7 @@ from nanokvm.models import (
     IPInfo,
     LcdTimeFormat,
     MouseJigglerMode,
+    Permission,
     TailscaleState,
 )
 from nanokvm.ssh_client import (
@@ -1178,6 +1179,92 @@ async def test_account_role_change_reloads_the_entry(
 
     client.get_account.side_effect = None
     client.get_account.return_value = GetAccountRsp(username="nano", role="admin")
+    await coordinator._async_fetch_core_data()
+    reload.assert_called_once_with(coordinator.config_entry.entry_id)
+
+
+async def test_core_fetch_follows_the_grants_of_a_user_account(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> None:
+    """From non-Pro 2.5.3 a user's grants pick the endpoints, not its role.
+
+    Without the power grant the device refuses /vm/gpio, which used to fail
+    every poll.
+    """
+    client = coordinator.client
+    responses = _configure_required_client_responses(
+        client, hardware=HWVersion.PCIE, role="user"
+    )
+    client.get_account.return_value = GetAccountRsp(
+        username="nano",
+        role="user",
+        permissions=["console.view", "device", "library.read"],
+    )
+    client.get_mounted_image.return_value = GetMountedImageRsp(
+        file="", cdrom=False, readOnly=False
+    )
+
+    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_storage_data()
+    coordinator._async_schedule_app_version_refresh()
+
+    for attribute in (
+        "hid_mode",
+        "ssh_state",
+        "mdns_state",
+        "oled_info",
+        "mouse_jiggler_state",
+        "virtual_device_info",
+        "swap_size",
+    ):
+        assert getattr(coordinator, attribute) == responses[attribute]
+    client.get_mounted_image.assert_awaited_once()
+    for attribute, endpoint in (
+        ("gpio_info", client.get_gpio),
+        ("wifi_status", client.get_wifi_status),
+        ("tailscale_status", client.get_tailscale_status),
+    ):
+        assert getattr(coordinator, attribute) is None
+        endpoint.assert_not_awaited()
+    assert coordinator._app_version_fetch_task is None
+
+
+@pytest.mark.parametrize(
+    ("permissions", "expected"),
+    [
+        (None, {Permission.CONSOLE_VIEW, Permission.CONSOLE_CONTROL, Permission.POWER}),
+        (["console.view", "network"], {Permission.CONSOLE_VIEW, Permission.NETWORK}),
+    ],
+)
+async def test_user_grants_come_from_the_role_before_2_5_3(
+    coordinator: NanoKVMDataUpdateCoordinator,
+    permissions: list[str] | None,
+    expected: set[Permission],
+) -> None:
+    """A user account that lists no grants holds what the role gave before 2.5.3."""
+    coordinator.account = GetAccountRsp(
+        username="nano", role="user", permissions=permissions
+    )
+    assert {p for p in Permission if coordinator.can(p)} == expected
+
+
+async def test_account_grant_change_reloads_the_entry(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> None:
+    """Entities depend on the grants, so changed grants rebuild them."""
+    client = coordinator.client
+    _configure_required_client_responses(client, hardware=HWVersion.PCIE, role="user")
+    reload = coordinator.hass.config_entries.async_schedule_reload
+    client.get_account.return_value = GetAccountRsp(
+        username="nano", role="user", permissions=["console.view"]
+    )
+    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()
+    reload.assert_not_called()
+
+    client.get_account.return_value = GetAccountRsp(
+        username="nano", role="user", permissions=["console.view", "power"]
+    )
     await coordinator._async_fetch_core_data()
     reload.assert_called_once_with(coordinator.config_entry.entry_id)
 

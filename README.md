@@ -1,6 +1,6 @@
 # Sipeed NanoKVM Integration for Home Assistant
 
-[![HACS][badge-hacs]][link-hacs]
+[![Marketplace][badge-marketplace]][link-marketplace]
 [![Tests][badge-tests]][link-tests]
 [![HACS Validation][badge-hacs-validation]][link-hacs-validation]
 [![Hassfest][badge-hassfest]][link-hassfest]
@@ -23,17 +23,23 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 | SSH diagnostics | Uptime, CPU temp, memory/storage usage when SSH is enabled |
 | Camera | HDMI still snapshots on non-Pro models and native WebRTC streaming |
 
+## Requirements
+
+- Home Assistant 2025.2.0 or newer
+
 ## Installation
 
-### HACS (recommended)
+### Marketplace (recommended)
 
-1. Ensure [HACS](https://hacs.xyz/) is installed.
-2. Open this repository directly in your HACS instance:
+[![Open your Home Assistant instance and open this repository in the Marketplace.][badge-my-marketplace]][link-my-marketplace]
 
-   [![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=chiconws&repository=homeassistant-nanokvm)
+1. Click the button above, or search for **Sipeed NanoKVM** in **Settings → Marketplace**.
+2. Click **Download**.
+3. Restart Home Assistant.
 
-3. Click **Download** in HACS.
-4. Restart Home Assistant.
+On Home Assistant 2026.10 or older, install [HACS](https://hacs.xyz/) first, then use:
+[![Open your Home Assistant instance and open this repository in HACS.][badge-my-hacs]][link-my-hacs]
+Then download **Sipeed NanoKVM** in HACS and restart Home Assistant.
 
 ### Manual
 
@@ -95,16 +101,20 @@ Notes:
 
 ### Non-administrator accounts
 
-Non-Pro application `2.5.1` and newer has user accounts with the roles `admin` and `user`. The integration works with either and reports the role in the **Account role** diagnostic sensor. A `user` account only gets the entities the device lets it use:
+Non-Pro application `2.5.1` and newer has user accounts with the roles `admin` and `user`. The integration works with either and reports the role in the **Account role** diagnostic sensor. An `admin` account gets every entity. A `user` account only gets the entities its permissions cover:
 
-| Works with a `user` account | Needs an `admin` account |
+| Permission | Entities and services |
 | --- | --- |
-| Camera, Power switch, Power/Reset buttons, Reset HDMI button | SSH, mDNS, virtual network/disk and HDMI output switches, HDMI idle timeout |
-| Power LED, HDMI signal, Num/Caps/Scroll Lock, wired connected | Reboot and Reset HID buttons |
-| IP address sensors, account role | HID mode, Mouse Jiggler, OLED timeout and Swap size selects |
-| `push_button`, `paste_text`, `wake_on_lan`, `reset_hdmi` services | Mounted image, CD-ROM mode, Wi-Fi, Tailscale, SSH diagnostics, watchdog, application update |
+| Any account | Camera, Reset HDMI button, HDMI signal, Num/Caps/Scroll Lock, wired connected, IP address sensors, account role; `reset_hdmi` service |
+| `console.control` | `paste_text` service |
+| `power` | Power switch, Power/Reset buttons, Power and HDD LEDs; `push_button` and `wake_on_lan` services |
+| `device` | SSH, mDNS, virtual network/disk and HDMI output switches, HDMI idle timeout, Reboot and Reset HID buttons, HID mode, Mouse Jiggler, OLED timeout and Swap size selects, SSH diagnostics, watchdog |
+| `library.read` | Mounted image, CD-ROM mode |
+| `network` | Wi-Fi |
+| `tailscale` | Tailscale |
+| `update` | Application update |
 
-Changing the account's role on the device reloads the integration so the entities match.
+From application `2.5.3` the device's web UI sets each `user` account's permissions. Before `2.5.3`, a `user` account holds `power` and the console permissions only. Changing the account's role or permissions on the device reloads the integration so the entities match.
 
 ## Hardware Compatibility
 
@@ -190,6 +200,13 @@ automation:
 | No Pro still image | Pro snapshots are intentionally skipped to avoid interrupting WebRTC video |
 | Missing wired/wireless IP sensor | The sensor appears after the device reports an active address for that connection type |
 
+## Removal
+
+1. Go to **Settings → Devices & services → Sipeed NanoKVM**, open ⋮ and select **Delete**.
+2. Remove it in **Settings → Marketplace** (or HACS), or delete
+   `custom_components/nanokvm` if you installed it manually.
+3. Restart Home Assistant.
+
 ## Supported Languages
 
 - English (`en`)
@@ -215,11 +232,15 @@ automation:
 - [puddly](https://github.com/puddly) for creating
   [`python-nanokvm`](https://github.com/puddly/python-nanokvm).
 
-[badge-hacs]: https://img.shields.io/badge/HACS-Default-41BDF5.svg
+[badge-marketplace]: https://img.shields.io/badge/Marketplace-Default-41BDF5.svg
+[badge-my-marketplace]: https://my.home-assistant.io/badges/marketplace_repository.svg
+[badge-my-hacs]: https://my.home-assistant.io/badges/hacs_repository.svg
 [badge-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml/badge.svg
 [badge-hacs-validation]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hacs.yaml/badge.svg
 [badge-hassfest]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hassfest.yaml/badge.svg
-[link-hacs]: https://github.com/custom-components/hacs
+[link-marketplace]: https://www.home-assistant.io/integrations/marketplace/
+[link-my-marketplace]: https://my.home-assistant.io/redirect/marketplace_repository/?owner=chiconws&repository=homeassistant-nanokvm&category=integration
+[link-my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=chiconws&repository=homeassistant-nanokvm&category=integration
 [link-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml
 [link-hacs-validation]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hacs.yaml
 [link-hassfest]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hassfest.yaml

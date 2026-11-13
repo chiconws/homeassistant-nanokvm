@@ -14,7 +14,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from nanokvm.models import HWVersion
+from nanokvm.models import HWVersion, Permission
 
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import (
@@ -38,6 +38,16 @@ class NanoKVMBinarySensorEntityDescription(BinarySensorEntityDescription):
     should_create_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = (
         lambda _: True
     )
+
+
+def _can_read_gpio(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the account may read the power and HDD LEDs."""
+    return coordinator.can(Permission.POWER)
+
+
+def _hdd_led_supported(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the HDD LED applies (Alpha hardware only)."""
+    return _is_alpha_hardware(coordinator) and _can_read_gpio(coordinator)
 
 
 def _is_alpha_hardware(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -120,6 +130,8 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.gpio_info and coordinator.gpio_info.pwr
         ),
+        available_fn=_can_read_gpio,
+        should_create_fn=_can_read_gpio,
     ),
     NanoKVMBinarySensorEntityDescription(
         key="hdd_led",
@@ -127,9 +139,8 @@ BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.gpio_info and coordinator.gpio_info.hdd
         ),
-        # HDD LED is only valid for Alpha hardware
-        available_fn=_is_alpha_hardware,
-        should_create_fn=_is_alpha_hardware,
+        available_fn=_hdd_led_supported,
+        should_create_fn=_hdd_led_supported,
     ),
     NanoKVMBinarySensorEntityDescription(
         key="hdmi_signal",

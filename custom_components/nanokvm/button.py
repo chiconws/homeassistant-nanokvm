@@ -10,7 +10,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from nanokvm.models import GpioType
+from nanokvm.models import GpioType, Permission
 
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
@@ -29,17 +29,19 @@ BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
         key="power",
         translation_key="power",
         press_fn=lambda coordinator: coordinator.client.push_button(GpioType.POWER, 100),
+        available_fn=lambda coordinator: coordinator.can(Permission.POWER),
     ),
     NanoKVMButtonEntityDescription(
         key="reset",
         translation_key="reset",
         press_fn=lambda coordinator: coordinator.client.push_button(GpioType.RESET, 100),
+        available_fn=lambda coordinator: coordinator.can(Permission.POWER),
     ),
     NanoKVMButtonEntityDescription(
         key="reboot",
         translation_key="reboot",
         press_fn=lambda coordinator: coordinator.client.reboot_system(),
-        available_fn=lambda coordinator: coordinator.is_admin,
+        available_fn=lambda coordinator: coordinator.can(Permission.DEVICE),
     ),
     NanoKVMButtonEntityDescription(
         key="reset_hdmi",
@@ -53,7 +55,7 @@ BUTTONS: tuple[NanoKVMButtonEntityDescription, ...] = (
         translation_key="reset_hid",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda coordinator: coordinator.client.reset_hid(),
-        available_fn=lambda coordinator: coordinator.is_admin,
+        available_fn=lambda coordinator: coordinator.can(Permission.DEVICE),
     ),
     NanoKVMButtonEntityDescription(
         key="sync_time",

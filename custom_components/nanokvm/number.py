@@ -16,6 +16,8 @@ from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from nanokvm.models import Permission
+
 from .const import (
     LED_BEAD_MIN,
     LED_BEAD_TOTAL_LIMIT,
@@ -87,7 +89,7 @@ def _led_vertical_max(coordinator: NanoKVMDataUpdateCoordinator) -> float:
 def _hdmi_idle_timeout_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether the HDMI capture idle timeout can be read and changed."""
     return bool(
-        coordinator.is_admin
+        coordinator.can(Permission.DEVICE)
         and coordinator.hdmi_state
         and coordinator.hdmi_state.idle_timeout is not None
     )

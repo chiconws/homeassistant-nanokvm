@@ -11,7 +11,14 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from nanokvm.models import DiskType, HidMode, LcdTimeFormat, MouseJigglerMode, VirtualDevice
+from nanokvm.models import (
+    DiskType,
+    HidMode,
+    LcdTimeFormat,
+    MouseJigglerMode,
+    Permission,
+    VirtualDevice,
+)
 
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
@@ -75,7 +82,7 @@ DISK_TYPE_OPTIONS = {
 
 def _has_hid_mode(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether the HID mode is known and this account may change it."""
-    return coordinator.is_admin and coordinator.hid_mode is not None
+    return coordinator.can(Permission.DEVICE) and coordinator.hid_mode is not None
 
 
 def _has_mouse_jiggler_state(coordinator: NanoKVMDataUpdateCoordinator) -> bool:

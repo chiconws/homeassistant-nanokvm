@@ -19,6 +19,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from nanokvm.client import NanoKVMError
+from nanokvm.models import Permission
 
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
@@ -43,8 +44,8 @@ async def async_setup_entry(
     """Set up NanoKVM update based on a config entry."""
     coordinator = entry.runtime_data
 
-    # Only an administrator can read or install application versions.
-    if coordinator.is_admin:
+    # Reading or installing application versions needs the update grant.
+    if coordinator.can(Permission.UPDATE):
         async_add_entities([NanoKVMUpdate(coordinator)])
 
 

@@ -690,11 +690,15 @@ async def test_pro_services_reject_non_pro_devices(
                 status=DownloadStatus.IN_PROGRESS,
                 file="installer.iso",
                 percentage="25",
+                loaded=25,
+                total=100,
             ),
             {
                 "status": "in_progress",
                 "file": "installer.iso",
                 "percentage": "25",
+                "loaded": 25,
+                "total": 100,
             },
         ),
         (
@@ -804,7 +808,7 @@ async def test_response_handler_translates_unexpected_errors(
     assert isinstance(captured.value.__cause__, RuntimeError)
 
 
-async def test_forbidden_service_asks_for_an_administrator_account(
+async def test_forbidden_service_names_the_missing_permission(
     hass_mock: MagicMock,
     registered_services: Mapping[str, RegisteredService],
 ) -> None:
@@ -817,6 +821,6 @@ async def test_forbidden_service_asks_for_an_administrator_account(
 
     with pytest.raises(
         HomeAssistantError,
-        match="list_images service needs a NanoKVM administrator account",
+        match="lacks the permission for the list_images service",
     ):
         await _call_service(hass_mock, registered_services, SERVICE_LIST_IMAGES)

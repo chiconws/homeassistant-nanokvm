@@ -14,8 +14,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from nanokvm.client import NanoKVMError
-from nanokvm.models import GpioType, VirtualDevice
+from nanokvm.client import NanoKVMError, NanoKVMNotSupportedError
+from nanokvm.models import GpioType, Permission, VirtualDevice
 
 from .coordinator import NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity, async_add_entities_as_supported
@@ -45,22 +45,22 @@ def _hdmi_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
 def _hdmi_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether HDMI controls are available."""
     return (
-        coordinator.is_admin
+        coordinator.can(Permission.DEVICE)
         and coordinator.supports_hdmi_endpoint
         and coordinator.hdmi_state is not None
     )
 
 
-def _is_admin(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
-    """Return whether the account may change administrator-only settings."""
-    return coordinator.is_admin
+def _can_change_device(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
+    """Return whether the account may change device settings."""
+    return coordinator.can(Permission.DEVICE)
 
 
 def _non_pro_virtual_device_available(
     coordinator: NanoKVMDataUpdateCoordinator,
 ) -> bool:
     """Return whether non-Pro virtual-device controls are available."""
-    return coordinator.is_admin and coordinator.is_non_pro_hardware
+    return _can_change_device(coordinator) and coordinator.is_non_pro_hardware
 
 
 def _watchdog_value(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -117,7 +117,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         ),
         turn_on_fn=lambda coordinator: coordinator.client.enable_ssh(),
         turn_off_fn=lambda coordinator: coordinator.client.disable_ssh(),
-        available_fn=_is_admin,
+        available_fn=_can_change_device,
     ),
     NanoKVMSwitchEntityDescription(
         key="mdns",
@@ -128,7 +128,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         ),
         turn_on_fn=lambda coordinator: coordinator.client.enable_mdns(),
         turn_off_fn=lambda coordinator: coordinator.client.disable_mdns(),
-        available_fn=_is_admin,
+        available_fn=_can_change_device,
     ),
     NanoKVMSwitchEntityDescription(
         key="virtual_network",
@@ -178,6 +178,7 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         ),
         turn_on_fn=lambda coordinator: coordinator.client.push_button(GpioType.POWER, 200),
         turn_off_fn=lambda coordinator: coordinator.client.push_button(GpioType.POWER, 200),
+        available_fn=lambda coordinator: coordinator.can(Permission.POWER),
     ),
     NanoKVMSwitchEntityDescription(
         key="hdmi",
@@ -383,18 +384,29 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
 
 
 class NanoKVMVirtualDeviceSwitch(NanoKVMSwitch):
-    """Defines a virtual device switch backed by a toggle-only API."""
+    """Defines a virtual device switch.
+
+    Non-Pro 2.5.3 sets the device on or off; older firmware and the Pro only
+    toggle it.
+    """
 
     async def _async_set(self, enabled: bool) -> None:
-        """Refresh first, then toggle only when the requested state differs."""
-        await self.coordinator.async_refresh()
-        if self.is_on == enabled:
-            return
-
+        """Set the state, or toggle only when the refreshed state differs."""
         device = self.entity_description.virtual_device
         assert device is not None
         async with self._async_device_action() as client:
-            await client.update_virtual_device(device)
+            try:
+                await client.update_virtual_device(device, enable=enabled)
+            except NanoKVMNotSupportedError:
+                toggle_only = True
+            else:
+                toggle_only = False
+        if toggle_only:
+            await self.coordinator.async_refresh()
+            if self.is_on == enabled:
+                return
+            async with self._async_device_action() as client:
+                await client.update_virtual_device(device)
         await self.coordinator.async_request_refresh()
 
 
