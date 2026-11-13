@@ -1,19 +1,17 @@
 """Config flow for Sipeed NanoKVM integration."""
-from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, override
 
 import aiohttp
-import voluptuous as vol
+import voluptuous as vol  # noqa: TID251 - probatio needs HA 2026.9; the minimum is 2025.2
 from yarl import URL
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
-
-from nanokvm.client import NanoKVMClient, NanoKVMAuthenticationFailure, NanoKVMError
+from nanokvm.client import NanoKVMAuthenticationFailure, NanoKVMClient, NanoKVMError
 from nanokvm.ssh_client import (
     DEFAULT_SSH_USERNAME,
     NanoKVMSSHAuthenticationError,
@@ -37,10 +35,7 @@ from .const import (
     INTEGRATION_TITLE,
     PREFERRED_HOST_TIMEOUT_SECONDS,
 )
-from .ssh_host_keys import (
-    async_check_ssh_login,
-    retarget_known_hosts_line,
-)
+from .ssh_host_keys import async_check_ssh_login, retarget_known_hosts_line
 from .utils import (
     CannotConnect,
     InvalidAuth,
@@ -56,6 +51,7 @@ from .utils import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
 
 async def validate_input(data: dict[str, Any]) -> str:
     """Validate the user input allows us to connect."""
@@ -87,7 +83,7 @@ async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
             ) as client:
                 await client.authenticate(data[CONF_USERNAME], data[CONF_PASSWORD])
                 ssh_state = await client.get_ssh_state()
-        except (asyncio.TimeoutError, aiohttp.ClientError, NanoKVMError):
+        except (TimeoutError, aiohttp.ClientError, NanoKVMError):
             continue
 
         if not ssh_state.enabled:
@@ -95,7 +91,7 @@ async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
 
         try:
             return await probe_host_key(extract_ssh_host(data[CONF_HOST]))
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 - any probe failure means an unverified key
             _LOGGER.warning(
                 "Unable to verify the SSH host key for NanoKVM at %s: %s",
                 data[CONF_HOST],
@@ -117,7 +113,7 @@ async def async_is_nanokvm_api(api_url: str, ssl_fingerprint: str) -> bool:
             await client.authenticate(DEFAULT_USERNAME, DEFAULT_PASSWORD)
     except NanoKVMAuthenticationFailure:
         return True
-    except (aiohttp.ClientError, asyncio.TimeoutError, NanoKVMError):
+    except (TimeoutError, aiohttp.ClientError, NanoKVMError):
         return False
     return True
 
@@ -173,14 +169,13 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         self, *discovery_hosts: str
     ) -> ConfigEntry | None:
         """Find an entry by its host or its API-reported device hostname."""
-        normalized_hosts = {
-            host.rstrip(".").casefold() for host in discovery_hosts
-        }
+        normalized_hosts = {host.rstrip(".").casefold() for host in discovery_hosts}
         hostname_candidates: list[ConfigEntry] = []
         for entry in self._async_current_entries():
             has_valid_host = False
             for configured_host in (
-                entry.data.get(CONF_HOST), entry.data.get(CONF_PREFERRED_HOST)
+                entry.data.get(CONF_HOST),
+                entry.data.get(CONF_PREFERRED_HOST),
             ):
                 if not isinstance(configured_host, str):
                     continue
@@ -236,9 +231,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                     candidate_key = await validate_input(
                         dict(entry.data) | {CONF_HOST: probe_url}
                     )
-            except (
-                CannotConnect, InvalidAuth, SSLCertificateChanged, asyncio.TimeoutError
-            ):
+            except (TimeoutError, CannotConnect, InvalidAuth, SSLCertificateChanged):
                 continue
             if candidate_key == device_key:
                 selected_host = host
@@ -366,11 +359,12 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
     async def add_device(
         self, device_key: str, data: dict[str, Any]
     ) -> ConfigFlowResult:
+        """Create the entry for a verified device, unless it is configured already."""
         _LOGGER.debug(
             "Adding device - key: %s, Host: %s, Static: %s",
             device_key,
             data[CONF_HOST],
-            data.get(CONF_USE_STATIC_HOST, False)
+            data.get(CONF_USE_STATIC_HOST, False),
         )
         await self.async_set_unique_id(device_key)
         self._abort_if_unique_id_configured()
@@ -380,9 +374,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_create_entry(title=INTEGRATION_TITLE, data=data)
 
-    async def _async_fetch_and_redirect_ssl(
-        self, return_step: str
-    ) -> ConfigFlowResult:
+    async def _async_fetch_and_redirect_ssl(self, return_step: str) -> ConfigFlowResult:
         """Fetch the remote fingerprint and redirect to the SSL confirmation step."""
         self._ssl_return_step = return_step
         self._discovered_fingerprint = await async_fetch_remote_fingerprint(
@@ -457,7 +449,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="ssh_host_key_unavailable")
             return self.async_show_form(
                 step_id="ssh_host_key",
-                data_schema=vol.Schema(
+                data_schema=vol.Schema(  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
                     {vol.Required(CONF_TRUST_SSH_HOST_KEY, default=False): bool}
                 ),
                 description_placeholders={
@@ -489,7 +481,9 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             return await self.async_step_ssh_credentials()
         except NanoKVMSSHConnectionError as err:
             # SSH metrics are optional and report their own failures later.
-            _LOGGER.debug("Unable to check the SSH login for %s: %s", host_key.host, err)
+            _LOGGER.debug(
+                "Unable to check the SSH login for %s: %s", host_key.host, err
+            )
         return await self._async_finish_ssh_setup()
 
     def _ssh_credentials(self) -> tuple[str, str]:
@@ -527,7 +521,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="ssh_credentials",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
                 {
                     vol.Required(
                         CONF_SSH_USERNAME, default=self._ssh_credentials()[0]
@@ -599,7 +593,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             await validate_input(self.data)
         except SSLCertificateChanged:
             return await self._async_fetch_and_redirect_ssl("reauth_finish")
-        except Exception:
+        except Exception:  # noqa: BLE001 - any other failure falls through to the confirm form
             pass
 
         return await self.async_step_reauth_confirm()
@@ -640,7 +634,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=schema,
+            data_schema=schema,  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
             errors=errors,
             description_placeholders={
                 "name": entry.data.get(CONF_HOST, INTEGRATION_TITLE),
@@ -657,7 +651,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             device_key = await validate_input(self.data)
         except InvalidAuth:
             return await self.async_step_reauth_confirm()
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 - logged and shown as a flow error
             _LOGGER.error(
                 "Reauth failed after SSL confirmation: %s: %s",
                 type(err).__name__,
@@ -674,10 +668,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(device_key)
 
         existing_entry = self._async_find_matching_entry(device_key)
-        if (
-            existing_entry is not None
-            and existing_entry.entry_id != entry.entry_id
-        ):
+        if existing_entry is not None and existing_entry.entry_id != entry.entry_id:
             return self.async_abort(reason="already_configured")
 
         return self._async_update_and_abort(
@@ -691,6 +682,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
             reason="reauth_successful",
         )
 
+    @override
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -726,16 +718,19 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({
-                vol.Required(CONF_HOST): str,
-                vol.Optional(CONF_USE_STATIC_HOST, default=False): bool,
-            }),
+            data_schema=vol.Schema(  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
+                {
+                    vol.Required(CONF_HOST): str,
+                    vol.Optional(CONF_USE_STATIC_HOST, default=False): bool,
+                }
+            ),
             errors=errors,
         )
 
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Confirm the setup of a discovered device."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -799,10 +794,11 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="auth",
-            data_schema=schema,
+            data_schema=schema,  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
             errors=errors,
         )
 
+    @override
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
@@ -873,7 +869,8 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 device_key = str(device_info.device_key)
 
                 if existing_entry and existing_entry.unique_id not in (
-                    device_key, discovery_hostname
+                    device_key,
+                    discovery_hostname,
                 ):
                     # Another NanoKVM answers at an address saved for this
                     # entry. Leave the entry alone and handle the device by
@@ -962,7 +959,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 # the endpoint has answered like a NanoKVM.
                 try:
                     fingerprint = await async_fetch_remote_fingerprint(api_url)
-                except (aiohttp.ClientError, asyncio.TimeoutError, OSError):
+                except (TimeoutError, aiohttp.ClientError, OSError):
                     fingerprint = None
                 if fingerprint is None or not await async_is_nanokvm_api(
                     api_url, fingerprint
@@ -981,7 +978,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._ssl_return_step = "zeroconf"
                 self._discovered_fingerprint = fingerprint
                 return await self.async_step_ssl_fingerprint()
-            except (aiohttp.ClientError, asyncio.TimeoutError, NanoKVMError) as err:
+            except (TimeoutError, aiohttp.ClientError, NanoKVMError) as err:
                 _LOGGER.debug(
                     "Failed to connect to %s (%s) during discovery: %s. Ignoring as most likely not a NanoKVM device.",
                     discovery_hostname,
@@ -991,4 +988,3 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="cannot_connect")
 
         return await self.async_step_user(user_input=self.data)
-

@@ -1,42 +1,26 @@
-# Python cache files
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Tooling caches / coverage
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 .coverage
 .coverage.*
 htmlcov/
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
 
-# Virtual environment
-venv/
-ENV/
-
-# IDE files
-.idea/
+# Local-only dev files (never commit credentials)
 .vscode/
-*.swp
-*.swo
+.claude/settings.local.json
+*.local.json
 
-# OS specific files
+# OS / IDE
+.idea/
 .DS_Store
 Thumbs.db
-
-# Development container files
-.devcontainer.json
-docker-compose.yml

@@ -1,0 +1,55 @@
+name: Release
+
+# Push a vX.Y.Z tag on main. This checks the tag against manifest.json, runs the
+# checks and opens a DRAFT release titled with the tag. Review it on GitHub and
+# click Publish; HACS only sees published releases.
+# yamllint disable-line rule:truthy
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    name: Draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # gh release create
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # full history, so origin/main exists for the ancestry check
+
+      - name: Tag must be on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
+
+      - name: Tag must match manifest version
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('custom_components/nanokvm/manifest.json'))['version'])")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "::error::tag $GITHUB_REF_NAME != manifest v$version"; exit 1; }
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Run checks
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -r requirements_test.txt
+          SKIP=no-commit-to-branch .venv/bin/prek run --all-files --hook-stage manual
+          .venv/bin/python -m pytest -q
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,23 +1,21 @@
 """Tests for the NanoKVM camera platform."""
 
-from __future__ import annotations
-
 import asyncio
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 import logging
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Self
 from unittest.mock import AsyncMock, MagicMock
 
-from homeassistant.components.camera import CameraEntityFeature, CameraState
-from homeassistant.components.camera.const import StreamType
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 import pytest
 from webrtc_models import RTCIceCandidateInit
 from yarl import URL
 
 import custom_components.nanokvm.camera as camera_module
+from homeassistant.components.camera import CameraEntityFeature, CameraState
+from homeassistant.components.camera.const import StreamType
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 
 
 def _coordinator(**overrides: object) -> SimpleNamespace:
@@ -103,9 +101,8 @@ async def test_camera_initializes_native_webrtc_stream(
     assert await entity.stream_source() is None
     assert entity.camera_capabilities.frontend_stream_types == {StreamType.WEB_RTC}
 
-    manager_factory.assert_called_once_with(
-        coordinator, entity._handle_streaming_state
-    )
+    manager_factory.assert_called_once_with(coordinator, entity._handle_streaming_state)  # noqa: SLF001
+
 
 def test_camera_streaming_state_tracks_native_webrtc_sessions(
     hass_mock: MagicMock,
@@ -138,7 +135,7 @@ async def test_snapshot_is_suppressed_on_pro_hardware(
     entity, _manager, _manager_factory = _camera(
         monkeypatch, _coordinator(is_pro_hardware=True)
     )
-    assert await entity._async_read_snapshot_frame() is None
+    assert await entity._async_read_snapshot_frame() is None  # noqa: SLF001
     entity.coordinator.clone_client.assert_not_called()
 
 
@@ -149,7 +146,7 @@ class _SnapshotClient(AbstractAsyncContextManager["_SnapshotClient"]):
         self.get_snapshot = AsyncMock(return_value=b"jpeg")
         self.exited = False
 
-    async def __aenter__(self) -> _SnapshotClient:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:
@@ -166,7 +163,7 @@ async def test_snapshot_uses_the_library_and_releases_the_client(
     authenticate = entity.coordinator.async_ensure_authenticated
     entity.coordinator.clone_client.return_value = client
 
-    assert await entity._async_read_snapshot_frame() == b"jpeg"
+    assert await entity._async_read_snapshot_frame() == b"jpeg"  # noqa: SLF001
     client.get_snapshot.assert_awaited_once_with(camera_module.SNAPSHOT_TIMEOUT_SECONDS)
     assert client.exited is True
     authenticate.assert_awaited_once_with(client)

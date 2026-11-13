@@ -1,0 +1,4 @@
+# markdownlint-cli2 and the VS Code markdownlint extension read this file.
+default: true
+# Same reason as ruff E501 in core: no line-length rule.
+MD013: false

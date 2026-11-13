@@ -1,13 +1,12 @@
 """Shared pytest fixtures for Home Assistant integration-boundary tests."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock
+
+import pytest
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
-import pytest
 
 
 @pytest.fixture
@@ -24,6 +23,7 @@ def config_entry_mock() -> MagicMock:
     entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test-entry"
     entry.unique_id = "test-device"
+    entry.update_listeners = []
     entry.data = {
         CONF_HOST: "nanokvm.local",
         CONF_USERNAME: "admin",

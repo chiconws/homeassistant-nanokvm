@@ -1,11 +1,8 @@
 """Tests for NanoKVM switch helpers, descriptions, and entity properties."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from types import SimpleNamespace
 
-from homeassistant.const import EntityCategory
 from nanokvm.models import VirtualDevice
 import pytest
 
@@ -26,6 +23,7 @@ from custom_components.nanokvm.switch import (
     _watchdog_available,
     _watchdog_value,
 )
+from homeassistant.const import EntityCategory
 
 
 def _description_identity(

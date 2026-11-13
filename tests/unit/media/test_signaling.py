@@ -1,32 +1,29 @@
 """Behavior tests for NanoKVM WebRTC signaling and session lifecycle."""
 
-from __future__ import annotations
-
 import asyncio
 from collections import deque
 from collections.abc import Callable, Coroutine
 import json
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Self
 
 from aiohttp import WSMsgType
+from nanokvm.client import NanoKVMClient
+from nanokvm.webrtc import WebRTCSignaling
+import pytest
+import pytest_asyncio
+from webrtc_models import RTCIceCandidateInit
+
+from custom_components.nanokvm.media import signaling as webrtc_module
+from custom_components.nanokvm.media.signaling import NanoKVMWebRTCManager
 from homeassistant.components.camera.webrtc import (
     WebRTCAnswer,
     WebRTCCandidate,
     WebRTCError,
 )
 from homeassistant.exceptions import HomeAssistantError
-import pytest
-import pytest_asyncio
-from webrtc_models import RTCIceCandidateInit
 
-from nanokvm.webrtc import WebRTCSignaling
-
-from custom_components.nanokvm.media import signaling as webrtc_module
-from custom_components.nanokvm.media.signaling import NanoKVMWebRTCManager
-
-
-COMBINED_OFFER = "\r\n".join(
+COMBINED_OFFER = "\r\n".join(  # noqa: FLY002 - one SDP line per item
     (
         "v=0",
         "o=- 1 1 IN IP4 127.0.0.1",
@@ -42,7 +39,7 @@ COMBINED_OFFER = "\r\n".join(
         "",
     )
 )
-VIDEO_ONLY_OFFER = "\r\n".join(
+VIDEO_ONLY_OFFER = "\r\n".join(  # noqa: FLY002 - one SDP line per item
     (
         "v=0",
         "o=- 1 1 IN IP4 127.0.0.1",
@@ -55,7 +52,7 @@ VIDEO_ONLY_OFFER = "\r\n".join(
         "",
     )
 )
-VIDEO_ANSWER = "\r\n".join(
+VIDEO_ANSWER = "\r\n".join(  # noqa: FLY002 - one SDP line per item
     (
         "v=0",
         "o=- 2 2 IN IP4 127.0.0.1",
@@ -69,7 +66,7 @@ VIDEO_ANSWER = "\r\n".join(
         "",
     )
 )
-AUDIO_ANSWER = "\r\n".join(
+AUDIO_ANSWER = "\r\n".join(  # noqa: FLY002 - one SDP line per item
     (
         "v=0",
         "o=- 3 3 IN IP4 127.0.0.1",
@@ -90,6 +87,7 @@ class FakeWebSocket:
     """Small asynchronous WebSocket boundary with observable I/O."""
 
     def __init__(self) -> None:
+        """Initialize the test double."""
         self.sent: list[dict[str, object]] = []
         self.closed = False
         self.close_code: int | None = None
@@ -99,10 +97,12 @@ class FakeWebSocket:
         self._incoming: asyncio.Queue[object] = asyncio.Queue()
         self._exception: Exception | None = None
 
-    def __aiter__(self) -> FakeWebSocket:
+    def __aiter__(self) -> Self:
+        """Return the message iterator."""
         return self
 
     async def __anext__(self) -> object:
+        """Return the next queued message."""
         item = await self._incoming.get()
         if item is _END:
             raise StopAsyncIteration
@@ -111,12 +111,14 @@ class FakeWebSocket:
         return item
 
     async def send_json(self, payload: dict[str, object]) -> None:
+        """Record a sent message."""
         event = payload.get("event")
         if isinstance(event, str) and event in self.send_failures:
             raise self.send_failures[event]
         self.sent.append(payload)
 
     async def close(self) -> None:
+        """Close the WebSocket."""
         self.close_calls += 1
         self.closed = True
         self._incoming.put_nowait(_END)
@@ -153,6 +155,7 @@ class FakeClient:
     def __init__(
         self, websocket: FakeWebSocket | None = None, *, pro: bool = False
     ) -> None:
+        """Initialize the test double."""
         self.websocket = websocket or FakeWebSocket()
         self.pro = pro
         self.open_calls = 0
@@ -173,7 +176,8 @@ class FakeClient:
             raise self.open_error
         return WebRTCSignaling(self.websocket, pro=self.pro)  # type: ignore[arg-type]
 
-    async def __aenter__(self) -> FakeClient:
+    async def __aenter__(self) -> Self:
+        """Enter the client context."""
         self.enter_calls += 1
         return self
 
@@ -183,6 +187,7 @@ class FakeClient:
         exc: BaseException | None,
         traceback: object,
     ) -> None:
+        """Leave the client context."""
         self.exit_calls += 1
         if self.exit_error is not None:
             raise self.exit_error
@@ -192,6 +197,7 @@ class FakeHass:
     """Home Assistant task-scheduling boundary."""
 
     def __init__(self) -> None:
+        """Initialize the test double."""
         self.tasks: list[asyncio.Task[None]] = []
 
     def async_create_task(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
@@ -212,6 +218,7 @@ class WebRTCHarness:
         authenticate_error: Exception | None = None,
         session_state_callback: Callable[[bool], None] = lambda streaming: None,
     ) -> None:
+        """Initialize the test double."""
         self.clients = deque(clients or [FakeClient()])
         self.hass = hass or FakeHass()
         self.authenticate_error = authenticate_error
@@ -359,10 +366,10 @@ async def test_session_state_callback_tracks_first_open_and_last_close(
 
     assert states == [True]
 
-    await harness.manager._async_close_webrtc_session("first")
+    await harness.manager._async_close_webrtc_session("first")  # noqa: SLF001
     assert states == [True]
 
-    await harness.manager._async_close_webrtc_session("second")
+    await harness.manager._async_close_webrtc_session("second")  # noqa: SLF001
     assert states == [True, False]
 
 
@@ -445,8 +452,7 @@ async def test_pro_inconsistent_video_status_reports_error_and_closes(
         WebRTCError(
             code="webrtc_inconsistent_video_mode",
             message=(
-                "NanoKVM Pro stopped WebRTC video because another video mode "
-                "is active"
+                "NanoKVM Pro stopped WebRTC video because another video mode is active"
             ),
         )
     ]
@@ -579,7 +585,7 @@ async def test_offer_setup_failures_release_the_client(
 
     assert client.exit_calls == 1
     assert client.websocket.closed is closes_websocket
-    assert "session" not in harness.manager._pending_candidates
+    assert "session" not in harness.manager._pending_candidates  # noqa: SLF001
     assert states == []
     assert harness.hass.tasks == []
 
@@ -687,7 +693,5 @@ async def test_new_session_keeps_other_active_session_alive(
 
 def test_real_client_exposes_the_stream_methods() -> None:
     """The stream paths call these library methods; fail if they move."""
-    from nanokvm.client import NanoKVMClient
-
     assert callable(NanoKVMClient.open_webrtc_signaling)
     assert callable(NanoKVMClient.mjpeg_stream_bytes)

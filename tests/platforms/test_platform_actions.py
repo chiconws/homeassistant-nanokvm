@@ -1,7 +1,5 @@
 """Tests for platform entity actions and Home Assistant-facing properties."""
 
-from __future__ import annotations
-
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,13 +7,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
-from homeassistant.exceptions import HomeAssistantError
 from nanokvm.client import (
     NanoKVMError,
     NanoKVMNotSupportedError,
     NanoKVMPermissionError,
 )
-from nanokvm.ssh_client import NanoKVMSSHError
 from nanokvm.models import (
     DiskType,
     HidMode,
@@ -23,6 +19,7 @@ from nanokvm.models import (
     MouseJigglerMode,
     VirtualDevice,
 )
+from nanokvm.ssh_client import NanoKVMSSHError
 import pytest
 from yarl import URL
 
@@ -33,6 +30,7 @@ import custom_components.nanokvm.select as select_module
 import custom_components.nanokvm.sensor as sensor_module
 import custom_components.nanokvm.switch as switch_module
 import custom_components.nanokvm.update as update_module
+from homeassistant.exceptions import HomeAssistantError
 
 
 def _coordinator(**overrides: object) -> SimpleNamespace:
@@ -387,7 +385,7 @@ async def test_power_state_refresh_handles_unavailable_gpio() -> None:
         _description(switch_module.SWITCHES, "power"),
     )
 
-    assert await entity._async_current_power_state() is None
+    assert await entity._async_current_power_state() is None  # noqa: SLF001
 
 
 def _run_power_off_monitor_inline(
@@ -420,14 +418,14 @@ async def test_power_turn_off_returns_before_the_host_is_off(
     await entity.async_turn_off()
 
     coordinator.client.push_button.assert_awaited_once()
-    monitor = entity._shutdown_monitor
+    monitor = entity._shutdown_monitor  # noqa: SLF001
     assert monitor is not None and not monitor.done()
 
     await entity.async_will_remove_from_hass()
     await asyncio.gather(monitor, return_exceptions=True)
 
     assert monitor.cancelled()
-    assert entity._shutdown_monitor is None
+    assert entity._shutdown_monitor is None  # noqa: SLF001
 
 
 @pytest.mark.asyncio
@@ -450,7 +448,8 @@ async def test_power_turn_off_presses_once_and_returns_when_gpio_turns_off() -> 
     _run_power_off_monitor_inline(entity, loop)
 
     await entity.async_turn_off()
-    await entity._shutdown_monitor
+    assert entity._shutdown_monitor is not None  # noqa: SLF001
+    await entity._shutdown_monitor  # noqa: SLF001
 
     coordinator.client.push_button.assert_awaited_once()
     assert coordinator.async_refresh.await_count == 1
@@ -471,7 +470,8 @@ async def test_power_turn_off_refreshes_after_timeout() -> None:
     _run_power_off_monitor_inline(entity, loop)
 
     await entity.async_turn_off()
-    await entity._shutdown_monitor
+    assert entity._shutdown_monitor is not None  # noqa: SLF001
+    await entity._shutdown_monitor  # noqa: SLF001
 
     coordinator.client.push_button.assert_awaited_once()
     assert coordinator.async_refresh.await_count == 1
@@ -496,7 +496,8 @@ async def test_power_turn_off_sleeps_between_unsuccessful_polls(
     _run_power_off_monitor_inline(entity, loop)
 
     await entity.async_turn_off()
-    await entity._shutdown_monitor
+    assert entity._shutdown_monitor is not None  # noqa: SLF001
+    await entity._shutdown_monitor  # noqa: SLF001
 
     sleep.assert_awaited_once_with(5)
     assert coordinator.async_refresh.await_count == 1

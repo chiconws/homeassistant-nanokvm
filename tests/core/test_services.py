@@ -1,7 +1,5 @@
 """Behavior tests for NanoKVM service registration and handlers."""
 
-from __future__ import annotations
-
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -9,9 +7,6 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from homeassistant.const import CONF_HOST
-from homeassistant.core import ServiceCall, SupportsResponse
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from nanokvm.client import NanoKVMPermissionError
 from nanokvm.models import (
     DownloadStatus,
@@ -24,7 +19,7 @@ from nanokvm.models import (
     WiFiInfo,
 )
 import pytest
-import voluptuous as vol
+import voluptuous as vol  # noqa: TID251 - the integration still uses voluptuous
 
 from custom_components.nanokvm import services as services_module
 from custom_components.nanokvm.const import (
@@ -55,6 +50,9 @@ from custom_components.nanokvm.const import (
     SERVICE_SET_MOUSE_JIGGLER,
     SERVICE_WAKE_ON_LAN,
 )
+from homeassistant.const import CONF_HOST
+from homeassistant.core import ServiceCall, SupportsResponse
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,7 +236,8 @@ def test_register_services_registers_complete_surface_with_response_contracts(
     registered = _capture_registered_services(hass_mock)
 
     assert tuple(registered) == tuple(
-        service.name for service in services_module._SERVICES
+        service.name
+        for service in services_module._SERVICES  # noqa: SLF001
     )
     assert {
         name
@@ -546,7 +545,7 @@ async def test_led_strip_requires_at_least_one_update_field(
     """An empty LED update must fail before resolving or contacting a device."""
     _install_coordinators(hass_mock, _coordinator(is_pro_hardware=True))
 
-    with pytest.raises(vol.Invalid, match="must contain at least one of"):
+    with pytest.raises(vol.Invalid, match="at least one of"):
         await _call_service(hass_mock, registered_services, SERVICE_SET_LED_STRIP)
 
 

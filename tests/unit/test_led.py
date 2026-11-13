@@ -1,11 +1,8 @@
 """Tests for NanoKVM Pro LED strip configuration helpers."""
 
-from __future__ import annotations
-
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from homeassistant.exceptions import HomeAssistantError
 from nanokvm.models import GetLedStripRsp
 import pytest
 
@@ -16,6 +13,7 @@ from custom_components.nanokvm.led import (
     max_vertical_count,
     note_reported_led_strip,
 )
+from homeassistant.exceptions import HomeAssistantError
 
 
 def _device_state() -> GetLedStripRsp:
@@ -100,7 +98,9 @@ async def test_led_write_applies_complete_valid_update() -> None:
     )
 
 
-async def test_led_toggle_keeps_requested_brightness_when_device_reports_lower() -> None:
+async def test_led_toggle_keeps_requested_brightness_when_device_reports_lower() -> (
+    None
+):
     """A lower reported brightness is not written back by an unrelated change."""
     coordinator = _led_coordinator(brightness=68)
 

@@ -1,9 +1,8 @@
 """Sensor platform for Sipeed NanoKVM."""
-from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -11,20 +10,20 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
 from nanokvm.models import Permission
 
-from .coordinator import NanoKVMDataUpdateCoordinator
+from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
 from .entity import (
     NanoKVMEntity,
     async_add_entities_as_supported,
     has_connection_type,
     has_mounted_image,
 )
+
+PARALLEL_UPDATES = 0
 
 _TAILSCALE_STATE_MAP: dict[str, str] = {
     "notInstall": "not_install",
@@ -71,9 +70,9 @@ def _connection_ip_value(
 
     for address in addresses:
         if address.version == "IPv4":
-            return address.addr
+            return str(address.addr)
 
-    return addresses[0].addr
+    return str(addresses[0].addr)
 
 
 def _connection_ip_attributes(
@@ -88,9 +87,7 @@ def _connection_ip_attributes(
                 "version": address.version,
                 "type": address.type,
             }
-            for address in _addresses_for_connection_type(
-                coordinator, connection_type
-            )
+            for address in _addresses_for_connection_type(coordinator, connection_type)
         ]
     }
 
@@ -114,13 +111,17 @@ def _tailscale_attributes(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str
     }
 
 
-def _memory_total_attribute(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str, Any]:
+def _memory_total_attribute(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> dict[str, Any]:
     """Return memory total attribute when available."""
     total = coordinator.ssh_metrics.memory_total
     return {"total_mb": total} if total is not None else {}
 
 
-def _storage_total_attribute(coordinator: NanoKVMDataUpdateCoordinator) -> dict[str, Any]:
+def _storage_total_attribute(
+    coordinator: NanoKVMDataUpdateCoordinator,
+) -> dict[str, Any]:
     """Return storage total attribute when available."""
     total = coordinator.ssh_metrics.storage_total
     return {"total_mb": total} if total is not None else {}
@@ -185,9 +186,7 @@ NETWORK_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coordinator: _connection_ip_value(coordinator, "wired"),
         available_fn=lambda coordinator: has_connection_type(coordinator, "wired"),
-        should_create_fn=lambda coordinator: has_connection_type(
-            coordinator, "wired"
-        ),
+        should_create_fn=lambda coordinator: has_connection_type(coordinator, "wired"),
         attributes_fn=lambda coordinator: _connection_ip_attributes(
             coordinator, "wired"
         ),
@@ -215,9 +214,7 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TIMESTAMP,
         should_create_fn=_ssh_enabled,
         value_fn=lambda coordinator: coordinator.ssh_metrics.boot_time,
-        available_fn=lambda coordinator: (
-            coordinator.ssh_metrics.boot_time is not None
-        ),
+        available_fn=lambda coordinator: coordinator.ssh_metrics.boot_time is not None,
     ),
     NanoKVMSensorEntityDescription(
         key="cpu_temperature",
@@ -263,7 +260,7 @@ SSH_SENSORS: tuple[NanoKVMSensorEntityDescription, ...] = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NanoKVMConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM sensor based on a config entry."""
@@ -299,16 +296,21 @@ class NanoKVMSensor(NanoKVMEntity, SensorEntity):
         )
 
     @property
+    @override
     def available(self) -> bool:
         """Return if entity is available."""
-        return super().available and self.entity_description.available_fn(self.coordinator)
+        return super().available and self.entity_description.available_fn(
+            self.coordinator
+        )
 
     @property
+    @override
     def native_value(self) -> Any:
         """Return the state of the sensor."""
         return self.entity_description.value_fn(self.coordinator)
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
         return self.entity_description.attributes_fn(self.coordinator)

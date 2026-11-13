@@ -1,7 +1,5 @@
 """Shared fixtures for platform helper and entity-description tests."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from types import SimpleNamespace
 

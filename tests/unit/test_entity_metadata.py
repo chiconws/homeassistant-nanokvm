@@ -1,7 +1,5 @@
 """Tests that every entity gets its name and icon from the metadata files."""
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 
@@ -50,7 +48,8 @@ def _entities(relative_path: str) -> dict[str, dict[str, dict[str, object]]]:
 
 
 @pytest.mark.parametrize(
-    "translation", ["translations/en.json", "translations/fr.json", "translations/pt-BR.json"]
+    "translation",
+    ["translations/en.json", "translations/fr.json", "translations/pt-BR.json"],
 )
 def test_every_entity_has_a_translated_name(translation: str) -> None:
     """Descriptions carry no inline name, so each needs a translation."""

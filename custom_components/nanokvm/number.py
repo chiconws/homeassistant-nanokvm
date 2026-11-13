@@ -1,9 +1,8 @@
 """Number platform for Sipeed NanoKVM."""
-from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 from homeassistant.components.number import (
     NumberDeviceClass,
@@ -11,11 +10,9 @@ from homeassistant.components.number import (
     NumberEntityDescription,
     NumberMode,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
 from nanokvm.models import Permission
 
 from .const import (
@@ -24,7 +21,7 @@ from .const import (
     LED_BRIGHTNESS_MAX,
     LED_BRIGHTNESS_MIN,
 )
-from .coordinator import NanoKVMDataUpdateCoordinator
+from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
 from .led import (
     async_set_led_strip,
@@ -32,6 +29,8 @@ from .led import (
     max_horizontal_count,
     max_vertical_count,
 )
+
+PARALLEL_UPDATES = 0
 
 # The device accepts up to one week.
 HDMI_IDLE_TIMEOUT_MAX_MINUTES = 7 * 24 * 60
@@ -71,9 +70,7 @@ def _led_vertical_value(
 def _led_horizontal_max(coordinator: NanoKVMDataUpdateCoordinator) -> float:
     """Return maximum horizontal beads for the current vertical count."""
     vertical_count = (
-        coordinator.led_strip.vertical_count
-        if coordinator.led_strip
-        else LED_BEAD_MIN
+        coordinator.led_strip.vertical_count if coordinator.led_strip else LED_BEAD_MIN
     )
     return max_horizontal_count(vertical_count)
 
@@ -86,6 +83,8 @@ def _led_vertical_max(coordinator: NanoKVMDataUpdateCoordinator) -> float:
         else LED_BEAD_MIN
     )
     return max_vertical_count(horizontal_count)
+
+
 def _hdmi_idle_timeout_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether the HDMI capture idle timeout can be read and changed."""
     return bool(
@@ -167,7 +166,7 @@ NUMBERS: tuple[NanoKVMNumberEntityDescription, ...] = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NanoKVMConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM number based on a config entry."""
@@ -201,6 +200,7 @@ class NanoKVMNumber(NanoKVMEntity, NumberEntity):
         )
 
     @property
+    @override
     def available(self) -> bool:
         """Return if entity is available."""
         return super().available and self.entity_description.available_fn(
@@ -208,15 +208,18 @@ class NanoKVMNumber(NanoKVMEntity, NumberEntity):
         )
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the number value."""
         return self.entity_description.value_fn(self.coordinator)
 
     @property
+    @override
     def native_max_value(self) -> float:
         """Return the dynamic maximum value."""
         return self.entity_description.max_value_fn(self.coordinator)
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Set the number value."""
         async with self._async_device_action():

@@ -1,15 +1,13 @@
 """Tests for NanoKVM sensor helpers and entity descriptions."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+from nanokvm.models import IPInfo
 import pytest
 
-from nanokvm.models import IPInfo
-
+from custom_components.nanokvm.entity import has_connection_type, has_mounted_image
 from custom_components.nanokvm.sensor import (
     MEDIA_SENSORS,
     NETWORK_SENSORS,
@@ -25,7 +23,6 @@ from custom_components.nanokvm.sensor import (
     _tailscale_attributes,
     _tailscale_state_value,
 )
-from custom_components.nanokvm.entity import has_connection_type, has_mounted_image
 
 CoordinatorStateFactory = Callable[..., SimpleNamespace]
 

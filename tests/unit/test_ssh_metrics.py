@@ -1,14 +1,11 @@
 """Tests for the reconnecting NanoKVM SSH metrics collector."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock
 
+from nanokvm.ssh_client import NanoKVMSSHAuthenticationError, SSHMetrics
 import pytest
 
 import custom_components.nanokvm.ssh_metrics as ssh_metrics_module
-from nanokvm.ssh_client import NanoKVMSSHAuthenticationError, SSHMetrics
-
 from custom_components.nanokvm.ssh_metrics import SSHMetricsCollector
 
 
@@ -104,7 +101,7 @@ def test_constructor_configures_the_library_ssh_client(
         known_hosts=None,
         allow_unknown_host_key=False,
     )
-    assert collector._client is client
+    assert collector._client is client  # noqa: SLF001
 
 
 def test_constructor_forwards_approved_known_hosts_path(
@@ -155,7 +152,7 @@ async def test_ensure_connected_authenticates_unusable_connections(
         connection = _Connection(transport)
     collector, client, _ = _collector(monkeypatch, ssh_client=connection)
 
-    await collector._async_ensure_connected()
+    await collector._async_ensure_connected()  # noqa: SLF001
 
     assert client.authenticate_calls == ["secret"]
 
@@ -167,7 +164,7 @@ async def test_ensure_connected_reuses_an_active_transport(
     connection = _active_connection()
     collector, client, _ = _collector(monkeypatch, ssh_client=connection)
 
-    await collector._async_ensure_connected()
+    await collector._async_ensure_connected()  # noqa: SLF001
 
     assert connection.get_transport_calls == 1
     assert client.authenticate_calls == []

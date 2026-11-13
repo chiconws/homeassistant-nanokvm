@@ -1,54 +1,5 @@
 {
   "config": {
-    "step": {
-      "user": {
-        "title": "Connect to Sipeed NanoKVM",
-        "description": "Set up a Sipeed NanoKVM integration.",
-        "data": {
-          "host": "API URL",
-          "use_static_host": "Use static host only (disable mDNS discovery)"
-        }
-      },
-      "auth": {
-        "title": "Authenticate to Sipeed NanoKVM",
-        "description": "Authenticate to your Sipeed NanoKVM device.",
-        "data": {
-          "username": "Username",
-          "password": "Password"
-        }
-      },
-      "confirm": {
-        "title": "Discovered Sipeed NanoKVM",
-        "description": "Do you want to set up the NanoKVM device named {name}?"
-      },
-      "reauth_confirm": {
-        "title": "Reauthenticate Sipeed NanoKVM",
-        "description": "The NanoKVM integration needs updated credentials for {name}."
-      },
-      "ssl_fingerprint": {
-        "title": "Verify SSL Certificate",
-        "description": "The NanoKVM device at **{host}** presented a self-signed certificate with the following SHA-256 fingerprint:\n\n`{fingerprint}`\n\nDo you trust this certificate?"
-      },
-      "ssl_fingerprint_changed": {
-        "title": "SSL Certificate Changed",
-        "description": "The SSL certificate for the NanoKVM device at **{host}** has changed.\n\n**Previous fingerprint:**\n`{old_fingerprint}`\n\n**New fingerprint:**\n`{new_fingerprint}`\n\nThis could mean the device generated a new certificate, or that something is intercepting the connection. Only accept if you expect this change."
-      },
-      "ssh_host_key": {
-        "title": "Verify SSH Host Key",
-        "description": "The NanoKVM device at **{host}** presented this SSH host-key fingerprint:\n\n`{fingerprint}`\n\nOnly trust it if it matches a fingerprint you obtained from a trusted source.",
-        "data": {
-          "trust_ssh_host_key": "I trust this SSH host key"
-        }
-      },
-      "ssh_credentials": {
-        "title": "SSH Credentials",
-        "description": "The NanoKVM device at **{host}** rejected the SSH login. SSH collects the CPU temperature, memory, storage and uptime.\n\nEnter the SSH username and password, or leave the password empty to skip SSH metrics.",
-        "data": {
-          "ssh_username": "Username",
-          "ssh_password": "Password"
-        }
-      }
-    },
     "abort": {
       "already_configured": "This NanoKVM device is already configured",
       "cannot_connect": "Failed to connect to the NanoKVM device",
@@ -60,47 +11,99 @@
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
-      "unknown": "Unexpected error",
-      "ssl_certificate_changed": "The SSL certificate has changed"
+      "ssl_certificate_changed": "The SSL certificate has changed",
+      "unknown": "Unexpected error"
+    },
+    "step": {
+      "auth": {
+        "data": {
+          "password": "Password",
+          "username": "Username"
+        },
+        "description": "Authenticate to your Sipeed NanoKVM device.",
+        "title": "Authenticate to Sipeed NanoKVM"
+      },
+      "confirm": {
+        "description": "Do you want to set up the NanoKVM device named {name}?",
+        "title": "Discovered Sipeed NanoKVM"
+      },
+      "reauth_confirm": {
+        "description": "The NanoKVM integration needs updated credentials for {name}.",
+        "title": "Reauthenticate Sipeed NanoKVM"
+      },
+      "ssh_credentials": {
+        "data": {
+          "ssh_password": "Password",
+          "ssh_username": "Username"
+        },
+        "description": "The NanoKVM device at **{host}** rejected the SSH login. SSH collects the CPU temperature, memory, storage and uptime.\n\nEnter the SSH username and password, or leave the password empty to skip SSH metrics.",
+        "title": "SSH Credentials"
+      },
+      "ssh_host_key": {
+        "data": {
+          "trust_ssh_host_key": "I trust this SSH host key"
+        },
+        "description": "The NanoKVM device at **{host}** presented this SSH host-key fingerprint:\n\n`{fingerprint}`\n\nOnly trust it if it matches a fingerprint you obtained from a trusted source.",
+        "title": "Verify SSH Host Key"
+      },
+      "ssl_fingerprint": {
+        "description": "The NanoKVM device at **{host}** presented a self-signed certificate with the following SHA-256 fingerprint:\n\n`{fingerprint}`\n\nDo you trust this certificate?",
+        "title": "Verify SSL Certificate"
+      },
+      "ssl_fingerprint_changed": {
+        "description": "The SSL certificate for the NanoKVM device at **{host}** has changed.\n\n**Previous fingerprint:**\n`{old_fingerprint}`\n\n**New fingerprint:**\n`{new_fingerprint}`\n\nThis could mean the device generated a new certificate, or that something is intercepting the connection. Only accept if you expect this change.",
+        "title": "SSL Certificate Changed"
+      },
+      "user": {
+        "data": {
+          "host": "API URL",
+          "use_static_host": "Use static host only (disable mDNS discovery)"
+        },
+        "description": "Set up a Sipeed NanoKVM integration.",
+        "title": "Connect to Sipeed NanoKVM"
+      }
     }
   },
   "entity": {
     "binary_sensor": {
-      "power_led": {
-        "name": "Power LED"
-      },
-      "hdd_led": {
-        "name": "HDD LED"
-      },
-      "network_device": {
-        "name": "Virtual Network Device"
-      },
-      "disk_device": {
-        "name": "Virtual Disk Device"
-      },
-      "ssh_enabled": {
-        "name": "SSH Enabled"
-      },
-      "mdns_enabled": {
-        "name": "mDNS Enabled"
-      },
-      "oled_present": {
-        "name": "OLED Present"
-      },
-      "wifi_supported": {
-        "name": "WiFi Supported"
-      },
-      "wifi_connected": {
-        "name": "WiFi Connected"
-      },
-      "wired_connected": {
-        "name": "Wired Connected"
+      "caps_lock": {
+        "name": "Caps Lock"
       },
       "cdrom_mode": {
         "name": "CD-ROM Mode"
       },
+      "disk_device": {
+        "name": "Virtual Disk Device"
+      },
+      "hdd_led": {
+        "name": "HDD LED"
+      },
+      "hdmi_signal": {
+        "name": "HDMI Signal"
+      },
+      "mdns_enabled": {
+        "name": "mDNS Enabled"
+      },
       "mouse_jiggler": {
         "name": "Mouse Jiggler"
+      },
+      "network_device": {
+        "name": "Virtual Network Device"
+      },
+      "num_lock": {
+        "name": "Num Lock"
+      },
+      "oled_present": {
+        "name": "OLED Present"
+      },
+      "power_led": {
+        "name": "Power LED"
+      },
+      "scroll_lock": {
+        "name": "Scroll Lock"
+      },
+      "ssh_enabled": {
+        "name": "SSH Enabled"
       },
       "static_ip_enabled": {
         "name": "Static IP Enabled"
@@ -108,31 +111,126 @@
       "time_synchronized": {
         "name": "Time Synchronized"
       },
-      "num_lock": {
-        "name": "Num Lock"
+      "wifi_connected": {
+        "name": "WiFi Connected"
       },
-      "caps_lock": {
-        "name": "Caps Lock"
+      "wifi_supported": {
+        "name": "WiFi Supported"
       },
-      "scroll_lock": {
-        "name": "Scroll Lock"
+      "wired_connected": {
+        "name": "Wired Connected"
+      }
+    },
+    "button": {
+      "power": {
+        "name": "Power Button"
       },
-      "hdmi_signal": {
-        "name": "HDMI Signal"
+      "reboot": {
+        "name": "Reboot System"
+      },
+      "reset": {
+        "name": "Reset Button"
+      },
+      "reset_hdmi": {
+        "name": "Reset HDMI"
+      },
+      "reset_hid": {
+        "name": "Reset HID"
+      },
+      "sync_time": {
+        "name": "Sync Time"
+      }
+    },
+    "camera": {
+      "hdmi": {
+        "name": "HDMI Stream"
+      }
+    },
+    "number": {
+      "hdmi_idle_timeout": {
+        "name": "HDMI Idle Timeout"
+      },
+      "led_brightness": {
+        "name": "LED Brightness"
+      },
+      "led_horizontal_beads": {
+        "name": "LED Horizontal Beads"
+      },
+      "led_vertical_beads": {
+        "name": "LED Vertical Beads"
+      }
+    },
+    "select": {
+      "hid_mode": {
+        "name": "HID Mode (Reboot Required)",
+        "state": {
+          "hid_only": "HID Only",
+          "normal": "Normal"
+        }
+      },
+      "lcd_time_format": {
+        "name": "LCD Time Format",
+        "state": {
+          "12h": "12-hour",
+          "24h": "24-hour"
+        }
+      },
+      "mouse_jiggler_mode": {
+        "name": "Mouse Jiggler Mode",
+        "state": {
+          "absolute_mode": "Absolute Mode",
+          "disable": "Disabled",
+          "relative_mode": "Relative Mode"
+        }
+      },
+      "oled_sleep_timeout": {
+        "name": "OLED Sleep Timeout",
+        "state": {
+          "1_hour": "1 hour",
+          "1_min": "1 min",
+          "3_min": "3 min",
+          "5_min": "5 min",
+          "10_min": "10 min",
+          "15_sec": "15 sec",
+          "30_min": "30 min",
+          "30_sec": "30 sec",
+          "never": "Never"
+        }
+      },
+      "swap_size": {
+        "name": "Swap Size",
+        "state": {
+          "64_mb": "64 MB",
+          "128_mb": "128 MB",
+          "256_mb": "256 MB",
+          "512_mb": "512 MB",
+          "disable": "Disabled"
+        }
+      },
+      "virtual_disk_type": {
+        "name": "Virtual Disk Type",
+        "state": {
+          "disable": "Disabled",
+          "emmc": "eMMC",
+          "sdcard": "SD Card"
+        }
       }
     },
     "sensor": {
-      "hid_mode": {
-        "name": "HID Mode"
+      "account_role": {
+        "name": "Account Role"
       },
-      "oled_sleep": {
-        "name": "OLED Sleep Timeout"
+      "application_version": {
+        "name": "Application Version"
+      },
+      "cpu_temperature": {
+        "name": "CPU Temperature"
       },
       "hardware_version": {
         "name": "Hardware Version"
       },
-      "application_version": {
-        "name": "Application Version"
+      "hid_mode": {
+        "name": "HID Mode"
       },
       "ip_address": {
         "name": "IP Address",
@@ -141,6 +239,52 @@
             "name": "Addresses"
           }
         }
+      },
+      "memory_used_percent": {
+        "name": "Memory Used",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total MB"
+          }
+        }
+      },
+      "mounted_image": {
+        "name": "Mounted Image"
+      },
+      "oled_sleep": {
+        "name": "OLED Sleep Timeout"
+      },
+      "storage_used_percent": {
+        "name": "Storage Used",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total MB"
+          }
+        }
+      },
+      "tailscale_state": {
+        "name": "Tailscale",
+        "state": {
+          "not_install": "Not installed",
+          "not_login": "Not logged in",
+          "not_running": "Not running",
+          "running": "Running",
+          "stopped": "Stopped"
+        },
+        "state_attributes": {
+          "account": {
+            "name": "Account"
+          },
+          "ip": {
+            "name": "IP Address"
+          },
+          "name": {
+            "name": "Device Name"
+          }
+        }
+      },
+      "uptime": {
+        "name": "Uptime"
       },
       "wired_ip_address": {
         "name": "Wired IP Address",
@@ -157,73 +301,9 @@
             "name": "Addresses"
           }
         }
-      },
-      "mounted_image": {
-        "name": "Mounted Image"
-      },
-      "tailscale_state": {
-        "name": "Tailscale",
-        "state": {
-          "not_install": "Not installed",
-          "not_running": "Not running",
-          "not_login": "Not logged in",
-          "stopped": "Stopped",
-          "running": "Running"
-        },
-        "state_attributes": {
-          "name": {
-            "name": "Device Name"
-          },
-          "ip": {
-            "name": "IP Address"
-          },
-          "account": {
-            "name": "Account"
-          }
-        }
-      },
-      "uptime": {
-        "name": "Uptime"
-      },
-      "cpu_temperature": {
-        "name": "CPU Temperature"
-      },
-      "memory_used_percent": {
-        "name": "Memory Used",
-        "state_attributes": {
-          "total_mb": {
-            "name": "Total MB"
-          }
-        }
-      },
-      "storage_used_percent": {
-        "name": "Storage Used",
-        "state_attributes": {
-          "total_mb": {
-            "name": "Total MB"
-          }
-        }
-      },
-      "account_role": {
-        "name": "Account Role"
       }
     },
     "switch": {
-      "ssh": {
-        "name": "SSH"
-      },
-      "mdns": {
-        "name": "mDNS"
-      },
-      "virtual_network": {
-        "name": "Virtual Network"
-      },
-      "virtual_disk": {
-        "name": "Virtual Disk"
-      },
-      "power": {
-        "name": "Power"
-      },
       "hdmi": {
         "name": "HDMI Output"
       },
@@ -233,342 +313,262 @@
       "hdmi_passthrough": {
         "name": "HDMI Passthrough"
       },
+      "led_strip": {
+        "name": "LED Strip"
+      },
       "low_power": {
         "name": "Low Power"
       },
-      "led_strip": {
-        "name": "LED Strip"
+      "mdns": {
+        "name": "mDNS"
+      },
+      "power": {
+        "name": "Power"
+      },
+      "ssh": {
+        "name": "SSH"
+      },
+      "virtual_disk": {
+        "name": "Virtual Disk"
       },
       "virtual_mic": {
         "name": "Virtual Microphone"
       },
+      "virtual_network": {
+        "name": "Virtual Network"
+      },
       "watchdog": {
         "name": "Watchdog"
-      }
-    },
-    "select": {
-      "hid_mode": {
-        "name": "HID Mode (Reboot Required)",
-        "state": {
-          "normal": "Normal",
-          "hid_only": "HID Only"
-        }
-      },
-      "mouse_jiggler_mode": {
-        "name": "Mouse Jiggler Mode",
-        "state": {
-          "disable": "Disabled",
-          "relative_mode": "Relative Mode",
-          "absolute_mode": "Absolute Mode"
-        }
-      },
-      "oled_sleep_timeout": {
-        "name": "OLED Sleep Timeout",
-        "state": {
-          "never": "Never",
-          "15_sec": "15 sec",
-          "30_sec": "30 sec",
-          "1_min": "1 min",
-          "3_min": "3 min",
-          "5_min": "5 min",
-          "10_min": "10 min",
-          "30_min": "30 min",
-          "1_hour": "1 hour"
-        }
-      },
-      "swap_size": {
-        "name": "Swap Size",
-        "state": {
-          "disable": "Disabled",
-          "64_mb": "64 MB",
-          "128_mb": "128 MB",
-          "256_mb": "256 MB",
-          "512_mb": "512 MB"
-        }
-      },
-      "lcd_time_format": {
-        "name": "LCD Time Format",
-        "state": {
-          "12h": "12-hour",
-          "24h": "24-hour"
-        }
-      },
-      "virtual_disk_type": {
-        "name": "Virtual Disk Type",
-        "state": {
-          "disable": "Disabled",
-          "emmc": "eMMC",
-          "sdcard": "SD Card"
-        }
-      }
-    },
-    "number": {
-      "led_brightness": {
-        "name": "LED Brightness"
-      },
-      "led_horizontal_beads": {
-        "name": "LED Horizontal Beads"
-      },
-      "led_vertical_beads": {
-        "name": "LED Vertical Beads"
-      },
-      "hdmi_idle_timeout": {
-        "name": "HDMI Idle Timeout"
       }
     },
     "update": {
       "application": {
         "name": "Application"
       }
-    },
-    "button": {
-      "power": {
-        "name": "Power Button"
-      },
-      "reset": {
-        "name": "Reset Button"
-      },
-      "reboot": {
-        "name": "Reboot System"
-      },
-      "reset_hdmi": {
-        "name": "Reset HDMI"
-      },
-      "reset_hid": {
-        "name": "Reset HID"
-      },
-      "sync_time": {
-        "name": "Sync Time"
-      }
-    },
-    "camera": {
-      "hdmi": {
-        "name": "HDMI Stream"
-      }
     }
   },
   "services": {
-    "push_button": {
-      "name": "Push Button",
-      "description": "Simulate pushing a hardware button on the NanoKVM device.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        },
-        "button_type": {
-          "name": "Button Type",
-          "description": "The type of button to push (power or reset)."
-        },
-        "duration": {
-          "name": "Duration",
-          "description": "The duration to hold the button in milliseconds (100-5000)."
-        }
-      }
-    },
-    "paste_text": {
-      "name": "Paste Text",
-      "description": "Paste text via HID keyboard simulation.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        },
-        "text": {
-          "name": "Text",
-          "description": "The text to paste. Only ASCII printable characters are supported."
-        }
-      }
-    },
-    "reboot": {
-      "name": "Reboot System",
-      "description": "Reboot the NanoKVM device.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        }
-      }
-    },
-    "reset_hdmi": {
-      "name": "Reset HDMI",
-      "description": "Reset the HDMI connection (relevant for PCIe version).",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        }
-      }
-    },
-    "reset_hid": {
-      "name": "Reset HID",
-      "description": "Reset the HID subsystem.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        }
-      }
-    },
-    "wake_on_lan": {
-      "name": "Wake on LAN",
-      "description": "Send a Wake-on-LAN packet to the specified MAC address.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        },
-        "mac": {
-          "name": "MAC Address",
-          "description": "The MAC address to send the Wake-on-LAN packet to."
-        }
-      }
-    },
-    "set_mouse_jiggler": {
-      "name": "Set Mouse Jiggler",
-      "description": "Configure the mouse jiggler state and mode.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        },
-        "enabled": {
-          "name": "Enabled",
-          "description": "Enable or disable the mouse jiggler."
-        },
-        "mode": {
-          "name": "Mode",
-          "description": "The mouse jiggler mode (absolute or relative)."
-        }
-      }
-    },
-    "set_led_strip": {
-      "name": "Set LED Strip",
-      "description": "Configure NanoKVM Pro LED strip settings.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        },
-        "on": {
-          "name": "On",
-          "description": "Enable or disable the LED strip."
-        },
-        "brightness": {
-          "name": "Brightness",
-          "description": "LED strip brightness percentage."
-        },
-        "horizontal_count": {
-          "name": "Horizontal Beads",
-          "description": "Horizontal LED bead count."
-        },
-        "vertical_count": {
-          "name": "Vertical Beads",
-          "description": "Vertical LED bead count."
-        }
-      }
-    },
-    "scan_wifi": {
-      "name": "Scan Wi-Fi",
-      "description": "Scan nearby Wi-Fi networks and return the NanoKVM Pro response.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        }
-      }
-    },
-    "list_images": {
-      "name": "List Images",
-      "description": "List images available on the NanoKVM.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        }
-      }
-    },
-    "is_image_download_enabled": {
-      "name": "Is Image Download Enabled",
-      "description": "Return whether image downloading is enabled on the NanoKVM.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        }
-      }
-    },
     "get_image_download_status": {
-      "name": "Get Image Download Status",
       "description": "Return the current NanoKVM image download status.",
       "fields": {
         "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
         },
         "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
         }
-      }
+      },
+      "name": "Get Image Download Status"
+    },
+    "is_image_download_enabled": {
+      "description": "Return whether image downloading is enabled on the NanoKVM.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "Is Image Download Enabled"
     },
     "list_custom_edids": {
-      "name": "List Custom EDIDs",
       "description": "List custom EDIDs available on a NanoKVM Pro.",
       "fields": {
         "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
         },
         "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
         }
-      }
+      },
+      "name": "List Custom EDIDs"
+    },
+    "list_images": {
+      "description": "List images available on the NanoKVM.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "List Images"
+    },
+    "paste_text": {
+      "description": "Paste text via HID keyboard simulation.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        },
+        "text": {
+          "description": "The text to paste. Only ASCII printable characters are supported.",
+          "name": "Text"
+        }
+      },
+      "name": "Paste Text"
+    },
+    "push_button": {
+      "description": "Simulate pushing a hardware button on the NanoKVM device.",
+      "fields": {
+        "button_type": {
+          "description": "The type of button to push (power or reset).",
+          "name": "Button Type"
+        },
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "duration": {
+          "description": "The duration to hold the button in milliseconds (100-5000).",
+          "name": "Duration"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "Push Button"
+    },
+    "reboot": {
+      "description": "Reboot the NanoKVM device.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "Reboot System"
+    },
+    "reset_hdmi": {
+      "description": "Reset the HDMI connection (relevant for PCIe version).",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "Reset HDMI"
+    },
+    "reset_hid": {
+      "description": "Reset the HID subsystem.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "Reset HID"
+    },
+    "scan_wifi": {
+      "description": "Scan nearby Wi-Fi networks and return the NanoKVM Pro response.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "Scan Wi-Fi"
+    },
+    "set_led_strip": {
+      "description": "Configure NanoKVM Pro LED strip settings.",
+      "fields": {
+        "brightness": {
+          "description": "LED strip brightness percentage.",
+          "name": "Brightness"
+        },
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "horizontal_count": {
+          "description": "Horizontal LED bead count.",
+          "name": "Horizontal Beads"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        },
+        "on": {
+          "description": "Enable or disable the LED strip.",
+          "name": "On"
+        },
+        "vertical_count": {
+          "description": "Vertical LED bead count.",
+          "name": "Vertical Beads"
+        }
+      },
+      "name": "Set LED Strip"
+    },
+    "set_mouse_jiggler": {
+      "description": "Configure the mouse jiggler state and mode.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "enabled": {
+          "description": "Enable or disable the mouse jiggler.",
+          "name": "Enabled"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        },
+        "mode": {
+          "description": "The mouse jiggler mode (absolute or relative).",
+          "name": "Mode"
+        }
+      },
+      "name": "Set Mouse Jiggler"
+    },
+    "wake_on_lan": {
+      "description": "Send a Wake-on-LAN packet to the specified MAC address.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        },
+        "mac": {
+          "description": "The MAC address to send the Wake-on-LAN packet to.",
+          "name": "MAC Address"
+        }
+      },
+      "name": "Wake on LAN"
     }
   }
 }

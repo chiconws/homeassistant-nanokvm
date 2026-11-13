@@ -1,7 +1,5 @@
 """Shared utility helpers for the Sipeed NanoKVM integration."""
-from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import TypeVar, overload
@@ -12,7 +10,6 @@ from yarl import URL
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
-
 from nanokvm.client import NanoKVMAuthenticationFailure, NanoKVMClient, NanoKVMError
 
 _ResultT = TypeVar("_ResultT")
@@ -190,7 +187,6 @@ async def async_connect(
             async with client:
                 await client.authenticate(username, password)
                 result = await then(client) if then is not None else None
-            return client, result
         except (
             aiohttp.ServerFingerprintMismatch,
             aiohttp.ClientConnectorCertificateError,
@@ -201,10 +197,12 @@ async def async_connect(
             raise SSLCertificateChanged from err
         except aiohttp.ClientConnectionError as err:
             last_error = err
-        except (aiohttp.ClientError, NanoKVMError, asyncio.TimeoutError) as err:
+        except (TimeoutError, aiohttp.ClientError, NanoKVMError) as err:
             if is_auth_failure(err):
                 raise InvalidAuth from err
             last_error = err
             break
+        else:
+            return client, result
 
     raise CannotConnect from last_error

@@ -1,19 +1,17 @@
 """Regression tests for coordinator reauthentication error handling."""
 
-from __future__ import annotations
-
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from homeassistant.config_entries import ConfigEntry
 from nanokvm.client import NanoKVMAuthenticationFailure
-from pytest import raises
+import pytest
 
 from custom_components.nanokvm.coordinator import (
     NanoKVMDataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.config_entries import ConfigEntry
 
 
 def _coordinator() -> NanoKVMDataUpdateCoordinator:
@@ -33,21 +31,21 @@ def test_post_reauthentication_timeout_uses_update_failed_contract() -> None:
 
     async def run_test() -> None:
         coordinator = _coordinator()
-        coordinator._async_fetch_with_client = AsyncMock(
+        coordinator._async_fetch_with_client = AsyncMock(  # noqa: SLF001
             side_effect=[
                 NanoKVMAuthenticationFailure("expired token"),
-                asyncio.TimeoutError(),
+                TimeoutError(),
             ]
         )
-        coordinator._async_reauthenticate_client = AsyncMock()
+        coordinator._async_reauthenticate_client = AsyncMock()  # noqa: SLF001
 
-        with raises(
+        with pytest.raises(
             UpdateFailed,
             match="Timed out communicating with NanoKVM after 10 seconds",
         ):
-            await coordinator._async_fetch_once()
+            await coordinator._async_fetch_once()  # noqa: SLF001
 
-        coordinator._async_reauthenticate_client.assert_awaited_once()
-        assert coordinator._async_fetch_with_client.await_count == 2
+        coordinator._async_reauthenticate_client.assert_awaited_once()  # noqa: SLF001
+        assert coordinator._async_fetch_with_client.await_count == 2  # noqa: SLF001
 
     asyncio.run(run_test())

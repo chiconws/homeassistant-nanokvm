@@ -1,5 +1,4 @@
 """Bridge Home Assistant WebRTC sessions to NanoKVM signaling."""
-from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
@@ -8,6 +7,8 @@ from dataclasses import dataclass
 import logging
 from typing import TYPE_CHECKING
 
+from webrtc_models import RTCIceCandidateInit
+
 from homeassistant.components.camera.webrtc import (
     WebRTCAnswer,
     WebRTCCandidate,
@@ -15,12 +16,11 @@ from homeassistant.components.camera.webrtc import (
     WebRTCSendMessage,
 )
 from homeassistant.exceptions import HomeAssistantError
-from nanokvm.client import NanoKVMClient, NanoKVMVideoModeError
 from nanokvm import webrtc
-from webrtc_models import RTCIceCandidateInit
+from nanokvm.client import NanoKVMClient, NanoKVMVideoModeError
 
 if TYPE_CHECKING:
-    from ..coordinator import NanoKVMDataUpdateCoordinator
+    from ..coordinator import NanoKVMDataUpdateCoordinator  # noqa: TID252 - sibling of the media package
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,11 +37,13 @@ class _NanoKVMWebRTCSession:
 
 
 def _to_nanokvm(candidate: RTCIceCandidateInit) -> webrtc.IceCandidate:
-    return webrtc.IceCandidate(
-        candidate=candidate.candidate,
-        sdp_mid=candidate.sdp_mid,
-        sdp_m_line_index=candidate.sdp_m_line_index,
-        username_fragment=candidate.user_fragment,
+    return webrtc.IceCandidate.model_validate(
+        {
+            "candidate": candidate.candidate,
+            "sdpMid": candidate.sdp_mid,
+            "sdpMLineIndex": candidate.sdp_m_line_index,
+            "usernameFragment": candidate.user_fragment,
+        }
     )
 
 
@@ -59,7 +61,7 @@ class NanoKVMWebRTCManager:
 
     def __init__(
         self,
-        coordinator: NanoKVMDataUpdateCoordinator,
+        coordinator: "NanoKVMDataUpdateCoordinator",
         session_state_callback: Callable[[bool], None],
     ) -> None:
         """Initialize WebRTC manager."""
@@ -146,7 +148,7 @@ class NanoKVMWebRTCManager:
                 WebRTCError(code="webrtc_inconsistent_video_mode", message=str(err))
             )
             _LOGGER.warning("%s; closing signaling session", err)
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 - reported to the frontend as a WebRTC error
             _LOGGER.error("Error reading NanoKVM WebRTC signaling: %s", err)
             send_message(WebRTCError(code="webrtc_signal_failed", message=str(err)))
         finally:

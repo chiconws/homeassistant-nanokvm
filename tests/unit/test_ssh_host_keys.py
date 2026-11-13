@@ -1,9 +1,8 @@
 """Tests for SSH login checks and host-key persistence."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from types import TracebackType
+from typing import Self
 from unittest.mock import MagicMock
 
 from nanokvm.ssh_client import NanoKVMSSHAuthenticationError
@@ -22,7 +21,9 @@ def test_known_hosts_path_is_scoped_to_the_entry(tmp_path: Path) -> None:
     assert known_hosts_path(tmp_path, "entry-1") == (
         tmp_path / "nanokvm" / "ssh" / "entry-1.known_hosts"
     )
-    assert known_hosts_path(tmp_path, "entry-2") != known_hosts_path(tmp_path, "entry-1")
+    assert known_hosts_path(tmp_path, "entry-2") != known_hosts_path(
+        tmp_path, "entry-1"
+    )
 
 
 def test_retarget_known_hosts_line_keeps_the_trusted_key() -> None:
@@ -56,7 +57,7 @@ def test_retarget_known_hosts_line_rejects_invalid_entries(
 def test_write_known_hosts_rejects_multiline_content(tmp_path: Path) -> None:
     """Host-key storage cannot be used to inject extra known-hosts entries."""
     with pytest.raises(ValueError, match="exactly one non-empty line"):
-        host_keys_module._write_known_hosts(
+        host_keys_module._write_known_hosts(  # noqa: SLF001
             tmp_path / "known_hosts",
             "host ssh-ed25519 key\nother-host ssh-ed25519 key",
         )
@@ -80,7 +81,7 @@ async def test_write_known_hosts_creates_owner_only_file(tmp_path: Path) -> None
 class _FakeSSH:
     """Record how the login check uses the library's SSH client."""
 
-    instances: list[_FakeSSH] = []
+    instances: "list[_FakeSSH]" = []
     error: Exception | None = None
 
     def __init__(self, host: str, username: str, *, host_key: str) -> None:
@@ -91,7 +92,7 @@ class _FakeSSH:
         self.closed = False
         _FakeSSH.instances.append(self)
 
-    async def __aenter__(self) -> _FakeSSH:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(

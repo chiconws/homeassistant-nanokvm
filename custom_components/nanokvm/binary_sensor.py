@@ -1,22 +1,20 @@
 """Binary sensor platform for Sipeed NanoKVM."""
-from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import override
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
 from nanokvm.models import HWVersion, Permission
 
-from .coordinator import NanoKVMDataUpdateCoordinator
+from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
 from .entity import (
     NanoKVMEntity,
     async_add_entities_as_supported,
@@ -24,20 +22,16 @@ from .entity import (
     has_mounted_image,
 )
 
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True, kw_only=True)
 class NanoKVMBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Describes NanoKVM binary sensor entity."""
 
-    value_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = (
-        lambda _: False
-    )
-    available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = (
-        lambda _: True
-    )
-    should_create_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = (
-        lambda _: True
-    )
+    value_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: False
+    available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
+    should_create_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
 
 
 def _can_read_gpio(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
@@ -207,7 +201,7 @@ KEYBOARD_LED_BINARY_SENSORS: tuple[NanoKVMBinarySensorEntityDescription, ...] = 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NanoKVMConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM binary sensor based on a config entry."""
@@ -243,11 +237,15 @@ class NanoKVMBinarySensor(NanoKVMEntity, BinarySensorEntity):
         )
 
     @property
+    @override
     def is_on(self) -> bool:
         """Return the state of the binary sensor."""
         return self.entity_description.value_fn(self.coordinator)
 
     @property
+    @override
     def available(self) -> bool:
         """Return if entity is available."""
-        return super().available and self.entity_description.available_fn(self.coordinator)
+        return super().available and self.entity_description.available_fn(
+            self.coordinator
+        )

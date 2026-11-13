@@ -1,54 +1,5 @@
 {
   "config": {
-    "step": {
-      "user": {
-        "title": "Connect to Sipeed NanoKVM",
-        "description": "Set up a Sipeed NanoKVM integration.",
-        "data": {
-          "host": "API URL",
-          "use_static_host": "Use static host only (disable mDNS discovery)"
-        }
-      },
-      "auth": {
-        "title": "Authenticate to Sipeed NanoKVM",
-        "description": "Authenticate to your Sipeed NanoKVM device.",
-        "data": {
-          "username": "Username",
-          "password": "Password"
-        }
-      },
-      "confirm": {
-        "title": "Discovered Sipeed NanoKVM",
-        "description": "Do you want to set up the NanoKVM device named {name}?"
-      },
-      "reauth_confirm": {
-        "title": "Reauthenticate Sipeed NanoKVM",
-        "description": "The NanoKVM integration needs updated credentials for {name}."
-      },
-      "ssl_fingerprint": {
-        "title": "Verify SSL Certificate",
-        "description": "The NanoKVM device at **{host}** presented a self-signed certificate with the following SHA-256 fingerprint:\n\n`{fingerprint}`\n\nDo you trust this certificate?"
-      },
-      "ssl_fingerprint_changed": {
-        "title": "SSL Certificate Changed",
-        "description": "The SSL certificate for the NanoKVM device at **{host}** has changed.\n\n**Previous fingerprint:**\n`{old_fingerprint}`\n\n**New fingerprint:**\n`{new_fingerprint}`\n\nThis could mean the device generated a new certificate, or that something is intercepting the connection. Only accept if you expect this change."
-      },
-      "ssh_host_key": {
-        "title": "Verify SSH Host Key",
-        "description": "The NanoKVM device at **{host}** presented this SSH host-key fingerprint:\n\n`{fingerprint}`\n\nOnly trust it if it matches a fingerprint you obtained from a trusted source.",
-        "data": {
-          "trust_ssh_host_key": "I trust this SSH host key"
-        }
-      },
-      "ssh_credentials": {
-        "title": "SSH Credentials",
-        "description": "The NanoKVM device at **{host}** rejected the SSH login. SSH collects the CPU temperature, memory, storage and uptime.\n\nEnter the SSH username and password, or leave the password empty to skip SSH metrics.",
-        "data": {
-          "ssh_username": "Username",
-          "ssh_password": "Password"
-        }
-      }
-    },
     "abort": {
       "already_configured": "This NanoKVM device is already configured",
       "cannot_connect": "Failed to connect to the NanoKVM device",
@@ -60,14 +11,72 @@
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
-      "unknown": "Unexpected error",
-      "ssl_certificate_changed": "The SSL certificate has changed"
+      "ssl_certificate_changed": "The SSL certificate has changed",
+      "unknown": "Unexpected error"
+    },
+    "step": {
+      "auth": {
+        "data": {
+          "password": "Password",
+          "username": "Username"
+        },
+        "description": "Authenticate to your Sipeed NanoKVM device.",
+        "title": "Authenticate to Sipeed NanoKVM"
+      },
+      "confirm": {
+        "description": "Do you want to set up the NanoKVM device named {name}?",
+        "title": "Discovered Sipeed NanoKVM"
+      },
+      "reauth_confirm": {
+        "description": "The NanoKVM integration needs updated credentials for {name}.",
+        "title": "Reauthenticate Sipeed NanoKVM"
+      },
+      "ssh_credentials": {
+        "data": {
+          "ssh_password": "Password",
+          "ssh_username": "Username"
+        },
+        "description": "The NanoKVM device at **{host}** rejected the SSH login. SSH collects the CPU temperature, memory, storage and uptime.\n\nEnter the SSH username and password, or leave the password empty to skip SSH metrics.",
+        "title": "SSH Credentials"
+      },
+      "ssh_host_key": {
+        "data": {
+          "trust_ssh_host_key": "I trust this SSH host key"
+        },
+        "description": "The NanoKVM device at **{host}** presented this SSH host-key fingerprint:\n\n`{fingerprint}`\n\nOnly trust it if it matches a fingerprint you obtained from a trusted source.",
+        "title": "Verify SSH Host Key"
+      },
+      "ssl_fingerprint": {
+        "description": "The NanoKVM device at **{host}** presented a self-signed certificate with the following SHA-256 fingerprint:\n\n`{fingerprint}`\n\nDo you trust this certificate?",
+        "title": "Verify SSL Certificate"
+      },
+      "ssl_fingerprint_changed": {
+        "description": "The SSL certificate for the NanoKVM device at **{host}** has changed.\n\n**Previous fingerprint:**\n`{old_fingerprint}`\n\n**New fingerprint:**\n`{new_fingerprint}`\n\nThis could mean the device generated a new certificate, or that something is intercepting the connection. Only accept if you expect this change.",
+        "title": "SSL Certificate Changed"
+      },
+      "user": {
+        "data": {
+          "host": "API URL",
+          "use_static_host": "Use static host only (disable mDNS discovery)"
+        },
+        "description": "Set up a Sipeed NanoKVM integration.",
+        "title": "Connect to Sipeed NanoKVM"
+      }
     }
   },
   "entity": {
     "binary_sensor": {
-      "wired_connected": {
-        "name": "Wired Connected"
+      "caps_lock": {
+        "name": "Caps Lock"
+      },
+      "hdmi_signal": {
+        "name": "HDMI Signal"
+      },
+      "num_lock": {
+        "name": "Num Lock"
+      },
+      "scroll_lock": {
+        "name": "Scroll Lock"
       },
       "static_ip_enabled": {
         "name": "Static IP Enabled"
@@ -75,55 +84,27 @@
       "time_synchronized": {
         "name": "Time Synchronized"
       },
-      "num_lock": {
-        "name": "Num Lock"
-      },
-      "caps_lock": {
-        "name": "Caps Lock"
-      },
-      "scroll_lock": {
-        "name": "Scroll Lock"
-      },
-      "hdmi_signal": {
-        "name": "HDMI Signal"
+      "wired_connected": {
+        "name": "Wired Connected"
       }
     },
-    "sensor": {
-      "wired_ip_address": {
-        "name": "Wired IP Address",
-        "state_attributes": {
-          "addresses": {
-            "name": "Addresses"
-          }
-        }
-      },
-      "wireless_ip_address": {
-        "name": "Wireless IP Address",
-        "state_attributes": {
-          "addresses": {
-            "name": "Addresses"
-          }
-        }
-      },
-      "account_role": {
-        "name": "Account Role"
+    "button": {
+      "sync_time": {
+        "name": "Sync Time"
       }
     },
-    "switch": {
-      "hdmi_capture": {
-        "name": "HDMI Capture"
+    "number": {
+      "hdmi_idle_timeout": {
+        "name": "HDMI Idle Timeout"
       },
-      "hdmi_passthrough": {
-        "name": "HDMI Passthrough"
+      "led_brightness": {
+        "name": "LED Brightness"
       },
-      "low_power": {
-        "name": "Low Power"
+      "led_horizontal_beads": {
+        "name": "LED Horizontal Beads"
       },
-      "led_strip": {
-        "name": "LED Strip"
-      },
-      "virtual_mic": {
-        "name": "Virtual Microphone"
+      "led_vertical_beads": {
+        "name": "LED Vertical Beads"
       }
     },
     "select": {
@@ -143,126 +124,145 @@
         }
       }
     },
-    "number": {
-      "led_brightness": {
-        "name": "LED Brightness"
+    "sensor": {
+      "account_role": {
+        "name": "Account Role"
       },
-      "led_horizontal_beads": {
-        "name": "LED Horizontal Beads"
+      "wired_ip_address": {
+        "name": "Wired IP Address",
+        "state_attributes": {
+          "addresses": {
+            "name": "Addresses"
+          }
+        }
       },
-      "led_vertical_beads": {
-        "name": "LED Vertical Beads"
-      },
-      "hdmi_idle_timeout": {
-        "name": "HDMI Idle Timeout"
+      "wireless_ip_address": {
+        "name": "Wireless IP Address",
+        "state_attributes": {
+          "addresses": {
+            "name": "Addresses"
+          }
+        }
       }
     },
-    "button": {
-      "sync_time": {
-        "name": "Sync Time"
+    "switch": {
+      "hdmi_capture": {
+        "name": "HDMI Capture"
+      },
+      "hdmi_passthrough": {
+        "name": "HDMI Passthrough"
+      },
+      "led_strip": {
+        "name": "LED Strip"
+      },
+      "low_power": {
+        "name": "Low Power"
+      },
+      "virtual_mic": {
+        "name": "Virtual Microphone"
       }
     }
   },
   "services": {
-    "set_led_strip": {
-      "name": "Set LED Strip",
-      "description": "Configure NanoKVM Pro LED strip settings.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        },
-        "on": {
-          "name": "On",
-          "description": "Enable or disable the LED strip."
-        },
-        "brightness": {
-          "name": "Brightness",
-          "description": "LED strip brightness percentage."
-        },
-        "horizontal_count": {
-          "name": "Horizontal Beads",
-          "description": "Horizontal LED bead count."
-        },
-        "vertical_count": {
-          "name": "Vertical Beads",
-          "description": "Vertical LED bead count."
-        }
-      }
-    },
-    "scan_wifi": {
-      "name": "Scan Wi-Fi",
-      "description": "Scan nearby Wi-Fi networks and return the NanoKVM Pro response.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        }
-      }
-    },
-    "list_images": {
-      "name": "List Images",
-      "description": "List images available on the NanoKVM.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        }
-      }
-    },
-    "is_image_download_enabled": {
-      "name": "Is Image Download Enabled",
-      "description": "Return whether image downloading is enabled on the NanoKVM.",
-      "fields": {
-        "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
-        },
-        "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
-        }
-      }
-    },
     "get_image_download_status": {
-      "name": "Get Image Download Status",
       "description": "Return the current NanoKVM image download status.",
       "fields": {
         "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
         },
         "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
         }
-      }
+      },
+      "name": "Get Image Download Status"
+    },
+    "is_image_download_enabled": {
+      "description": "Return whether image downloading is enabled on the NanoKVM.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "Is Image Download Enabled"
     },
     "list_custom_edids": {
-      "name": "List Custom EDIDs",
       "description": "List custom EDIDs available on a NanoKVM Pro.",
       "fields": {
         "device_id": {
-          "name": "Device",
-          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured."
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
         },
         "host": {
-          "name": "Host",
-          "description": "Optional target host. Required when multiple NanoKVM devices are configured."
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
         }
-      }
+      },
+      "name": "List Custom EDIDs"
+    },
+    "list_images": {
+      "description": "List images available on the NanoKVM.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "List Images"
+    },
+    "scan_wifi": {
+      "description": "Scan nearby Wi-Fi networks and return the NanoKVM Pro response.",
+      "fields": {
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        }
+      },
+      "name": "Scan Wi-Fi"
+    },
+    "set_led_strip": {
+      "description": "Configure NanoKVM Pro LED strip settings.",
+      "fields": {
+        "brightness": {
+          "description": "LED strip brightness percentage.",
+          "name": "Brightness"
+        },
+        "device_id": {
+          "description": "Optional target NanoKVM device. Use this or the host when multiple NanoKVM devices are configured.",
+          "name": "Device"
+        },
+        "horizontal_count": {
+          "description": "Horizontal LED bead count.",
+          "name": "Horizontal Beads"
+        },
+        "host": {
+          "description": "Optional target host. Required when multiple NanoKVM devices are configured.",
+          "name": "Host"
+        },
+        "on": {
+          "description": "Enable or disable the LED strip.",
+          "name": "On"
+        },
+        "vertical_count": {
+          "description": "Vertical LED bead count.",
+          "name": "Vertical Beads"
+        }
+      },
+      "name": "Set LED Strip"
     }
   }
 }

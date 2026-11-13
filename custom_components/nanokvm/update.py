@@ -1,9 +1,7 @@
 """Update platform for Sipeed NanoKVM."""
-from __future__ import annotations
 
-import asyncio
 import logging
-from typing import Any
+from typing import Any, override
 
 import aiohttp
 
@@ -13,16 +11,16 @@ from homeassistant.components.update import (
     UpdateEntityDescription,
     UpdateEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
 from nanokvm.client import NanoKVMError
 from nanokvm.models import Permission
 
-from .coordinator import NanoKVMDataUpdateCoordinator
+from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
+
+PARALLEL_UPDATES = 0
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +36,7 @@ def _normalize_version(version: str | None) -> str | None:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NanoKVMConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM update based on a config entry."""
@@ -61,19 +59,18 @@ class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
 
     def __init__(self, coordinator: NanoKVMDataUpdateCoordinator) -> None:
         """Initialize NanoKVM update."""
-        super().__init__(
-            coordinator=coordinator, unique_id_suffix="update_application"
-        )
+        super().__init__(coordinator=coordinator, unique_id_suffix="update_application")
 
     @property
+    @override
     def available(self) -> bool:
         """Return if entity is available."""
         return (
-            super().available
-            and self.coordinator.application_version_info is not None
+            super().available and self.coordinator.application_version_info is not None
         )
 
     @property
+    @override
     def installed_version(self) -> str | None:
         """Version installed and in use."""
         current_version = None
@@ -88,6 +85,7 @@ class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
         return _normalize_version(self.coordinator.device_info.application)
 
     @property
+    @override
     def latest_version(self) -> str | None:
         """Latest version available for install."""
         latest_version = None
@@ -101,6 +99,7 @@ class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
 
         return self.installed_version
 
+    @override
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
     ) -> None:
@@ -115,7 +114,7 @@ class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
                 "assuming the update is continuing"
             )
             return
-        except (NanoKVMError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+        except (TimeoutError, NanoKVMError, aiohttp.ClientError) as err:
             raise HomeAssistantError(
                 f"Failed to start NanoKVM application update: {err}"
             ) from err
