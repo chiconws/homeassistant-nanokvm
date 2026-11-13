@@ -226,9 +226,10 @@ All three should be green on the PR branch before merge/release.
 Feature and fix branches merge into `dev` through pull requests. A release
 always follows the same steps:
 
-1. On `dev`, commit only the `version` change in `manifest.json` as
-   `chore: bump version to X.Y.Z` and push it. The bump gets no pull request
-   of its own and never rides along in a feature pull request.
+1. On a `chore/bump-X.Y.Z` branch, commit only the `version` change in
+   `manifest.json` as `chore: bump version to X.Y.Z` and merge it into `dev`
+   through its own pull request (`dev` is protected, even for admins). The
+   bump never rides along in a feature pull request.
 2. Open a pull request from `dev` to `main` titled `Release vX.Y.Z`. Its body
    summarizes the changes with their pull request numbers, calls out breaking
    changes such as a new minimum Home Assistant version, and ends with
