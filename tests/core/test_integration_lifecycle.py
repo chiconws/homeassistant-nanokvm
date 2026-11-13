@@ -1,14 +1,11 @@
 """Tests for NanoKVM config-entry setup and unload lifecycle."""
 
-from __future__ import annotations
-
-import asyncio
 from dataclasses import dataclass
 from types import SimpleNamespace
+from typing import Self
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from nanokvm.client import NanoKVMAuthenticationFailure, NanoKVMError
 import pytest
 from yarl import URL
@@ -22,6 +19,7 @@ from custom_components.nanokvm.const import (
     DOMAIN,
 )
 import custom_components.nanokvm.utils as utils_module
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 
 @dataclass(slots=True)
@@ -37,7 +35,7 @@ class SetupClient:
     """Minimal async NanoKVM client used at the integration boundary."""
 
     scenarios: list[SetupScenario] = []
-    instances: list[SetupClient] = []
+    instances: "list[SetupClient]" = []
 
     def __init__(
         self,
@@ -46,6 +44,7 @@ class SetupClient:
         ssl_fingerprint: str | None = None,
         **_: object,
     ) -> None:
+        """Initialize the test double."""
         if not self.scenarios:
             raise AssertionError(f"No setup scenario configured for {url}")
         self.scenario = self.scenarios.pop(0)
@@ -56,7 +55,7 @@ class SetupClient:
         self.exited = False
         self.instances.append(self)
 
-    async def __aenter__(self) -> SetupClient:
+    async def __aenter__(self) -> Self:
         """Enter the fake setup client context."""
         self.entered = True
         return self
@@ -185,9 +184,7 @@ async def test_setup_entry_persists_approved_ssh_host_key(
     """Setup writes the approved host key before the coordinator starts."""
     _prepare_hass(hass_mock)
     hass_mock.config = SimpleNamespace(path=MagicMock(return_value=str(tmp_path)))
-    config_entry_mock.data[CONF_SSH_HOST_KEY] = (
-        "nanokvm.local ssh-ed25519 ZHVtbXk="
-    )
+    config_entry_mock.data[CONF_SSH_HOST_KEY] = "nanokvm.local ssh-ed25519 ZHVtbXk="
     install_setup_client(SetupScenario())
     coordinator_factory, _ = _install_coordinator(monkeypatch)
 
@@ -303,7 +300,7 @@ async def test_setup_entry_exhausted_connection_candidates_is_not_ready(
 @pytest.mark.parametrize(
     "error",
     [
-        asyncio.TimeoutError(),
+        TimeoutError(),
         aiohttp.ClientPayloadError("invalid response"),
         NanoKVMError("api failure"),
     ],

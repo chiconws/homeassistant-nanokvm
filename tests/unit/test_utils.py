@@ -1,13 +1,10 @@
 """Tests for NanoKVM host normalization helpers."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock
 
 import pytest
 
 from custom_components.nanokvm import utils
-
 from custom_components.nanokvm.utils import (
     NanoKVMAPIConnectionOption,
     api_base_url_to_web_url,
@@ -190,7 +187,7 @@ def test_verification_url_keeps_explicit_scheme(
 def test_normalize_mdns_adds_exactly_one_trailing_dot(
     hostname: str, expected: str
 ) -> None:
-    """mDNS names must end with exactly the existing or newly added dot."""
+    """MDNS names must end with exactly the existing or newly added dot."""
     assert normalize_mdns(hostname) == expected
 
 

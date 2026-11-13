@@ -1,27 +1,23 @@
 """Base NanoKVM entity class."""
-from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncGenerator, Callable, Sequence
 import contextlib
-import logging
 from functools import cached_property
-from typing import TypeVar
+import logging
+from typing import TypeVar, override
 
 import aiohttp
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-
 from nanokvm.client import NanoKVMClient, NanoKVMError, NanoKVMPermissionError
 
 from .const import DOMAIN, INTEGRATION_TITLE
-from .coordinator import NanoKVMDataUpdateCoordinator
+from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
 from .utils import api_base_url_to_web_url, device_sw_version
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,7 +42,7 @@ def has_connection_type(
 
 @callback
 def async_add_entities_as_supported(
-    entry: ConfigEntry,
+    entry: NanoKVMConfigEntry,
     coordinator: NanoKVMDataUpdateCoordinator,
     async_add_entities: AddEntitiesCallback,
     descriptions: Sequence[_DescriptionT],
@@ -83,9 +79,13 @@ class NanoKVMEntity(CoordinatorEntity[NanoKVMDataUpdateCoordinator]):
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.device_info.device_key}_{unique_id_suffix}"
+        self._attr_unique_id = (
+            f"{coordinator.device_info.device_key}_{unique_id_suffix}"
+        )
         _LOGGER.debug(
-            "Created entity %s with unique_id: %s", unique_id_suffix, self._attr_unique_id
+            "Created entity %s with unique_id: %s",
+            unique_id_suffix,
+            self._attr_unique_id,
         )
 
     @contextlib.asynccontextmanager
@@ -98,12 +98,13 @@ class NanoKVMEntity(CoordinatorEntity[NanoKVMDataUpdateCoordinator]):
             raise HomeAssistantError(
                 "The NanoKVM account lacks the permission for this action"
             ) from err
-        except (NanoKVMError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+        except (TimeoutError, NanoKVMError, aiohttp.ClientError) as err:
             raise HomeAssistantError(
                 f"NanoKVM did not accept the request: {str(err) or type(err).__name__}"
             ) from err
 
     @cached_property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return device information about this NanoKVM device."""
         device_data = self.coordinator.device_info

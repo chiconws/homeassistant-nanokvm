@@ -1,14 +1,12 @@
 """Tests for NanoKVM update metadata and synchronous entity properties."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from types import SimpleNamespace
 
-from homeassistant.components.update import UpdateDeviceClass, UpdateEntityFeature
 import pytest
 
 from custom_components.nanokvm.update import NanoKVMUpdate, _normalize_version
+from homeassistant.components.update import UpdateDeviceClass, UpdateEntityFeature
 
 
 @pytest.mark.parametrize(

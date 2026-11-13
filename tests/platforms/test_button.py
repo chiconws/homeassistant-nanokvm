@@ -1,16 +1,10 @@
 """Tests for NanoKVM button descriptions and availability helpers."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from types import SimpleNamespace
 
+from custom_components.nanokvm.button import BUTTONS, NanoKVMButton
 from homeassistant.const import EntityCategory
-
-from custom_components.nanokvm.button import (
-    BUTTONS,
-    NanoKVMButton,
-)
 
 
 def test_button_descriptions_expose_stable_metadata() -> None:

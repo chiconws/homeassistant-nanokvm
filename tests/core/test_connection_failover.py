@@ -1,21 +1,20 @@
 """Regression tests for NanoKVM transport failover."""
 
-from __future__ import annotations
-
 import asyncio
 from types import SimpleNamespace
+from typing import Self
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from pytest import MonkeyPatch
+import pytest
 from yarl import URL
 
 import custom_components.nanokvm as nanokvm_module
 import custom_components.nanokvm.config_flow as config_flow_module
 from custom_components.nanokvm.coordinator import NanoKVMDataUpdateCoordinator
 import custom_components.nanokvm.utils as utils_module
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 
 
 def _coordinator() -> NanoKVMDataUpdateCoordinator:
@@ -40,20 +39,20 @@ def test_runtime_disconnect_tries_alternate_transport() -> None:
     async def run_test() -> None:
         coordinator = _coordinator()
         disconnect = aiohttp.ServerDisconnectedError("HTTP probe disconnected")
-        coordinator._async_fetch_with_client = AsyncMock(
+        coordinator._async_fetch_with_client = AsyncMock(  # noqa: SLF001
             side_effect=[disconnect, {"transport": "https"}]
         )
-        coordinator._async_failover_client = AsyncMock(return_value=True)
+        coordinator._async_failover_client = AsyncMock(return_value=True)  # noqa: SLF001
 
-        assert await coordinator._async_fetch_once() == {"transport": "https"}
-        coordinator._async_failover_client.assert_awaited_once_with(disconnect)
-        assert coordinator._async_fetch_with_client.await_count == 2
+        assert await coordinator._async_fetch_once() == {"transport": "https"}  # noqa: SLF001
+        coordinator._async_failover_client.assert_awaited_once_with(disconnect)  # noqa: SLF001
+        assert coordinator._async_fetch_with_client.await_count == 2  # noqa: SLF001
 
     asyncio.run(run_test())
 
 
 def test_config_validation_disconnect_tries_https(
-    monkeypatch: MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Config validation must try HTTPS when the HTTP probe disconnects."""
 
@@ -67,7 +66,7 @@ def test_config_validation_disconnect_tries_https(
                 self.url = URL(url)
                 attempted_urls.append(url)
 
-            async def __aenter__(self) -> FakeClient:
+            async def __aenter__(self) -> Self:
                 return self
 
             async def __aexit__(self, *_: object) -> None:
@@ -98,7 +97,7 @@ def test_config_validation_disconnect_tries_https(
     asyncio.run(run_test())
 
 
-def test_entry_setup_disconnect_tries_https(monkeypatch: MonkeyPatch) -> None:
+def test_entry_setup_disconnect_tries_https(monkeypatch: pytest.MonkeyPatch) -> None:
     """Config-entry setup must try HTTPS when the HTTP probe disconnects."""
 
     async def run_test() -> None:
@@ -111,7 +110,7 @@ def test_entry_setup_disconnect_tries_https(monkeypatch: MonkeyPatch) -> None:
                 self.url = URL(url)
                 attempted_urls.append(url)
 
-            async def __aenter__(self) -> FakeClient:
+            async def __aenter__(self) -> Self:
                 return self
 
             async def __aexit__(self, *_: object) -> None:
@@ -157,7 +156,9 @@ def test_entry_setup_disconnect_tries_https(monkeypatch: MonkeyPatch) -> None:
     asyncio.run(run_test())
 
 
-def test_reauthentication_disconnect_tries_https(monkeypatch: MonkeyPatch) -> None:
+def test_reauthentication_disconnect_tries_https(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Reauthentication must try HTTPS when the HTTP candidate disconnects."""
 
     async def run_test() -> None:
@@ -170,7 +171,7 @@ def test_reauthentication_disconnect_tries_https(monkeypatch: MonkeyPatch) -> No
                 self.url = URL(url)
                 attempted_urls.append(url)
 
-            async def __aenter__(self) -> FakeClient:
+            async def __aenter__(self) -> Self:
                 return self
 
             async def __aexit__(self, *_: object) -> None:
@@ -183,7 +184,7 @@ def test_reauthentication_disconnect_tries_https(monkeypatch: MonkeyPatch) -> No
         monkeypatch.setattr(utils_module, "NanoKVMClient", FakeClient)
         coordinator = _coordinator()
 
-        await coordinator._async_reauthenticate_client()
+        await coordinator._async_reauthenticate_client()  # noqa: SLF001
 
         assert [URL(url).scheme for url in attempted_urls] == ["http", "https"]
         assert coordinator.client.url.scheme == "https"

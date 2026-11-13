@@ -1,11 +1,8 @@
 """Tests for NanoKVM select platform helpers and descriptions."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from types import SimpleNamespace
 
-from homeassistant.const import EntityCategory
 from nanokvm.models import HidMode, LcdTimeFormat, MouseJigglerMode
 import pytest
 
@@ -31,7 +28,7 @@ from custom_components.nanokvm.select import (
     _pro_disk_value,
     _swap_size_value,
 )
-
+from homeassistant.const import EntityCategory
 
 CoordinatorStateFactory = Callable[..., SimpleNamespace]
 

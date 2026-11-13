@@ -1,29 +1,27 @@
 """Service registration for the Sipeed NanoKVM integration."""
-from __future__ import annotations
 
-import logging
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
+import logging
 from typing import Any
 
-import voluptuous as vol
+import voluptuous as vol  # noqa: TID251 - probatio needs HA 2026.9; the minimum is 2025.2
 
+from homeassistant.const import ATTR_DEVICE_ID, CONF_HOST
 from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
     ServiceResponse,
     SupportsResponse,
 )
-from homeassistant.const import ATTR_DEVICE_ID, CONF_HOST
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
-
 from nanokvm.client import NanoKVMClient, NanoKVMPermissionError
 from nanokvm.models import GpioType, MouseJigglerMode
 
 from .const import (
-    ATTR_BUTTON_TYPE,
     ATTR_BRIGHTNESS,
+    ATTR_BUTTON_TYPE,
     ATTR_DURATION,
     ATTR_ENABLED,
     ATTR_HORIZONTAL_COUNT,
@@ -66,7 +64,8 @@ _OPTIONAL_HOST_FIELD = {
 }
 
 PUSH_BUTTON_SCHEMA = vol.Schema(
-    _OPTIONAL_HOST_FIELD | {
+    _OPTIONAL_HOST_FIELD
+    | {
         vol.Required(ATTR_BUTTON_TYPE): vol.In([BUTTON_TYPE_POWER, BUTTON_TYPE_RESET]),
         vol.Optional(ATTR_DURATION, default=100): vol.All(
             vol.Coerce(int), vol.Range(min=100, max=5000)
@@ -75,23 +74,26 @@ PUSH_BUTTON_SCHEMA = vol.Schema(
 )
 
 PASTE_TEXT_SCHEMA = vol.Schema(
-    _OPTIONAL_HOST_FIELD | {
+    _OPTIONAL_HOST_FIELD
+    | {
         vol.Required(ATTR_TEXT): str,
     }
 )
 
 WAKE_ON_LAN_SCHEMA = vol.Schema(
-    _OPTIONAL_HOST_FIELD | {
+    _OPTIONAL_HOST_FIELD
+    | {
         vol.Required(ATTR_MAC): str,
     }
 )
 
 SET_MOUSE_JIGGLER_SCHEMA = vol.Schema(
-    _OPTIONAL_HOST_FIELD | {
+    _OPTIONAL_HOST_FIELD
+    | {
         vol.Required(ATTR_ENABLED): bool,
-        vol.Optional(
-            ATTR_MODE, default=MouseJigglerMode.ABSOLUTE.value
-        ): vol.In([MouseJigglerMode.ABSOLUTE.value, MouseJigglerMode.RELATIVE.value]),
+        vol.Optional(ATTR_MODE, default=MouseJigglerMode.ABSOLUTE.value): vol.In(
+            [MouseJigglerMode.ABSOLUTE.value, MouseJigglerMode.RELATIVE.value]
+        ),
     }
 )
 
@@ -116,7 +118,7 @@ SET_LED_STRIP_SCHEMA = vol.All(
             ),
         }
     ),
-    cv.has_at_least_one_key(
+    cv.has_at_least_one_key(  # noqa: TID251 - probatio needs HA 2026.9
         ATTR_ON, ATTR_BRIGHTNESS, ATTR_HORIZONTAL_COUNT, ATTR_VERTICAL_COUNT
     ),
 )
@@ -265,7 +267,9 @@ def _resolve_target_coordinator(
     ]
 
     if not matches:
-        raise ServiceValidationError(f"No NanoKVM device is configured for host {requested_host}")
+        raise ServiceValidationError(
+            f"No NanoKVM device is configured for host {requested_host}"
+        )
 
     if len(matches) > 1:
         raise ServiceValidationError(
@@ -287,7 +291,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             try:
                 async with coordinator.async_client() as client:
                     if service.pro_only and not coordinator.is_pro_hardware:
-                        raise HomeAssistantError(
+                        raise HomeAssistantError(  # noqa: TRY301 - re-raised as is below
                             f"The {service.name} service is only available for "
                             "NanoKVM Pro devices"
                         )
@@ -319,11 +323,10 @@ def async_register_services(hass: HomeAssistant) -> None:
             DOMAIN,
             service.name,
             make_handler(service),
-            schema=service.schema,
+            schema=service.schema,  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
             supports_response=(
                 SupportsResponse.ONLY
                 if service.returns_response
                 else SupportsResponse.NONE
             ),
         )
-

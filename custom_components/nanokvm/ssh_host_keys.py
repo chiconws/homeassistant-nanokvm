@@ -1,5 +1,4 @@
 """SSH login checks and per-entry host-key trust storage."""
-from __future__ import annotations
 
 import asyncio
 from pathlib import Path
@@ -8,7 +7,6 @@ import re
 from homeassistant.core import HomeAssistant
 from homeassistant.util.file import write_utf8_file_atomic
 from nanokvm.ssh_client import NanoKVMSSH
-
 
 _SAFE_ENTRY_ID = re.compile(r"[^A-Za-z0-9_.-]")
 
@@ -27,7 +25,7 @@ async def async_check_ssh_login(
     known_hosts_line: str, username: str, password: str
 ) -> None:
     """Sign in to the host the trusted key line names, then disconnect."""
-    host = known_hosts_line.split(maxsplit=1)[0].split(",")[0]
+    host = known_hosts_line.split(maxsplit=1)[0].split(",", maxsplit=1)[0]
     async with NanoKVMSSH(host, username, host_key=known_hosts_line) as ssh:
         await ssh.authenticate(password)
 

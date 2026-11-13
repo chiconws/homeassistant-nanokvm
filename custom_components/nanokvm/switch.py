@@ -1,25 +1,24 @@
 """Switch platform for Sipeed NanoKVM."""
-from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+import logging
+from typing import Any, override
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
 from nanokvm.client import NanoKVMError, NanoKVMNotSupportedError
 from nanokvm.models import GpioType, Permission, VirtualDevice
 
-from .coordinator import NanoKVMDataUpdateCoordinator
+from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity, async_add_entities_as_supported
 from .led import async_set_led_strip, led_strip_available
+
+PARALLEL_UPDATES = 0
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,9 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 class NanoKVMSwitchEntityDescription(SwitchEntityDescription):
     """Describes NanoKVM switch entity."""
 
-    value_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = (
-        lambda _: False
-    )
+    value_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: False
     available_fn: Callable[[NanoKVMDataUpdateCoordinator], bool] = lambda _: True
     turn_on_fn: Callable[[NanoKVMDataUpdateCoordinator], Awaitable[Any]] | None = None
     turn_off_fn: Callable[[NanoKVMDataUpdateCoordinator], Awaitable[Any]] | None = None
@@ -173,8 +170,12 @@ SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
         value_fn=lambda coordinator: bool(
             coordinator.gpio_info and coordinator.gpio_info.pwr
         ),
-        turn_on_fn=lambda coordinator: coordinator.client.push_button(GpioType.POWER, 200),
-        turn_off_fn=lambda coordinator: coordinator.client.push_button(GpioType.POWER, 200),
+        turn_on_fn=lambda coordinator: coordinator.client.push_button(
+            GpioType.POWER, 200
+        ),
+        turn_off_fn=lambda coordinator: coordinator.client.push_button(
+            GpioType.POWER, 200
+        ),
         available_fn=lambda coordinator: coordinator.can(Permission.POWER),
     ),
     NanoKVMSwitchEntityDescription(
@@ -240,9 +241,10 @@ SSH_SWITCHES: tuple[NanoKVMSwitchEntityDescription, ...] = (
     ),
 )
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NanoKVMConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM switch based on a config entry."""
@@ -293,19 +295,25 @@ class NanoKVMSwitch(NanoKVMEntity, SwitchEntity):
         )
 
     @property
+    @override
     def is_on(self) -> bool:
         """Return the state of the switch."""
         return self.entity_description.value_fn(self.coordinator)
 
     @property
+    @override
     def available(self) -> bool:
         """Return if entity is available."""
-        return super().available and self.entity_description.available_fn(self.coordinator)
+        return super().available and self.entity_description.available_fn(
+            self.coordinator
+        )
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
         await self._async_set(True)
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
         await self._async_set(False)
@@ -336,6 +344,7 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
             return None
         return bool(self.coordinator.gpio_info.pwr)
 
+    @override
     async def _async_set(self, enabled: bool) -> None:
         """Press the power button unless the host is already in that state."""
         if await self._async_current_power_state() is enabled:
@@ -358,20 +367,21 @@ class NanoKVMPowerSwitch(NanoKVMSwitch):
 
     async def _async_monitor_shutdown(self) -> None:
         """Refresh until the host reports power off or the wait times out."""
-        SHUTDOWN_TIMEOUT = 300
-        SHUTDOWN_POLL_INTERVAL = 5
+        shutdown_timeout = 300
+        shutdown_poll_interval = 5
 
         start_time = self.hass.loop.time()
-        while self.hass.loop.time() - start_time < SHUTDOWN_TIMEOUT:
+        while self.hass.loop.time() - start_time < shutdown_timeout:
             await self.coordinator.async_request_refresh()
             if self.coordinator.gpio_info and not self.coordinator.gpio_info.pwr:
                 await self.coordinator.async_request_refresh()
                 return
-            await asyncio.sleep(SHUTDOWN_POLL_INTERVAL)
+            await asyncio.sleep(shutdown_poll_interval)
 
-        _LOGGER.warning("Device did not turn off within %s seconds", SHUTDOWN_TIMEOUT)
+        _LOGGER.warning("Device did not turn off within %s seconds", shutdown_timeout)
         await self.coordinator.async_request_refresh()
 
+    @override
     async def async_will_remove_from_hass(self) -> None:
         """Stop following a pending shutdown when the entity is removed."""
         await super().async_will_remove_from_hass()
@@ -387,6 +397,7 @@ class NanoKVMVirtualDeviceSwitch(NanoKVMSwitch):
     toggle it.
     """
 
+    @override
     async def _async_set(self, enabled: bool) -> None:
         """Set the state, or toggle only when the refreshed state differs."""
         device = self.entity_description.virtual_device
@@ -410,6 +421,7 @@ class NanoKVMVirtualDeviceSwitch(NanoKVMSwitch):
 class NanoKVMWatchdogSwitch(NanoKVMSwitch):
     """Defines a NanoKVM watchdog switch backed by SSH file control."""
 
+    @override
     async def _async_set(self, enabled: bool) -> None:
         """Set watchdog state via SSH and refresh coordinator state."""
         collector = self.coordinator.async_ensure_ssh_metrics_collector()

@@ -1,5 +1,4 @@
 """SSH metrics collection for NanoKVM: a reconnecting wrapper around the library."""
-from __future__ import annotations
 
 from nanokvm.ssh_client import DEFAULT_SSH_USERNAME, NanoKVMSSH, SSHMetrics
 

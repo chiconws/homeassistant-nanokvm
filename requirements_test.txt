@@ -1,7 +1,12 @@
-coverage>=7.10.6,<8.0
-homeassistant==2026.5.1
+# pytest-homeassistant-custom-component pins homeassistant (and pytest, pytest-asyncio).
+# Bump it together with the other test pins.
+pytest-homeassistant-custom-component==0.13.373
+coverage>=7.10,<8.0
+mypy==2.4.1
+prek==0.5.7
+pyright==1.1.414
+ruff==0.17.3
+
+# project-specific
 nanokvm==1.6.0
-pytest>=9.0,<10.0
-pytest-asyncio>=1.4,<2.0
 PyTurboJPEG==1.8.3
-ruff==0.15.12
