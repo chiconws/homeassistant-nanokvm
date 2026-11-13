@@ -81,7 +81,7 @@ async def test_write_known_hosts_creates_owner_only_file(tmp_path: Path) -> None
 class _FakeSSH:
     """Record how the login check uses the library's SSH client."""
 
-    instances: "list[_FakeSSH]" = []
+    instances: list[_FakeSSH] = []
     error: Exception | None = None
 
     def __init__(self, host: str, username: str, *, host_key: str) -> None:

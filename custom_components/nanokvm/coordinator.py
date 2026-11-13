@@ -315,7 +315,7 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 ) as client:
                     await client.authenticate(self.username, self.password)
                     info = await client.get_info()
-        except (TimeoutError, aiohttp.ClientError, NanoKVMError):
+        except TimeoutError, aiohttp.ClientError, NanoKVMError:
             # Back off so a long-gone address is not probed every minute.
             self._preferred_host_check_interval = min(
                 self._preferred_host_check_interval * 2,

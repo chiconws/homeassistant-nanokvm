@@ -219,9 +219,8 @@ its logs.
   when behaviour, services, entities or user-facing text change.
 - Add tests for bug fixes and new behaviour. Test doubles use `Fake` from
   `tests/common.py`.
-- The minimum Home Assistant is 2025.2.0 (Python 3.13), so code must not use
-  Python 3.14-only syntax; ruff, mypy and Pyright target 3.13. Annotations
-  that name a class defined later or imported under `TYPE_CHECKING` are quoted.
+- The minimum Home Assistant is 2026.9.0 (Python 3.14); ruff, mypy and
+  Pyright target 3.14. Schemas use `probatio`, as in Home Assistant core.
 
 ## Releases
 
@@ -244,14 +243,12 @@ Feature and fix branches merge into `dev` through pull requests. A release:
 
 - Repository name, domain `nanokvm` and the name "Sipeed NanoKVM" stay:
   renaming breaks existing config entries and the default HACS listing.
-- `voluptuous` instead of `probatio` (`# noqa: TID251` on each import):
-  probatio ships with Home Assistant 2026.9, and the minimum is 2025.2.0.
 - `config_flow.py`, `coordinator.py` and `switch.py` are over ~400 lines;
   splitting them is deferred.
 - Tests drive the integration with `MagicMock` and duck-typed fakes instead of
-  the `hass` fixture, so they also run on the 2025.2 minimum.
+  the `hass` fixture; moving them is deferred.
 - French (`translations/fr.json`) is kept in addition to English and Brazilian
-  Portuguese.
+  Portuguese, so `CONTRIBUTING.md` lists it among the translations to update.
 
 [ha-url]: https://www.home-assistant.io/
 [nanokvm-url]: https://github.com/sipeed/NanoKVM

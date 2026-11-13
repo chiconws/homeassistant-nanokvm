@@ -5,7 +5,7 @@ import logging
 from typing import Any, override
 
 import aiohttp
-import voluptuous as vol  # noqa: TID251 - probatio needs HA 2026.9; the minimum is 2025.2
+import probatio
 from yarl import URL
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
@@ -83,7 +83,7 @@ async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
             ) as client:
                 await client.authenticate(data[CONF_USERNAME], data[CONF_PASSWORD])
                 ssh_state = await client.get_ssh_state()
-        except (TimeoutError, aiohttp.ClientError, NanoKVMError):
+        except TimeoutError, aiohttp.ClientError, NanoKVMError:
             continue
 
         if not ssh_state.enabled:
@@ -113,7 +113,7 @@ async def async_is_nanokvm_api(api_url: str, ssl_fingerprint: str) -> bool:
             await client.authenticate(DEFAULT_USERNAME, DEFAULT_PASSWORD)
     except NanoKVMAuthenticationFailure:
         return True
-    except (TimeoutError, aiohttp.ClientError, NanoKVMError):
+    except TimeoutError, aiohttp.ClientError, NanoKVMError:
         return False
     return True
 
@@ -231,7 +231,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                     candidate_key = await validate_input(
                         dict(entry.data) | {CONF_HOST: probe_url}
                     )
-            except (TimeoutError, CannotConnect, InvalidAuth, SSLCertificateChanged):
+            except TimeoutError, CannotConnect, InvalidAuth, SSLCertificateChanged:
                 continue
             if candidate_key == device_key:
                 selected_host = host
@@ -449,8 +449,8 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="ssh_host_key_unavailable")
             return self.async_show_form(
                 step_id="ssh_host_key",
-                data_schema=vol.Schema(  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
-                    {vol.Required(CONF_TRUST_SSH_HOST_KEY, default=False): bool}
+                data_schema=probatio.Schema(
+                    {probatio.Required(CONF_TRUST_SSH_HOST_KEY, default=False): bool}
                 ),
                 description_placeholders={
                     "host": host_key.host,
@@ -521,12 +521,12 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="ssh_credentials",
-            data_schema=vol.Schema(  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
+            data_schema=probatio.Schema(
                 {
-                    vol.Required(
+                    probatio.Required(
                         CONF_SSH_USERNAME, default=self._ssh_credentials()[0]
                     ): str,
-                    vol.Optional(CONF_SSH_PASSWORD): str,
+                    probatio.Optional(CONF_SSH_PASSWORD): str,
                 }
             ),
             errors=errors,
@@ -605,13 +605,13 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
 
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Required(
+                probatio.Required(
                     CONF_USERNAME,
                     default=entry.data.get(CONF_USERNAME, DEFAULT_USERNAME),
                 ): str,
-                vol.Required(CONF_PASSWORD): str,
+                probatio.Required(CONF_PASSWORD): str,
             }
         )
 
@@ -634,7 +634,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=schema,  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
+            data_schema=schema,
             errors=errors,
             description_placeholders={
                 "name": entry.data.get(CONF_HOST, INTEGRATION_TITLE),
@@ -718,10 +718,10 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
+            data_schema=probatio.Schema(
                 {
-                    vol.Required(CONF_HOST): str,
-                    vol.Optional(CONF_USE_STATIC_HOST, default=False): bool,
+                    probatio.Required(CONF_HOST): str,
+                    probatio.Optional(CONF_USE_STATIC_HOST, default=False): bool,
                 }
             ),
             errors=errors,
@@ -767,10 +767,10 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle authentication step."""
         errors: dict[str, str] = {}
 
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Required(CONF_USERNAME, default=DEFAULT_USERNAME): str,
-                vol.Required(CONF_PASSWORD): str,
+                probatio.Required(CONF_USERNAME, default=DEFAULT_USERNAME): str,
+                probatio.Required(CONF_PASSWORD): str,
             }
         )
 
@@ -794,7 +794,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="auth",
-            data_schema=schema,  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
+            data_schema=schema,
             errors=errors,
         )
 
@@ -959,7 +959,7 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 # the endpoint has answered like a NanoKVM.
                 try:
                     fingerprint = await async_fetch_remote_fingerprint(api_url)
-                except (TimeoutError, aiohttp.ClientError, OSError):
+                except TimeoutError, aiohttp.ClientError, OSError:
                     fingerprint = None
                 if fingerprint is None or not await async_is_nanokvm_api(
                     api_url, fingerprint

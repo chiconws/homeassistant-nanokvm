@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import logging
 from typing import Any
 
-import voluptuous as vol  # noqa: TID251 - probatio needs HA 2026.9; the minimum is 2025.2
+import probatio
 
 from homeassistant.const import ATTR_DEVICE_ID, CONF_HOST
 from homeassistant.core import (
@@ -15,7 +15,7 @@ from homeassistant.core import (
     SupportsResponse,
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers import device_registry as dr
 from nanokvm.client import NanoKVMClient, NanoKVMPermissionError
 from nanokvm.models import GpioType, MouseJigglerMode
 
@@ -59,66 +59,70 @@ from .utils import host_match_key
 _LOGGER = logging.getLogger(__name__)
 
 _OPTIONAL_HOST_FIELD = {
-    vol.Optional(ATTR_DEVICE_ID): vol.All(str, vol.Length(min=1)),
-    vol.Optional(CONF_HOST): vol.All(str, vol.Length(min=1)),
+    probatio.Optional(ATTR_DEVICE_ID): probatio.All(str, probatio.Length(min=1)),
+    probatio.Optional(CONF_HOST): probatio.All(str, probatio.Length(min=1)),
 }
 
-PUSH_BUTTON_SCHEMA = vol.Schema(
+PUSH_BUTTON_SCHEMA = probatio.Schema(
     _OPTIONAL_HOST_FIELD
     | {
-        vol.Required(ATTR_BUTTON_TYPE): vol.In([BUTTON_TYPE_POWER, BUTTON_TYPE_RESET]),
-        vol.Optional(ATTR_DURATION, default=100): vol.All(
-            vol.Coerce(int), vol.Range(min=100, max=5000)
+        probatio.Required(ATTR_BUTTON_TYPE): probatio.In(
+            [BUTTON_TYPE_POWER, BUTTON_TYPE_RESET]
+        ),
+        probatio.Optional(ATTR_DURATION, default=100): probatio.All(
+            probatio.Coerce(int), probatio.Range(min=100, max=5000)
         ),
     }
 )
 
-PASTE_TEXT_SCHEMA = vol.Schema(
+PASTE_TEXT_SCHEMA = probatio.Schema(
     _OPTIONAL_HOST_FIELD
     | {
-        vol.Required(ATTR_TEXT): str,
+        probatio.Required(ATTR_TEXT): str,
     }
 )
 
-WAKE_ON_LAN_SCHEMA = vol.Schema(
+WAKE_ON_LAN_SCHEMA = probatio.Schema(
     _OPTIONAL_HOST_FIELD
     | {
-        vol.Required(ATTR_MAC): str,
+        probatio.Required(ATTR_MAC): str,
     }
 )
 
-SET_MOUSE_JIGGLER_SCHEMA = vol.Schema(
+SET_MOUSE_JIGGLER_SCHEMA = probatio.Schema(
     _OPTIONAL_HOST_FIELD
     | {
-        vol.Required(ATTR_ENABLED): bool,
-        vol.Optional(ATTR_MODE, default=MouseJigglerMode.ABSOLUTE.value): vol.In(
+        probatio.Required(ATTR_ENABLED): bool,
+        probatio.Optional(
+            ATTR_MODE, default=MouseJigglerMode.ABSOLUTE.value
+        ): probatio.In(
             [MouseJigglerMode.ABSOLUTE.value, MouseJigglerMode.RELATIVE.value]
         ),
     }
 )
 
-HOST_ONLY_SCHEMA = vol.Schema(_OPTIONAL_HOST_FIELD)
+HOST_ONLY_SCHEMA = probatio.Schema(_OPTIONAL_HOST_FIELD)
 
-SET_LED_STRIP_SCHEMA = vol.All(
-    vol.Schema(
+SET_LED_STRIP_SCHEMA = probatio.All(
+    probatio.Schema(
         _OPTIONAL_HOST_FIELD
         | {
-            vol.Optional(ATTR_ON): bool,
-            vol.Optional(ATTR_BRIGHTNESS): vol.All(
-                vol.Coerce(int),
-                vol.Range(min=LED_BRIGHTNESS_MIN, max=LED_BRIGHTNESS_MAX),
+            probatio.Optional(ATTR_ON): bool,
+            probatio.Optional(ATTR_BRIGHTNESS): probatio.All(
+                probatio.Coerce(int),
+                probatio.Range(min=LED_BRIGHTNESS_MIN, max=LED_BRIGHTNESS_MAX),
             ),
-            vol.Optional(ATTR_HORIZONTAL_COUNT): vol.All(
-                vol.Coerce(int),
-                vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
+            probatio.Optional(ATTR_HORIZONTAL_COUNT): probatio.All(
+                probatio.Coerce(int),
+                probatio.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
             ),
-            vol.Optional(ATTR_VERTICAL_COUNT): vol.All(
-                vol.Coerce(int),
-                vol.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
+            probatio.Optional(ATTR_VERTICAL_COUNT): probatio.All(
+                probatio.Coerce(int),
+                probatio.Range(min=LED_BEAD_MIN, max=LED_BEAD_TOTAL_LIMIT),
             ),
         }
     ),
-    cv.has_at_least_one_key(  # noqa: TID251 - probatio needs HA 2026.9
+    probatio.AtLeastOne(
         ATTR_ON, ATTR_BRIGHTNESS, ATTR_HORIZONTAL_COUNT, ATTR_VERTICAL_COUNT
     ),
 )
@@ -132,7 +136,9 @@ class _Service:
     call: Callable[
         [NanoKVMDataUpdateCoordinator, NanoKVMClient, ServiceCall], Awaitable[Any]
     ]
-    schema: vol.Schema | vol.All = field(default_factory=lambda: HOST_ONLY_SCHEMA)
+    schema: probatio.Schema | probatio.All = field(
+        default_factory=lambda: HOST_ONLY_SCHEMA
+    )
     pro_only: bool = False
     returns_response: bool = False
     refresh: bool = False
@@ -323,7 +329,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             DOMAIN,
             service.name,
             make_handler(service),
-            schema=service.schema,  # type: ignore[arg-type]  # voluptuous until the minimum is HA 2026.9
+            schema=service.schema,
             supports_response=(
                 SupportsResponse.ONLY
                 if service.returns_response

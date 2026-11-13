@@ -31,7 +31,7 @@ The UI is available in English, French and Brazilian Portuguese.
 
 ## Requirements
 
-- Home Assistant 2025.2.0 or newer
+- Home Assistant 2026.9.0 or newer
 - A Sipeed NanoKVM (non-Pro or Pro) reachable from Home Assistant
 
 ## Installation
@@ -247,7 +247,7 @@ MIT, see [LICENSE](LICENSE).
 
 [badge-marketplace]: https://img.shields.io/badge/Marketplace-Default-41BDF5.svg
 [badge-release]: https://img.shields.io/github/v/release/chiconws/homeassistant-nanokvm
-[badge-ha]: https://img.shields.io/badge/Home%20Assistant-2025.2.0%2B-41BDF5?logo=home-assistant
+[badge-ha]: https://img.shields.io/badge/Home%20Assistant-2026.9.0%2B-41BDF5?logo=home-assistant
 [badge-commit-activity]: https://img.shields.io/github/commit-activity/m/chiconws/homeassistant-nanokvm
 [badge-hacs-validation]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hacs.yaml/badge.svg
 [badge-hassfest]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hassfest.yaml/badge.svg

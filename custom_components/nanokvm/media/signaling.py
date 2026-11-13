@@ -61,7 +61,7 @@ class NanoKVMWebRTCManager:
 
     def __init__(
         self,
-        coordinator: "NanoKVMDataUpdateCoordinator",
+        coordinator: NanoKVMDataUpdateCoordinator,
         session_state_callback: Callable[[bool], None],
     ) -> None:
         """Initialize WebRTC manager."""
