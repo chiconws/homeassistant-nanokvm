@@ -180,7 +180,7 @@ async def test_prepare_ssh_host_key_probes_enabled_service(
         fingerprint="SHA256:trusted",
     )
     probe = AsyncMock(return_value=host_key)
-    monkeypatch.setattr(config_flow_module, "async_probe_host_key", probe)
+    monkeypatch.setattr(config_flow_module, "probe_host_key", probe)
 
     result = await async_prepare_ssh_host_key(_connection_data())
 
@@ -198,7 +198,7 @@ async def test_prepare_ssh_host_key_skips_disabled_service(
     SSHStateClient.ssh_enabled = False
     monkeypatch.setattr(config_flow_module, "NanoKVMClient", SSHStateClient)
     probe = AsyncMock()
-    monkeypatch.setattr(config_flow_module, "async_probe_host_key", probe)
+    monkeypatch.setattr(config_flow_module, "probe_host_key", probe)
 
     try:
         assert await async_prepare_ssh_host_key(_connection_data()) is None
@@ -217,7 +217,7 @@ async def test_prepare_ssh_host_key_handles_probe_failure(
     monkeypatch.setattr(config_flow_module, "NanoKVMClient", SSHStateClient)
     monkeypatch.setattr(
         config_flow_module,
-        "async_probe_host_key",
+        "probe_host_key",
         AsyncMock(side_effect=OSError("SSH unavailable")),
     )
 

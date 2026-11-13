@@ -18,6 +18,8 @@ from nanokvm.ssh_client import (
     DEFAULT_SSH_USERNAME,
     NanoKVMSSHAuthenticationError,
     NanoKVMSSHConnectionError,
+    SSHHostKey,
+    probe_host_key,
 )
 from nanokvm.utils import async_fetch_remote_fingerprint
 
@@ -36,9 +38,7 @@ from .const import (
     PREFERRED_HOST_TIMEOUT_SECONDS,
 )
 from .ssh_host_keys import (
-    SSHHostKey,
     async_check_ssh_login,
-    async_probe_host_key,
     retarget_known_hosts_line,
 )
 from .utils import (
@@ -94,7 +94,7 @@ async def async_prepare_ssh_host_key(data: dict[str, Any]) -> SSHHostKey | None:
             return None
 
         try:
-            return await async_probe_host_key(extract_ssh_host(data[CONF_HOST]))
+            return await probe_host_key(extract_ssh_host(data[CONF_HOST]))
         except Exception as err:
             _LOGGER.warning(
                 "Unable to verify the SSH host key for NanoKVM at %s: %s",
