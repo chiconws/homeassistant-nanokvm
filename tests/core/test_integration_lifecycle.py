@@ -35,7 +35,7 @@ class SetupClient:
     """Minimal async NanoKVM client used at the integration boundary."""
 
     scenarios: list[SetupScenario] = []
-    instances: "list[SetupClient]" = []
+    instances: list[SetupClient] = []
 
     def __init__(
         self,

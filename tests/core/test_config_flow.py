@@ -53,7 +53,7 @@ class ScriptedClient:
     """Minimal async client whose instances consume configured scenarios."""
 
     scenarios: list[ClientScenario] = []
-    instances: "list[ScriptedClient]" = []
+    instances: list[ScriptedClient] = []
 
     def __init__(
         self,

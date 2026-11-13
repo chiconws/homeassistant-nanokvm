@@ -18,8 +18,8 @@ from nanokvm.models import (
     StatusImageRsp,
     WiFiInfo,
 )
+import probatio
 import pytest
-import voluptuous as vol  # noqa: TID251 - the integration still uses voluptuous
 
 from custom_components.nanokvm import services as services_module
 from custom_components.nanokvm.const import (
@@ -60,7 +60,7 @@ class RegisteredService:
     """Service metadata captured at the Home Assistant registry boundary."""
 
     handler: Callable[[ServiceCall], Awaitable[Any]]
-    schema: vol.Schema
+    schema: probatio.Schema
     supports_response: SupportsResponse
 
 
@@ -222,10 +222,10 @@ def test_service_schemas_apply_defaults_and_coercion() -> None:
     ],
 )
 def test_service_schemas_reject_invalid_fields(
-    schema: vol.Schema, data: dict[str, Any]
+    schema: probatio.Schema, data: dict[str, Any]
 ) -> None:
     """Invalid user input must fail before reaching a device handler."""
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         schema(data)
 
 
@@ -545,7 +545,7 @@ async def test_led_strip_requires_at_least_one_update_field(
     """An empty LED update must fail before resolving or contacting a device."""
     _install_coordinators(hass_mock, _coordinator(is_pro_hardware=True))
 
-    with pytest.raises(vol.Invalid, match="at least one of"):
+    with pytest.raises(probatio.Invalid, match="at least one of"):
         await _call_service(hass_mock, registered_services, SERVICE_SET_LED_STRIP)
 
 

@@ -2,7 +2,7 @@
 # Core-only entries (its own paths, PLATFORM_SCHEMA aliases, httpx2) are left out.
 [tool.ruff]
 # Oldest Python of the project's minimum HA, so fixes never use newer syntax.
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
@@ -209,7 +209,7 @@ show_missing = true
 skip_empty = true
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 explicit_package_bases = true
 show_error_codes = true
 follow_imports = "normal"
@@ -240,7 +240,7 @@ ignore_missing_imports = true
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 include = ["custom_components", "tests"]
 # Local editor tooling (gitignored), run from its own venv.
 ignore = [".vscode"]

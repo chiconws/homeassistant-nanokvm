@@ -29,7 +29,7 @@ class LedBrightnessRequest:
     reported: int | None = None
 
 
-def led_strip_available(coordinator: "NanoKVMDataUpdateCoordinator") -> bool:
+def led_strip_available(coordinator: NanoKVMDataUpdateCoordinator) -> bool:
     """Return whether Pro LED strip state is available."""
     return coordinator.is_pro_hardware and coordinator.led_strip is not None
 
@@ -45,7 +45,7 @@ def max_vertical_count(horizontal_count: int) -> int:
 
 
 def note_reported_led_strip(
-    coordinator: "NanoKVMDataUpdateCoordinator", reported: GetLedStripRsp | None
+    coordinator: NanoKVMDataUpdateCoordinator, reported: GetLedStripRsp | None
 ) -> bool:
     """Record the brightness reported by the first poll after a write."""
     request = coordinator.led_brightness_request
@@ -56,7 +56,7 @@ def note_reported_led_strip(
 
 
 async def async_set_led_strip(
-    coordinator: "NanoKVMDataUpdateCoordinator",
+    coordinator: NanoKVMDataUpdateCoordinator,
     *,
     on: bool | None = None,
     brightness: int | None = None,
