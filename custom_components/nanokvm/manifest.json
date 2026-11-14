@@ -1,6 +1,7 @@
 {
   "domain": "nanokvm",
   "name": "Sipeed NanoKVM",
+  "categories": ["computers_network"],
   "codeowners": ["@chiconws"],
   "config_flow": true,
   "dependencies": ["zeroconf"],
