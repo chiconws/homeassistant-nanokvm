@@ -78,7 +78,7 @@ Notes:
 - A NanoKVM reachable over both Ethernet and Wi-Fi keeps the address chosen during setup as its preferred address. If discovery switches to another interface, it checks for the preferred address once per minute, backing off to once per hour while it stays unreachable, and returns when the same device is reachable there. If another NanoKVM takes over that address, it is no longer preferred.
 - Coordinator polling interval is 30 seconds.
 
-Settings can be changed later from the integration's **Reconfigure** menu.
+The integration's **Reconfigure** menu replaces the trusted SSH host key and, if the device rejects the SSH login, asks for an SSH username and password. It needs SSH enabled on the NanoKVM. The host and **Use static host only** are set during setup.
 
 ## Entities
 
