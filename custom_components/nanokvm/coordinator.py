@@ -87,7 +87,6 @@ from .utils import (
     SSLCertificateChanged,
     api_connection_options,
     async_connect,
-    async_get_entry_device,
     device_sw_version,
     extract_ssh_host,
     is_auth_failure,
@@ -433,10 +432,8 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return
 
         registry = dr.async_get(self.hass)
-        device = async_get_entry_device(
-            self.hass,
-            self.config_entry.entry_id,
-            (DOMAIN, self.device_info.device_key),
+        device = registry.async_get_device_by_identifier(
+            (DOMAIN, self.device_info.device_key), self.config_entry.entry_id
         )
         if device is None:
             return

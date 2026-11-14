@@ -364,7 +364,9 @@ def test_discovery_address_match_takes_precedence_over_hostname_hint(
     exact = SimpleNamespace(unique_id="target-device", data={CONF_HOST: "192.0.2.20"})
     flow._async_current_entries = MagicMock(return_value=[hint, exact])  # noqa: SLF001
     registry = SimpleNamespace(
-        async_get_device=lambda **kwargs: SimpleNamespace(name="nano-kvm")
+        async_get_device_by_identifier=lambda identifier, entry_id: SimpleNamespace(
+            name="nano-kvm"
+        )
     )
     monkeypatch.setattr(
         "homeassistant.helpers.device_registry.async_get", lambda hass: registry
