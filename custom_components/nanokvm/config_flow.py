@@ -943,11 +943,6 @@ class NanoKVMConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
                 # If authentication fails, it's still a NanoKVM device, but we can't get device_info.
                 # We'll let the flow continue to prompt for credentials.
-                if existing_entry:
-                    return await self._async_handle_existing_entry(
-                        existing_entry,
-                        discovery_host,
-                    )
             except aiohttp.ClientConnectorCertificateError:
                 if existing_entry:
                     # Without a saved pin, discovery cannot verify this entry.
