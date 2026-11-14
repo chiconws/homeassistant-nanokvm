@@ -11,6 +11,6 @@
   "issue_tracker": "https://github.com/chiconws/homeassistant-nanokvm/issues",
   "loggers": ["nanokvm"],
   "requirements": ["nanokvm==1.6.0"],
-  "version": "2.3.2",
+  "version": "2.4.0",
   "zeroconf": ["_ssh._tcp.local.", "_workstation._tcp.local."]
 }
