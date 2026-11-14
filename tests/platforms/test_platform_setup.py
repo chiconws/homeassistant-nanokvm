@@ -1,14 +1,11 @@
 """Tests for Home Assistant platform setup and dynamic entity registration."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from homeassistant.const import CONF_HOST
-import pytest
 from nanokvm.models import HidMode, HWVersion, Permission
+import pytest
 from yarl import URL
 
 import custom_components.nanokvm.binary_sensor as binary_sensor_module
@@ -18,6 +15,7 @@ import custom_components.nanokvm.select as select_module
 import custom_components.nanokvm.sensor as sensor_module
 import custom_components.nanokvm.switch as switch_module
 import custom_components.nanokvm.update as update_module
+from homeassistant.const import CONF_HOST
 
 
 def _coordinator(**overrides: object) -> SimpleNamespace:
@@ -54,7 +52,6 @@ def _coordinator(**overrides: object) -> SimpleNamespace:
         "static_ip": None,
         "is_non_pro_hardware": False,
         "supports_hdmi_endpoint": False,
-        "supports_watchdog": False,
         "swap_size": None,
         "tailscale_status": None,
         "time_status": None,
@@ -348,7 +345,6 @@ async def test_switch_setup_uses_specialized_entities_and_dynamic_watchdog(
     _notify(coordinator)
     assert len(batches) == 1
 
-    coordinator.supports_watchdog = True
     coordinator.ssh_metrics = SimpleNamespace(watchdog_enabled=False)
     _notify(coordinator)
     _notify(coordinator)
@@ -363,9 +359,7 @@ async def test_switch_setup_handles_initial_watchdog_state(
     config_entry_mock: MagicMock,
 ) -> None:
     """An already available watchdog must be registered during setup."""
-    coordinator = _coordinator(
-        supports_watchdog=True, ssh_metrics=SimpleNamespace(watchdog_enabled=True)
-    )
+    coordinator = _coordinator(ssh_metrics=SimpleNamespace(watchdog_enabled=True))
     _configure_hass(hass_mock, config_entry_mock, coordinator)
     add_entities, batches = _entity_collector()
 
@@ -401,8 +395,10 @@ async def test_non_admin_account_gets_only_the_entities_it_may_use(
     """
     coordinator = _coordinator(
         account=SimpleNamespace(username="guest", role="user"),
-        can=lambda permission: permission
-        in {Permission.CONSOLE_VIEW, Permission.CONSOLE_CONTROL, Permission.POWER},
+        can=lambda permission: (
+            permission
+            in {Permission.CONSOLE_VIEW, Permission.CONSOLE_CONTROL, Permission.POWER}
+        ),
         hardware_info=SimpleNamespace(version=HWVersion.PCIE),
         is_non_pro_hardware=True,
         supports_hdmi_endpoint=True,

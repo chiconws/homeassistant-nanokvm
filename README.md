@@ -1,16 +1,20 @@
-# Sipeed NanoKVM Integration for Home Assistant
+# Sipeed NanoKVM
 
 [![Marketplace][badge-marketplace]][link-marketplace]
-[![Tests][badge-tests]][link-tests]
+[![GitHub Release][badge-release]][link-release]
+[![Home Assistant][badge-ha]][link-ha]
+[![GitHub Commit Activity][badge-commit-activity]][link-commits]
 [![HACS Validation][badge-hacs-validation]][link-hacs-validation]
 [![Hassfest][badge-hassfest]][link-hassfest]
+[![Tests][badge-tests]][link-tests]
+[![License][badge-license]][link-license]
 
 Control and monitor a [Sipeed NanoKVM](https://github.com/sipeed/NanoKVM)
 from Home Assistant.
 The integration connects to the NanoKVM API and exposes power controls,
 device settings, diagnostics, services, and camera streaming in Home Assistant.
 
-## What You Get
+## Features
 
 | Area | Capabilities |
 | --- | --- |
@@ -23,9 +27,12 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 | SSH diagnostics | Uptime, CPU temp, memory/storage usage when SSH is enabled |
 | Camera | HDMI still snapshots on non-Pro models and native WebRTC streaming |
 
+The UI is available in English, French and Brazilian Portuguese.
+
 ## Requirements
 
-- Home Assistant 2025.2.0 or newer
+- Home Assistant 2026.9.0 or newer
+- A Sipeed NanoKVM (non-Pro or Pro) reachable from Home Assistant
 
 ## Installation
 
@@ -33,8 +40,8 @@ device settings, diagnostics, services, and camera streaming in Home Assistant.
 
 [![Open your Home Assistant instance and open this repository in the Marketplace.][badge-my-marketplace]][link-my-marketplace]
 
-1. Click the button above, or search for **Sipeed NanoKVM** in **Settings → Marketplace**.
-2. Click **Download**.
+1. Click the button above, or search for **Sipeed NanoKVM** in **Settings → Marketplace**. If Home Assistant asks, confirm adding the repository.
+2. Download **Sipeed NanoKVM** in **Settings → Marketplace**.
 3. Restart Home Assistant.
 
 On Home Assistant 2026.10 or older, install [HACS](https://hacs.xyz/) first, then use:
@@ -43,15 +50,17 @@ Then download **Sipeed NanoKVM** in HACS and restart Home Assistant.
 
 ### Manual
 
-1. Download the latest release from
-   [releases](https://github.com/chiconws/homeassistant-nanokvm/releases).
-2. Copy the `nanokvm` folder to
-   `<config>/custom_components/nanokvm`.
+1. Download the latest [release][link-release].
+2. Copy `custom_components/nanokvm` into the `custom_components` folder of your
+   Home Assistant configuration.
 3. Restart Home Assistant.
 
 ## Configuration
 
-Add the integration from **Settings -> Devices & Services -> Add Integration**.
+[![Open your Home Assistant instance and start setting up Sipeed NanoKVM.][badge-my-config]][link-my-config]
+
+1. Go to **Settings → Devices & services → Add integration**.
+2. Search for **Sipeed NanoKVM** and follow the setup steps.
 
 | Option | Description |
 | --- | --- |
@@ -69,12 +78,7 @@ Notes:
 - A NanoKVM reachable over both Ethernet and Wi-Fi keeps the address chosen during setup as its preferred address. If discovery switches to another interface, it checks for the preferred address once per minute, backing off to once per hour while it stays unreachable, and returns when the same device is reachable there. If another NanoKVM takes over that address, it is no longer preferred.
 - Coordinator polling interval is 30 seconds.
 
-## Known Limitations
-
-- Host updates from discovery are disabled when **Use static host only** is enabled.
-- Camera stream availability depends on HDMI input/source status.
-- NanoKVM Pro still snapshots are skipped, because fetching one freezes any stream that is being watched ([sipeed/NanoKVM-Pro#157](https://github.com/sipeed/NanoKVM-Pro/issues/157)).
-- Feature-specific entities only appear when the device reports support for them.
+The integration's **Reconfigure** menu replaces the trusted SSH host key and, if the device rejects the SSH login, asks for an SSH username and password. It needs SSH enabled on the NanoKVM. The host and **Use static host only** are set during setup.
 
 ## Entities
 
@@ -95,7 +99,7 @@ Notes:
 - HDD LED is Alpha-only.
 - Wi-Fi entities only appear when the device reports Wi-Fi support.
 - SSH diagnostics appear after SSH is enabled on the NanoKVM. They sign in as `root` with the web UI password; if the device rejects that, setup asks for the SSH username and password.
-- The watchdog switch requires SSH and NanoKVM application version `2.2.2` or newer.
+- The watchdog switch requires SSH and non-Pro firmware that has the watchdog (application `2.2.2` or newer).
 - Pro LED bead counts must satisfy `horizontal + (2 * vertical) <= 150`.
 - Num/Caps/Scroll Lock sensors need a non-Pro model on application `2.5.0` or newer, and stay unavailable until the host reports its keyboard LEDs.
 
@@ -116,7 +120,7 @@ Non-Pro application `2.5.1` and newer has user accounts with the roles `admin` a
 
 From application `2.5.3` the device's web UI sets each `user` account's permissions. Before `2.5.3`, a `user` account holds `power` and the console permissions only. Changing the account's role or permissions on the device reloads the integration so the entities match.
 
-## Hardware Compatibility
+### Hardware compatibility
 
 | Feature | Availability |
 | --- | --- |
@@ -128,7 +132,7 @@ From application `2.5.3` the device's web UI sets each `user` account's permissi
 | HDMI capture/passthrough, low power, LED strip, virtual mic, LCD time format, sync time | Pro models |
 | Wired/wireless IP sensors | Created when that connection type is active |
 
-### NanoKVM Pro
+#### NanoKVM Pro
 
 NanoKVM Pro devices are supported through the `nanokvm` Python library.
 The integration exposes Pro controls for HDMI capture/passthrough, low power,
@@ -173,7 +177,7 @@ Notes:
 - `host` is optional when one NanoKVM is configured and required when multiple devices are configured.
 - Response services return structured data to callers that request a response.
 
-## Example Automation
+### Example automation
 
 ```yaml
 automation:
@@ -190,6 +194,17 @@ automation:
 
 ## Troubleshooting
 
+- **Diagnostics:** Settings → Devices & services → Sipeed NanoKVM → ⋮ →
+  **Download diagnostics** (credentials and addresses are redacted). Attach the file to bug reports.
+- **Debug logging:**
+
+```yaml
+logger:
+  logs:
+    custom_components.nanokvm: debug
+    nanokvm: debug
+```
+
 | Symptom | Check |
 | --- | --- |
 | Cannot connect | Confirm host/API URL, DNS, network reachability, and expected HTTP/HTTPS scheme |
@@ -200,31 +215,25 @@ automation:
 | No Pro still image | Pro snapshots are intentionally skipped to avoid interrupting WebRTC video |
 | Missing wired/wireless IP sensor | The sensor appears after the device reports an active address for that connection type |
 
+## Known limitations
+
+- Host updates from discovery are disabled when **Use static host only** is enabled.
+- Camera stream availability depends on HDMI input/source status.
+- NanoKVM Pro still snapshots are skipped, because fetching one freezes any stream that is being watched ([sipeed/NanoKVM-Pro#157](https://github.com/sipeed/NanoKVM-Pro/issues/157)).
+- Feature-specific entities only appear when the device reports support for them.
+
 ## Removal
 
-1. Go to **Settings → Devices & services → Sipeed NanoKVM**, open ⋮ and select **Delete**.
+1. Go to **Settings → Devices & services → Sipeed NanoKVM**, open ⋮ and select **Delete** on every entry.
 2. Remove it in **Settings → Marketplace** (or HACS), or delete
    `custom_components/nanokvm` if you installed it manually.
 3. Restart Home Assistant.
 
-## Supported Languages
+## Development
 
-- English (`en`)
-- French (`fr`)
-- Portuguese (Brazil) (`pt-BR`)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and tests, and [AGENTS.md](AGENTS.md) for the code structure. Service call examples are in [SERVICES.md](SERVICES.md).
 
-## Links
-
-- Documentation: <https://github.com/chiconws/homeassistant-nanokvm>
-- Issues: <https://github.com/chiconws/homeassistant-nanokvm/issues>
-- Service examples: [`SERVICES.md`](SERVICES.md)
-- Contributing guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Agent/dev notes: [`AGENTS.md`](AGENTS.md)
-- Python library (`python-nanokvm`):
-  <https://github.com/puddly/python-nanokvm>
-- License: MIT (`LICENSE`)
-
-## Acknowledgements
+## Credits
 
 - [Wouter0100](https://github.com/Wouter0100) for creating and maintaining
   this integration before handing it over.
@@ -232,15 +241,30 @@ automation:
 - [puddly](https://github.com/puddly) for creating
   [`python-nanokvm`](https://github.com/puddly/python-nanokvm).
 
+## License
+
+MIT, see [LICENSE](LICENSE).
+
 [badge-marketplace]: https://img.shields.io/badge/Marketplace-Default-41BDF5.svg
-[badge-my-marketplace]: https://my.home-assistant.io/badges/marketplace_repository.svg
-[badge-my-hacs]: https://my.home-assistant.io/badges/hacs_repository.svg
-[badge-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml/badge.svg
+[badge-release]: https://img.shields.io/github/v/release/chiconws/homeassistant-nanokvm
+[badge-ha]: https://img.shields.io/badge/Home%20Assistant-2026.9.0%2B-41BDF5?logo=home-assistant
+[badge-commit-activity]: https://img.shields.io/github/commit-activity/m/chiconws/homeassistant-nanokvm
 [badge-hacs-validation]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hacs.yaml/badge.svg
 [badge-hassfest]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hassfest.yaml/badge.svg
+[badge-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml/badge.svg
+[badge-license]: https://img.shields.io/github/license/chiconws/homeassistant-nanokvm
+[badge-my-marketplace]: https://my.home-assistant.io/badges/marketplace_repository.svg
+[badge-my-hacs]: https://my.home-assistant.io/badges/hacs_repository.svg
+[badge-my-config]: https://my.home-assistant.io/badges/config_flow_start.svg
+
 [link-marketplace]: https://www.home-assistant.io/integrations/marketplace/
-[link-my-marketplace]: https://my.home-assistant.io/redirect/marketplace_repository/?owner=chiconws&repository=homeassistant-nanokvm&category=integration
-[link-my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=chiconws&repository=homeassistant-nanokvm&category=integration
-[link-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml
+[link-release]: https://github.com/chiconws/homeassistant-nanokvm/releases/latest
+[link-ha]: https://www.home-assistant.io/
+[link-commits]: https://github.com/chiconws/homeassistant-nanokvm/commits/main
 [link-hacs-validation]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hacs.yaml
 [link-hassfest]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/hassfest.yaml
+[link-tests]: https://github.com/chiconws/homeassistant-nanokvm/actions/workflows/tests.yaml
+[link-license]: LICENSE
+[link-my-marketplace]: https://my.home-assistant.io/redirect/marketplace_repository/?owner=chiconws&repository=homeassistant-nanokvm&category=integration
+[link-my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=chiconws&repository=homeassistant-nanokvm&category=integration
+[link-my-config]: https://my.home-assistant.io/redirect/config_flow_start/?domain=nanokvm

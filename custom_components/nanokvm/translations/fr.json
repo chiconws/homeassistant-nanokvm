@@ -1,54 +1,5 @@
 {
   "config": {
-    "step": {
-      "user": {
-        "title": "Se connecter à Sipeed NanoKVM",
-        "description": "Configurer une intégration Sipeed NanoKVM.",
-        "data": {
-          "host": "Hôte (adresse IP ou nom d'hôte)",
-          "use_static_host": "Utiliser uniquement l'hôte statique (désactiver la découverte mDNS)"
-        }
-      },
-      "auth": {
-        "title": "S'authentifier auprès de Sipeed NanoKVM",
-        "description": "S'authentifier auprès de votre appareil Sipeed NanoKVM.",
-        "data": {
-          "username": "Nom d'utilisateur",
-          "password": "Mot de passe"
-        }
-      },
-      "confirm": {
-        "title": "Sipeed NanoKVM découvert",
-        "description": "Voulez-vous configurer l'appareil NanoKVM nommé {name} ?"
-      },
-      "reauth_confirm": {
-        "title": "Réauthentifier Sipeed NanoKVM",
-        "description": "L'intégration NanoKVM a besoin d'identifiants mis à jour pour {name}."
-      },
-      "ssl_fingerprint": {
-        "title": "Vérifier le certificat SSL",
-        "description": "L'appareil NanoKVM à l'adresse **{host}** a présenté un certificat auto-signé avec l'empreinte SHA-256 suivante :\n\n`{fingerprint}`\n\nFaites-vous confiance à ce certificat ?"
-      },
-      "ssl_fingerprint_changed": {
-        "title": "Le certificat SSL a changé",
-        "description": "Le certificat SSL de l'appareil NanoKVM à l'adresse **{host}** a changé.\n\n**Empreinte précédente :**\n`{old_fingerprint}`\n\n**Nouvelle empreinte :**\n`{new_fingerprint}`\n\nCela peut signifier que l'appareil a généré un nouveau certificat, ou que quelque chose intercepte la connexion. Acceptez uniquement si vous vous attendez à ce changement."
-      },
-      "ssh_host_key": {
-        "title": "Vérifier la clé d'hôte SSH",
-        "description": "L'appareil NanoKVM à l'adresse **{host}** a présenté cette empreinte de clé d'hôte SSH :\n\n`{fingerprint}`\n\nNe faites confiance à cette clé que si elle correspond à une empreinte obtenue auprès d'une source de confiance.",
-        "data": {
-          "trust_ssh_host_key": "Je fais confiance à cette clé d'hôte SSH"
-        }
-      },
-      "ssh_credentials": {
-        "title": "Identifiants SSH",
-        "description": "L'appareil NanoKVM à l'adresse **{host}** a refusé la connexion SSH. SSH collecte la température du processeur, la mémoire, le stockage et la durée de fonctionnement.\n\nSaisissez le nom d'utilisateur et le mot de passe SSH, ou laissez le mot de passe vide pour ignorer les métriques SSH.",
-        "data": {
-          "ssh_username": "Nom d'utilisateur",
-          "ssh_password": "Mot de passe"
-        }
-      }
-    },
     "abort": {
       "already_configured": "Cet appareil NanoKVM est déjà configuré",
       "cannot_connect": "Échec de la connexion à l’appareil NanoKVM",
@@ -60,47 +11,99 @@
     "error": {
       "cannot_connect": "Échec de la connexion",
       "invalid_auth": "Authentification invalide",
-      "unknown": "Erreur inattendue",
-      "ssl_certificate_changed": "Le certificat SSL a changé"
+      "ssl_certificate_changed": "Le certificat SSL a changé",
+      "unknown": "Erreur inattendue"
+    },
+    "step": {
+      "auth": {
+        "data": {
+          "password": "Mot de passe",
+          "username": "Nom d'utilisateur"
+        },
+        "description": "S'authentifier auprès de votre appareil Sipeed NanoKVM.",
+        "title": "S'authentifier auprès de Sipeed NanoKVM"
+      },
+      "confirm": {
+        "description": "Voulez-vous configurer l'appareil NanoKVM nommé {name} ?",
+        "title": "Sipeed NanoKVM découvert"
+      },
+      "reauth_confirm": {
+        "description": "L'intégration NanoKVM a besoin d'identifiants mis à jour pour {name}.",
+        "title": "Réauthentifier Sipeed NanoKVM"
+      },
+      "ssh_credentials": {
+        "data": {
+          "ssh_password": "Mot de passe",
+          "ssh_username": "Nom d'utilisateur"
+        },
+        "description": "L'appareil NanoKVM à l'adresse **{host}** a refusé la connexion SSH. SSH collecte la température du processeur, la mémoire, le stockage et la durée de fonctionnement.\n\nSaisissez le nom d'utilisateur et le mot de passe SSH, ou laissez le mot de passe vide pour ignorer les métriques SSH.",
+        "title": "Identifiants SSH"
+      },
+      "ssh_host_key": {
+        "data": {
+          "trust_ssh_host_key": "Je fais confiance à cette clé d'hôte SSH"
+        },
+        "description": "L'appareil NanoKVM à l'adresse **{host}** a présenté cette empreinte de clé d'hôte SSH :\n\n`{fingerprint}`\n\nNe faites confiance à cette clé que si elle correspond à une empreinte obtenue auprès d'une source de confiance.",
+        "title": "Vérifier la clé d'hôte SSH"
+      },
+      "ssl_fingerprint": {
+        "description": "L'appareil NanoKVM à l'adresse **{host}** a présenté un certificat auto-signé avec l'empreinte SHA-256 suivante :\n\n`{fingerprint}`\n\nFaites-vous confiance à ce certificat ?",
+        "title": "Vérifier le certificat SSL"
+      },
+      "ssl_fingerprint_changed": {
+        "description": "Le certificat SSL de l'appareil NanoKVM à l'adresse **{host}** a changé.\n\n**Empreinte précédente :**\n`{old_fingerprint}`\n\n**Nouvelle empreinte :**\n`{new_fingerprint}`\n\nCela peut signifier que l'appareil a généré un nouveau certificat, ou que quelque chose intercepte la connexion. Acceptez uniquement si vous vous attendez à ce changement.",
+        "title": "Le certificat SSL a changé"
+      },
+      "user": {
+        "data": {
+          "host": "Hôte (adresse IP ou nom d'hôte)",
+          "use_static_host": "Utiliser uniquement l'hôte statique (désactiver la découverte mDNS)"
+        },
+        "description": "Configurer une intégration Sipeed NanoKVM.",
+        "title": "Se connecter à Sipeed NanoKVM"
+      }
     }
   },
   "entity": {
     "binary_sensor": {
-      "power_led": {
-        "name": "LED d'alimentation"
-      },
-      "hdd_led": {
-        "name": "LED du disque dur"
-      },
-      "network_device": {
-        "name": "Périphérique réseau virtuel"
-      },
-      "disk_device": {
-        "name": "Périphérique de disque virtuel"
-      },
-      "ssh_enabled": {
-        "name": "SSH activé"
-      },
-      "mdns_enabled": {
-        "name": "mDNS activé"
-      },
-      "oled_present": {
-        "name": "Écran OLED présent"
-      },
-      "wifi_supported": {
-        "name": "WiFi pris en charge"
-      },
-      "wifi_connected": {
-        "name": "WiFi connecté"
-      },
-      "wired_connected": {
-        "name": "Connexion filaire active"
+      "caps_lock": {
+        "name": "Verr. maj"
       },
       "cdrom_mode": {
         "name": "Mode CD-ROM"
       },
+      "disk_device": {
+        "name": "Périphérique de disque virtuel"
+      },
+      "hdd_led": {
+        "name": "LED du disque dur"
+      },
+      "hdmi_signal": {
+        "name": "Signal HDMI"
+      },
+      "mdns_enabled": {
+        "name": "mDNS activé"
+      },
       "mouse_jiggler": {
         "name": "Agitateur de souris"
+      },
+      "network_device": {
+        "name": "Périphérique réseau virtuel"
+      },
+      "num_lock": {
+        "name": "Verr. num"
+      },
+      "oled_present": {
+        "name": "Écran OLED présent"
+      },
+      "power_led": {
+        "name": "LED d'alimentation"
+      },
+      "scroll_lock": {
+        "name": "Arrêt défil"
+      },
+      "ssh_enabled": {
+        "name": "SSH activé"
       },
       "static_ip_enabled": {
         "name": "IP statique activée"
@@ -108,31 +111,126 @@
       "time_synchronized": {
         "name": "Heure synchronisée"
       },
-      "num_lock": {
-        "name": "Verr. num"
+      "wifi_connected": {
+        "name": "WiFi connecté"
       },
-      "caps_lock": {
-        "name": "Verr. maj"
+      "wifi_supported": {
+        "name": "WiFi pris en charge"
       },
-      "scroll_lock": {
-        "name": "Arrêt défil"
+      "wired_connected": {
+        "name": "Connexion filaire active"
+      }
+    },
+    "button": {
+      "power": {
+        "name": "Bouton d'alimentation"
       },
-      "hdmi_signal": {
-        "name": "Signal HDMI"
+      "reboot": {
+        "name": "Redémarrer le système"
+      },
+      "reset": {
+        "name": "Bouton de réinitialisation"
+      },
+      "reset_hdmi": {
+        "name": "Réinitialiser HDMI"
+      },
+      "reset_hid": {
+        "name": "Réinitialiser HID"
+      },
+      "sync_time": {
+        "name": "Synchroniser l'heure"
+      }
+    },
+    "camera": {
+      "hdmi": {
+        "name": "Flux HDMI"
+      }
+    },
+    "number": {
+      "hdmi_idle_timeout": {
+        "name": "Délai d'inactivité HDMI"
+      },
+      "led_brightness": {
+        "name": "LED Luminosité"
+      },
+      "led_horizontal_beads": {
+        "name": "LED perles horizontales"
+      },
+      "led_vertical_beads": {
+        "name": "LED perles verticales"
+      }
+    },
+    "select": {
+      "hid_mode": {
+        "name": "Mode HID (Redémarrage requis)",
+        "state": {
+          "hid_only": "HID uniquement",
+          "normal": "Normal"
+        }
+      },
+      "lcd_time_format": {
+        "name": "Format horaire LCD",
+        "state": {
+          "12h": "12 heures",
+          "24h": "24 heures"
+        }
+      },
+      "mouse_jiggler_mode": {
+        "name": "Mode d'agitateur de souris",
+        "state": {
+          "absolute_mode": "Mode absolu",
+          "disable": "Désactiver",
+          "relative_mode": "Mode relatif"
+        }
+      },
+      "oled_sleep_timeout": {
+        "name": "Délai de veille OLED",
+        "state": {
+          "1_hour": "1 heure",
+          "1_min": "1 min",
+          "3_min": "3 min",
+          "5_min": "5 min",
+          "10_min": "10 min",
+          "15_sec": "15 s",
+          "30_min": "30 min",
+          "30_sec": "30 s",
+          "never": "Jamais"
+        }
+      },
+      "swap_size": {
+        "name": "Taille de swap",
+        "state": {
+          "64_mb": "64 Mo",
+          "128_mb": "128 Mo",
+          "256_mb": "256 Mo",
+          "512_mb": "512 Mo",
+          "disable": "Désactiver"
+        }
+      },
+      "virtual_disk_type": {
+        "name": "Type de disque virtuel",
+        "state": {
+          "disable": "Désactivé",
+          "emmc": "eMMC",
+          "sdcard": "Carte SD"
+        }
       }
     },
     "sensor": {
-      "hid_mode": {
-        "name": "Mode HID"
+      "account_role": {
+        "name": "Rôle du compte"
       },
-      "oled_sleep": {
-        "name": "Délai de veille OLED"
+      "application_version": {
+        "name": "Version de l'application"
+      },
+      "cpu_temperature": {
+        "name": "Température CPU"
       },
       "hardware_version": {
         "name": "Version matérielle"
       },
-      "application_version": {
-        "name": "Version de l'application"
+      "hid_mode": {
+        "name": "Mode HID"
       },
       "ip_address": {
         "name": "Adresse IP",
@@ -141,6 +239,52 @@
             "name": "Adresses"
           }
         }
+      },
+      "memory_used_percent": {
+        "name": "Mémoire utilisée",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total en Mo"
+          }
+        }
+      },
+      "mounted_image": {
+        "name": "Image montée"
+      },
+      "oled_sleep": {
+        "name": "Délai de veille OLED"
+      },
+      "storage_used_percent": {
+        "name": "Stockage utilisé",
+        "state_attributes": {
+          "total_mb": {
+            "name": "Total en Mo"
+          }
+        }
+      },
+      "tailscale_state": {
+        "name": "Tailscale",
+        "state": {
+          "not_install": "Non installé",
+          "not_login": "Non connecté",
+          "not_running": "Non démarré",
+          "running": "En cours",
+          "stopped": "Arrêté"
+        },
+        "state_attributes": {
+          "account": {
+            "name": "Compte"
+          },
+          "ip": {
+            "name": "Adresse IP"
+          },
+          "name": {
+            "name": "Nom de l'appareil"
+          }
+        }
+      },
+      "uptime": {
+        "name": "Temps de fonctionnement"
       },
       "wired_ip_address": {
         "name": "Adresse IP filaire",
@@ -157,73 +301,9 @@
             "name": "Adresses"
           }
         }
-      },
-      "mounted_image": {
-        "name": "Image montée"
-      },
-      "tailscale_state": {
-        "name": "Tailscale",
-        "state": {
-          "not_install": "Non installé",
-          "not_running": "Non démarré",
-          "not_login": "Non connecté",
-          "stopped": "Arrêté",
-          "running": "En cours"
-        },
-        "state_attributes": {
-          "name": {
-            "name": "Nom de l'appareil"
-          },
-          "ip": {
-            "name": "Adresse IP"
-          },
-          "account": {
-            "name": "Compte"
-          }
-        }
-      },
-      "uptime": {
-        "name": "Temps de fonctionnement"
-      },
-      "cpu_temperature": {
-        "name": "Température CPU"
-      },
-      "memory_used_percent": {
-        "name": "Mémoire utilisée",
-        "state_attributes": {
-          "total_mb": {
-            "name": "Total en Mo"
-          }
-        }
-      },
-      "storage_used_percent": {
-        "name": "Stockage utilisé",
-        "state_attributes": {
-          "total_mb": {
-            "name": "Total en Mo"
-          }
-        }
-      },
-      "account_role": {
-        "name": "Rôle du compte"
       }
     },
     "switch": {
-      "ssh": {
-        "name": "SSH"
-      },
-      "mdns": {
-        "name": "mDNS"
-      },
-      "virtual_network": {
-        "name": "Réseau virtuel"
-      },
-      "virtual_disk": {
-        "name": "Disque virtuel"
-      },
-      "power": {
-        "name": "Alimentation"
-      },
       "hdmi": {
         "name": "Sortie HDMI"
       },
@@ -233,342 +313,262 @@
       "hdmi_passthrough": {
         "name": "Pass-through HDMI"
       },
+      "led_strip": {
+        "name": "Bande LED"
+      },
       "low_power": {
         "name": "Basse consommation"
       },
-      "led_strip": {
-        "name": "Bande LED"
+      "mdns": {
+        "name": "mDNS"
+      },
+      "power": {
+        "name": "Alimentation"
+      },
+      "ssh": {
+        "name": "SSH"
+      },
+      "virtual_disk": {
+        "name": "Disque virtuel"
       },
       "virtual_mic": {
         "name": "Microphone virtuel"
       },
+      "virtual_network": {
+        "name": "Réseau virtuel"
+      },
       "watchdog": {
         "name": "Watchdog"
-      }
-    },
-    "select": {
-      "hid_mode": {
-        "name": "Mode HID (Redémarrage requis)",
-        "state": {
-          "normal": "Normal",
-          "hid_only": "HID uniquement"
-        }
-      },
-      "mouse_jiggler_mode": {
-        "name": "Mode d'agitateur de souris",
-        "state": {
-          "disable": "Désactiver",
-          "relative_mode": "Mode relatif",
-          "absolute_mode": "Mode absolu"
-        }
-      },
-      "oled_sleep_timeout": {
-        "name": "Délai de veille OLED",
-        "state": {
-          "never": "Jamais",
-          "15_sec": "15 s",
-          "30_sec": "30 s",
-          "1_min": "1 min",
-          "3_min": "3 min",
-          "5_min": "5 min",
-          "10_min": "10 min",
-          "30_min": "30 min",
-          "1_hour": "1 heure"
-        }
-      },
-      "swap_size": {
-        "name": "Taille de swap",
-        "state": {
-          "disable": "Désactiver",
-          "64_mb": "64 Mo",
-          "128_mb": "128 Mo",
-          "256_mb": "256 Mo",
-          "512_mb": "512 Mo"
-        }
-      },
-      "lcd_time_format": {
-        "name": "Format horaire LCD",
-        "state": {
-          "12h": "12 heures",
-          "24h": "24 heures"
-        }
-      },
-      "virtual_disk_type": {
-        "name": "Type de disque virtuel",
-        "state": {
-          "disable": "Désactivé",
-          "emmc": "eMMC",
-          "sdcard": "Carte SD"
-        }
-      }
-    },
-    "number": {
-      "led_brightness": {
-        "name": "LED Luminosité"
-      },
-      "led_horizontal_beads": {
-        "name": "LED perles horizontales"
-      },
-      "led_vertical_beads": {
-        "name": "LED perles verticales"
-      },
-      "hdmi_idle_timeout": {
-        "name": "Délai d'inactivité HDMI"
-      }
-    },
-    "button": {
-      "power": {
-        "name": "Bouton d'alimentation"
-      },
-      "reset": {
-        "name": "Bouton de réinitialisation"
-      },
-      "reboot": {
-        "name": "Redémarrer le système"
-      },
-      "reset_hdmi": {
-        "name": "Réinitialiser HDMI"
-      },
-      "reset_hid": {
-        "name": "Réinitialiser HID"
-      },
-      "sync_time": {
-        "name": "Synchroniser l'heure"
       }
     },
     "update": {
       "application": {
         "name": "Application"
       }
-    },
-    "camera": {
-      "hdmi": {
-        "name": "Flux HDMI"
-      }
     }
   },
   "services": {
-    "push_button": {
-      "name": "Appuyer sur un bouton",
-      "description": "Simuler l'appui sur un bouton matériel de l'appareil NanoKVM.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "button_type": {
-          "name": "Type de bouton",
-          "description": "Le type de bouton sur lequel appuyer (alimentation ou réinitialisation)."
-        },
-        "duration": {
-          "name": "Durée",
-          "description": "La durée de maintien du bouton en millisecondes (100-5000)."
-        }
-      }
-    },
-    "paste_text": {
-      "name": "Coller du texte",
-      "description": "Coller du texte via la simulation de clavier HID.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "text": {
-          "name": "Texte",
-          "description": "Le texte à coller. Seuls les caractères ASCII imprimables sont pris en charge."
-        }
-      }
-    },
-    "reboot": {
-      "name": "Redémarrer le système",
-      "description": "Redémarrer l'appareil NanoKVM.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        }
-      }
-    },
-    "reset_hdmi": {
-      "name": "Réinitialiser HDMI",
-      "description": "Réinitialiser la connexion HDMI (pertinent pour la version PCIe).",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        }
-      }
-    },
-    "reset_hid": {
-      "name": "Réinitialiser HID",
-      "description": "Réinitialiser le sous-système HID.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        }
-      }
-    },
-    "wake_on_lan": {
-      "name": "Wake on LAN",
-      "description": "Envoyer un paquet Wake-on-LAN à l'adresse MAC spécifiée.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "mac": {
-          "name": "Adresse MAC",
-          "description": "L'adresse MAC à laquelle envoyer le paquet Wake-on-LAN."
-        }
-      }
-    },
-    "set_mouse_jiggler": {
-      "name": "Définir l'agitateur de souris",
-      "description": "Configurer l'état et le mode de l'agitateur de souris.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "enabled": {
-          "name": "Activé",
-          "description": "Activer ou désactiver l'agitateur de souris."
-        },
-        "mode": {
-          "name": "Mode",
-          "description": "Le mode de l'agitateur de souris (absolu ou relatif)."
-        }
-      }
-    },
-    "set_led_strip": {
-      "name": "Définir la bande LED",
-      "description": "Configurer les paramètres de la bande LED du NanoKVM Pro.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "on": {
-          "name": "Activé",
-          "description": "Activer ou désactiver la bande LED."
-        },
-        "brightness": {
-          "name": "Luminosité",
-          "description": "Pourcentage de luminosité de la bande LED."
-        },
-        "horizontal_count": {
-          "name": "Perles horizontales",
-          "description": "Nombre de perles LED horizontales."
-        },
-        "vertical_count": {
-          "name": "Perles verticales",
-          "description": "Nombre de perles LED verticales."
-        }
-      }
-    },
-    "scan_wifi": {
-      "name": "Scanner le Wi-Fi",
-      "description": "Rechercher les réseaux Wi-Fi à proximité et retourner la réponse du NanoKVM Pro.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        }
-      }
-    },
-    "list_images": {
-      "name": "Lister les images",
-      "description": "Lister les images disponibles sur le NanoKVM.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        }
-      }
-    },
-    "is_image_download_enabled": {
-      "name": "Téléchargement d'images activé",
-      "description": "Retourner si le téléchargement d'images est activé sur le NanoKVM.",
-      "fields": {
-        "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
-        },
-        "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
-        }
-      }
-    },
     "get_image_download_status": {
-      "name": "Obtenir l'état du téléchargement d'image",
       "description": "Retourner l'état actuel du téléchargement d'image du NanoKVM.",
       "fields": {
         "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
         },
         "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
         }
-      }
+      },
+      "name": "Obtenir l'état du téléchargement d'image"
+    },
+    "is_image_download_enabled": {
+      "description": "Retourner si le téléchargement d'images est activé sur le NanoKVM.",
+      "fields": {
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        }
+      },
+      "name": "Téléchargement d'images activé"
     },
     "list_custom_edids": {
-      "name": "Lister les EDID personnalisés",
       "description": "Lister les EDID personnalisés disponibles sur un NanoKVM Pro.",
       "fields": {
         "device_id": {
-          "name": "Appareil",
-          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés."
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
         },
         "host": {
-          "name": "Hôte",
-          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés."
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
         }
-      }
+      },
+      "name": "Lister les EDID personnalisés"
+    },
+    "list_images": {
+      "description": "Lister les images disponibles sur le NanoKVM.",
+      "fields": {
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        }
+      },
+      "name": "Lister les images"
+    },
+    "paste_text": {
+      "description": "Coller du texte via la simulation de clavier HID.",
+      "fields": {
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        },
+        "text": {
+          "description": "Le texte à coller. Seuls les caractères ASCII imprimables sont pris en charge.",
+          "name": "Texte"
+        }
+      },
+      "name": "Coller du texte"
+    },
+    "push_button": {
+      "description": "Simuler l'appui sur un bouton matériel de l'appareil NanoKVM.",
+      "fields": {
+        "button_type": {
+          "description": "Le type de bouton sur lequel appuyer (alimentation ou réinitialisation).",
+          "name": "Type de bouton"
+        },
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "duration": {
+          "description": "La durée de maintien du bouton en millisecondes (100-5000).",
+          "name": "Durée"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        }
+      },
+      "name": "Appuyer sur un bouton"
+    },
+    "reboot": {
+      "description": "Redémarrer l'appareil NanoKVM.",
+      "fields": {
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        }
+      },
+      "name": "Redémarrer le système"
+    },
+    "reset_hdmi": {
+      "description": "Réinitialiser la connexion HDMI (pertinent pour la version PCIe).",
+      "fields": {
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        }
+      },
+      "name": "Réinitialiser HDMI"
+    },
+    "reset_hid": {
+      "description": "Réinitialiser le sous-système HID.",
+      "fields": {
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        }
+      },
+      "name": "Réinitialiser HID"
+    },
+    "scan_wifi": {
+      "description": "Rechercher les réseaux Wi-Fi à proximité et retourner la réponse du NanoKVM Pro.",
+      "fields": {
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        }
+      },
+      "name": "Scanner le Wi-Fi"
+    },
+    "set_led_strip": {
+      "description": "Configurer les paramètres de la bande LED du NanoKVM Pro.",
+      "fields": {
+        "brightness": {
+          "description": "Pourcentage de luminosité de la bande LED.",
+          "name": "Luminosité"
+        },
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "horizontal_count": {
+          "description": "Nombre de perles LED horizontales.",
+          "name": "Perles horizontales"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        },
+        "on": {
+          "description": "Activer ou désactiver la bande LED.",
+          "name": "Activé"
+        },
+        "vertical_count": {
+          "description": "Nombre de perles LED verticales.",
+          "name": "Perles verticales"
+        }
+      },
+      "name": "Définir la bande LED"
+    },
+    "set_mouse_jiggler": {
+      "description": "Configurer l'état et le mode de l'agitateur de souris.",
+      "fields": {
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "enabled": {
+          "description": "Activer ou désactiver l'agitateur de souris.",
+          "name": "Activé"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        },
+        "mode": {
+          "description": "Le mode de l'agitateur de souris (absolu ou relatif).",
+          "name": "Mode"
+        }
+      },
+      "name": "Définir l'agitateur de souris"
+    },
+    "wake_on_lan": {
+      "description": "Envoyer un paquet Wake-on-LAN à l'adresse MAC spécifiée.",
+      "fields": {
+        "device_id": {
+          "description": "Appareil NanoKVM cible facultatif. Utilisez-le ou l'hôte lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Appareil"
+        },
+        "host": {
+          "description": "Hôte cible facultatif. Obligatoire lorsque plusieurs appareils NanoKVM sont configurés.",
+          "name": "Hôte"
+        },
+        "mac": {
+          "description": "L'adresse MAC à laquelle envoyer le paquet Wake-on-LAN.",
+          "name": "Adresse MAC"
+        }
+      },
+      "name": "Wake on LAN"
     }
   }
 }

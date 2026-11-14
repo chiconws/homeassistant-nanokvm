@@ -1,21 +1,12 @@
 """Behavior tests for the NanoKVM data update coordinator."""
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
-import datetime
+import datetime as dt
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call
 
 import aiohttp
-import pytest
-from yarl import URL
-
-from homeassistant.const import CONF_HOST
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-
 from nanokvm.client import (
     NanoKVMApiError,
     NanoKVMAuthenticationFailure,
@@ -26,7 +17,6 @@ from nanokvm.client import (
 )
 from nanokvm.models import (
     GetAccountRsp,
-    GetKeyboardLedStatusRsp,
     GetCdRomRsp,
     GetGpioRsp,
     GetHardwareRsp,
@@ -36,6 +26,7 @@ from nanokvm.models import (
     GetHidModeRsp,
     GetHostnameRsp,
     GetInfoRsp,
+    GetKeyboardLedStatusRsp,
     GetLcdTimeFormatRsp,
     GetLedStripRsp,
     GetLowPowerRsp,
@@ -61,21 +52,26 @@ from nanokvm.models import (
 from nanokvm.ssh_client import (
     NanoKVMSSHAuthenticationError,
     NanoKVMSSHConnectionError,
+    SSHMetrics,
 )
+import pytest
+from yarl import URL
 
-import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.const import (
     CONF_SSH_PASSWORD,
     CONF_SSH_USERNAME,
     CONF_SSL_FINGERPRINT,
 )
+import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.coordinator import (
     NanoKVMDataUpdateCoordinator,
     _format_timeout_error,
     _is_invalid_file_content_error,
 )
-from custom_components.nanokvm.ssh_metrics import SSHMetricsSnapshot
 import custom_components.nanokvm.utils as utils_module
+from homeassistant.const import CONF_HOST
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 
 @pytest.fixture
@@ -170,7 +166,9 @@ def _configure_required_client_responses(
         "mdns_state": GetMdnsStateRsp(enabled=True),
         "hid_mode": GetHidModeRsp(mode=HidMode.NORMAL),
         "oled_info": GetOLEDRsp(exist=True, sleep=60),
-        "wifi_status": GetWifiRsp(supported=True, connected=True, ssid="lab"),
+        "wifi_status": GetWifiRsp(
+            supported=True, connected=True, ssid="lab", apMode=False
+        ),
         "hdmi_state": GetHdmiStateRsp(enabled=True),
         "mouse_jiggler_state": GetMouseJigglerRsp(
             enabled=True,
@@ -240,8 +238,8 @@ async def test_requested_led_brightness_survives_a_restart(
     )
     coordinator.led_brightness_request = coordinator_module.LedBrightnessRequest(68)
 
-    await coordinator._async_fetch_core_data()
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
 
     update = coordinator.hass.config_entries.async_update_entry
     update.assert_called_once()
@@ -278,9 +276,9 @@ def test_refresh_requests_use_a_short_cooldown(
     coordinator: NanoKVMDataUpdateCoordinator,
 ) -> None:
     """A second action shortly after the first still refreshes state promptly."""
-    debouncer = coordinator._debounced_refresh
+    debouncer = coordinator._debounced_refresh  # noqa: SLF001
 
-    assert debouncer.cooldown == coordinator_module._REQUEST_REFRESH_COOLDOWN_SECONDS
+    assert debouncer.cooldown == coordinator_module._REQUEST_REFRESH_COOLDOWN_SECONDS  # noqa: SLF001
     assert debouncer.cooldown < 5
     assert debouncer.immediate is True
 
@@ -291,31 +289,35 @@ def test_device_registry_follows_firmware_and_hostname_changes(
 ) -> None:
     """An updated application or hostname reaches the device registry without a reload."""
     registry = MagicMock()
-    registry.async_get_device_by_identifier.return_value = SimpleNamespace(id="device-id")
+    registry.async_get_device_by_identifier.return_value = SimpleNamespace(
+        id="device-id"
+    )
     monkeypatch.setattr(coordinator_module.dr, "async_get", lambda hass: registry)
     coordinator.device_info = SimpleNamespace(
         device_key="test-device", application="2.3.4", image="2026-07-01"
     )
     coordinator.hostname_info = SimpleNamespace(hostname="nano-pro")
 
-    coordinator._async_sync_device_registry()
-    coordinator._async_sync_device_registry()
+    coordinator._async_sync_device_registry()  # noqa: SLF001
+    coordinator._async_sync_device_registry()  # noqa: SLF001
     registry.async_update_device.assert_not_called()
 
     coordinator.device_info.application = "2.4.0"
     registry.async_get_device_by_identifier.return_value = None
-    coordinator._async_sync_device_registry()
+    coordinator._async_sync_device_registry()  # noqa: SLF001
     registry.async_update_device.assert_not_called()
 
-    registry.async_get_device_by_identifier.return_value = SimpleNamespace(id="device-id")
-    coordinator._async_sync_device_registry()
-    coordinator._async_sync_device_registry()
+    registry.async_get_device_by_identifier.return_value = SimpleNamespace(
+        id="device-id"
+    )
+    coordinator._async_sync_device_registry()  # noqa: SLF001
+    coordinator._async_sync_device_registry()  # noqa: SLF001
     registry.async_update_device.assert_called_once_with(
         "device-id", name="nano-pro", sw_version="2.4.0 (Image: 2026-07-01)"
     )
 
     coordinator.hostname_info = None
-    coordinator._async_sync_device_registry()
+    coordinator._async_sync_device_registry()  # noqa: SLF001
     assert registry.async_update_device.call_args.kwargs["name"] == "NanoKVM"
 
 
@@ -324,14 +326,16 @@ def _use_wifi_with_preferred_ethernet(
 ) -> None:
     """Configure a Pro temporarily using Wi-Fi while retaining its chosen Ethernet URL."""
     coordinator.hardware_info = GetHardwareRsp(version=HWVersion.PRO)
-    coordinator.config_entry.data.update({
-        CONF_HOST: "192.0.2.21",
-        "preferred_host": "https://192.0.2.20",
-        CONF_SSL_FINGERPRINT: "AA" * 32,
-        "ssh_host_key": "192.0.2.21 ssh-ed25519 ZHVtbXk=",
-    })
+    coordinator.config_entry.data.update(
+        {
+            CONF_HOST: "192.0.2.21",
+            "preferred_host": "https://192.0.2.20",
+            CONF_SSL_FINGERPRINT: "AA" * 32,
+            "ssh_host_key": "192.0.2.21 ssh-ed25519 ZHVtbXk=",
+        }
+    )
     coordinator.client.url = URL("https://192.0.2.21/api/")
-    coordinator._async_fetch_once = AsyncMock(return_value={"active_host": "wifi"})
+    coordinator._async_fetch_once = AsyncMock(return_value={"active_host": "wifi"})  # noqa: SLF001
 
 
 async def test_periodic_update_returns_to_preferred_host_without_mdns(
@@ -345,9 +349,11 @@ async def test_periodic_update_returns_to_preferred_host_without_mdns(
     factory = MagicMock(return_value=preferred)
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    await coordinator._async_update_data()
+    await coordinator._async_update_data()  # noqa: SLF001
 
-    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs[
+        "data"
+    ]
     assert updated[CONF_HOST] == "https://192.0.2.20"
     assert updated["preferred_host"] == "https://192.0.2.20"
     assert updated["ssh_host_key"] == "192.0.2.20 ssh-ed25519 ZHVtbXk="
@@ -355,7 +361,7 @@ async def test_periodic_update_returns_to_preferred_host_without_mdns(
     coordinator.hass.config_entries.async_schedule_reload.assert_called_once_with(
         coordinator.config_entry.entry_id
     )
-    coordinator._async_fetch_once.assert_not_awaited()
+    coordinator._async_fetch_once.assert_not_awaited()  # noqa: SLF001
     preferred.authenticate.assert_awaited_once_with("admin", "password")
     preferred.__aexit__.assert_awaited_once()
     assert factory.call_args.args == ("https://192.0.2.20/api/",)
@@ -377,9 +383,11 @@ async def test_periodic_update_returns_non_pro_to_preferred_http_host(
     factory = MagicMock(return_value=preferred)
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    await coordinator._async_update_data()
+    await coordinator._async_update_data()  # noqa: SLF001
 
-    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs[
+        "data"
+    ]
     assert updated[CONF_HOST] == "192.0.2.20"
     coordinator.hass.config_entries.async_schedule_reload.assert_called_once_with(
         coordinator.config_entry.entry_id
@@ -402,12 +410,16 @@ async def test_periodic_preferred_host_recovery_preserves_optional_ssh(
         coordinator.config_entry.data["ssh_host_key"] = "invalid-known-hosts-line"
     preferred = _candidate_client("https://192.0.2.20/api/")
     preferred.get_info.return_value = _device_info()
-    monkeypatch.setattr(coordinator_module, "NanoKVMClient", MagicMock(return_value=preferred))
+    monkeypatch.setattr(
+        coordinator_module, "NanoKVMClient", MagicMock(return_value=preferred)
+    )
 
-    result = await coordinator._async_update_data()
+    result = await coordinator._async_update_data()  # noqa: SLF001
 
     if without_ssh_key:
-        updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+        updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs[
+            "data"
+        ]
         assert updated[CONF_HOST] == "https://192.0.2.20"
         assert "ssh_host_key" not in updated
     else:
@@ -418,7 +430,7 @@ async def test_periodic_preferred_host_recovery_preserves_optional_ssh(
 @pytest.mark.parametrize(
     "probe_error",
     [
-        asyncio.TimeoutError(),
+        TimeoutError(),
         aiohttp.ClientConnectionError("cable unplugged"),
         NanoKVMAuthenticationFailure("credentials rejected"),
         NanoKVMError("API unavailable"),
@@ -438,7 +450,7 @@ async def test_periodic_preferred_host_failure_keeps_wifi_available(
     factory = MagicMock(return_value=preferred)
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    assert await coordinator._async_update_data() == {"active_host": "wifi"}
+    assert await coordinator._async_update_data() == {"active_host": "wifi"}  # noqa: SLF001
     assert factory.call_count == 1
     coordinator.hass.config_entries.async_update_entry.assert_not_called()
     preferred.__aexit__.assert_awaited_once()
@@ -455,9 +467,11 @@ async def test_periodic_preferred_host_rejects_different_device_identity(
     factory = MagicMock(return_value=preferred)
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    assert await coordinator._async_update_data() == {"active_host": "wifi"}
+    assert await coordinator._async_update_data() == {"active_host": "wifi"}  # noqa: SLF001
     assert factory.call_count == 1
-    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs[
+        "data"
+    ]
     assert updated[CONF_HOST] == "192.0.2.21"
     assert updated["preferred_host"] == "192.0.2.21"
     coordinator.hass.config_entries.async_schedule_reload.assert_not_called()
@@ -479,7 +493,7 @@ async def test_periodic_preferred_host_respects_configuration_changes_during_pro
     factory = MagicMock(return_value=preferred)
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    assert await coordinator._async_update_data() == {"active_host": "wifi"}
+    assert await coordinator._async_update_data() == {"active_host": "wifi"}  # noqa: SLF001
     assert factory.call_count == 1
     assert coordinator.config_entry.data[CONF_HOST] == "192.0.2.99"
     coordinator.hass.config_entries.async_update_entry.assert_not_called()
@@ -494,26 +508,28 @@ async def test_periodic_preferred_host_probe_is_throttled_then_recovers(
     now = 0.0
     monkeypatch.setattr(coordinator_module, "monotonic", lambda: now, raising=False)
     unavailable = _candidate_client(
-        "https://192.0.2.20/api/", authenticate_error=asyncio.TimeoutError()
+        "https://192.0.2.20/api/", authenticate_error=TimeoutError()
     )
     recovered = _candidate_client("https://192.0.2.20/api/")
     recovered.get_info.return_value = _device_info()
     factory = MagicMock(side_effect=[unavailable, recovered])
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    assert await coordinator._async_update_data() == {"active_host": "wifi"}
+    assert await coordinator._async_update_data() == {"active_host": "wifi"}  # noqa: SLF001
     now = 30.0
-    assert await coordinator._async_update_data() == {"active_host": "wifi"}
+    assert await coordinator._async_update_data() == {"active_host": "wifi"}  # noqa: SLF001
     assert factory.call_count == 1
     # The failed check doubled the wait before the next one.
     now = 61.0
-    assert await coordinator._async_update_data() == {"active_host": "wifi"}
+    assert await coordinator._async_update_data() == {"active_host": "wifi"}  # noqa: SLF001
     assert factory.call_count == 1
     now = 121.0
-    await coordinator._async_update_data()
+    await coordinator._async_update_data()  # noqa: SLF001
 
     assert factory.call_count == 2
-    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs[
+        "data"
+    ]
     assert updated[CONF_HOST] == "https://192.0.2.20"
 
 
@@ -526,7 +542,7 @@ async def test_periodic_preferred_host_probe_backs_off_up_to_an_hour(
     now = 0.0
     monkeypatch.setattr(coordinator_module, "monotonic", lambda: now, raising=False)
     unavailable = _candidate_client(
-        "https://192.0.2.20/api/", authenticate_error=asyncio.TimeoutError()
+        "https://192.0.2.20/api/", authenticate_error=TimeoutError()
     )
     monkeypatch.setattr(
         coordinator_module, "NanoKVMClient", MagicMock(return_value=unavailable)
@@ -534,9 +550,9 @@ async def test_periodic_preferred_host_probe_backs_off_up_to_an_hour(
 
     intervals = []
     for _ in range(8):
-        await coordinator._async_update_data()
-        intervals.append(coordinator._preferred_host_check_interval)
-        now += coordinator._preferred_host_check_interval
+        await coordinator._async_update_data()  # noqa: SLF001
+        intervals.append(coordinator._preferred_host_check_interval)  # noqa: SLF001
+        now += coordinator._preferred_host_check_interval  # noqa: SLF001
 
     assert intervals == [120, 240, 480, 960, 1920, 3600, 3600, 3600]
 
@@ -544,7 +560,12 @@ async def test_periodic_preferred_host_probe_backs_off_up_to_an_hour(
 @pytest.mark.parametrize(
     ("preferred_host", "client_url", "pinned", "probe_url"),
     [
-        ("http://192.0.2.20", "https://192.0.2.21/api/", True, "http://192.0.2.20/api/"),
+        (
+            "http://192.0.2.20",
+            "https://192.0.2.21/api/",
+            True,
+            "http://192.0.2.20/api/",
+        ),
         ("192.0.2.20", "http://192.0.2.21/api/", False, "http://192.0.2.20/api/"),
         ("192.0.2.20", "http://192.0.2.21/api/", True, "https://192.0.2.20/api/"),
         ("192.0.2.20", "https://192.0.2.21/api/", False, "https://192.0.2.20/api/"),
@@ -569,13 +590,15 @@ async def test_periodic_preferred_host_probe_uses_the_entry_transport(
     factory = MagicMock(return_value=preferred)
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    await coordinator._async_update_data()
+    await coordinator._async_update_data()  # noqa: SLF001
 
     assert factory.call_args.args == (probe_url,)
     assert factory.call_args.kwargs["ssl_fingerprint"] == (
         "AA" * 32 if pinned and probe_url.startswith("https://") else None
     )
-    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs["data"]
+    updated = coordinator.hass.config_entries.async_update_entry.call_args.kwargs[
+        "data"
+    ]
     assert updated[CONF_HOST] == preferred_host
 
 
@@ -597,7 +620,7 @@ async def test_periodic_preferred_host_probe_bounds_the_whole_request(
     factory = MagicMock(return_value=preferred)
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    assert await asyncio.wait_for(coordinator._async_update_data(), 0.5) == {
+    assert await asyncio.wait_for(coordinator._async_update_data(), 0.5) == {  # noqa: SLF001
         "active_host": "wifi"
     }
     assert factory.call_count == 1
@@ -614,9 +637,11 @@ async def test_periodic_preferred_host_restore_does_not_reload_an_unchanged_entr
     coordinator.hass.config_entries.async_update_entry.return_value = False
     preferred = _candidate_client("https://192.0.2.20/api/")
     preferred.get_info.return_value = _device_info()
-    monkeypatch.setattr(coordinator_module, "NanoKVMClient", MagicMock(return_value=preferred))
+    monkeypatch.setattr(
+        coordinator_module, "NanoKVMClient", MagicMock(return_value=preferred)
+    )
 
-    assert await coordinator._async_update_data() == {"active_host": "wifi"}
+    assert await coordinator._async_update_data() == {"active_host": "wifi"}  # noqa: SLF001
     coordinator.hass.config_entries.async_schedule_reload.assert_not_called()
 
 
@@ -637,7 +662,7 @@ async def test_periodic_preferred_host_probe_only_runs_for_fallbacks(
     factory = MagicMock(side_effect=AssertionError("unexpected preferred-host probe"))
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    assert await coordinator._async_update_data() == {"active_host": "wifi"}
+    assert await coordinator._async_update_data() == {"active_host": "wifi"}  # noqa: SLF001
     factory.assert_not_called()
     coordinator.hass.config_entries.async_update_entry.assert_not_called()
 
@@ -648,14 +673,14 @@ async def test_update_data_retries_then_returns_success(
 ) -> None:
     """Transient update failures are retried with the configured delay."""
     expected = {"ready": True}
-    coordinator._async_fetch_once = AsyncMock(
+    coordinator._async_fetch_once = AsyncMock(  # noqa: SLF001
         side_effect=[UpdateFailed("first"), UpdateFailed("second"), expected]
     )
     sleep = AsyncMock()
     monkeypatch.setattr(coordinator_module.asyncio, "sleep", sleep)
 
-    assert await coordinator._async_update_data() == expected
-    assert coordinator._async_fetch_once.await_count == 3
+    assert await coordinator._async_update_data() == expected  # noqa: SLF001
+    assert coordinator._async_fetch_once.await_count == 3  # noqa: SLF001
     assert sleep.await_args_list == [call(1), call(1)]
 
 
@@ -665,14 +690,14 @@ async def test_update_data_reraises_final_failure(
 ) -> None:
     """The third update failure is returned to Home Assistant."""
     final_error = UpdateFailed("final")
-    coordinator._async_fetch_once = AsyncMock(
+    coordinator._async_fetch_once = AsyncMock(  # noqa: SLF001
         side_effect=[UpdateFailed("first"), UpdateFailed("second"), final_error]
     )
     sleep = AsyncMock()
     monkeypatch.setattr(coordinator_module.asyncio, "sleep", sleep)
 
     with pytest.raises(UpdateFailed, match="final") as captured:
-        await coordinator._async_update_data()
+        await coordinator._async_update_data()  # noqa: SLF001
 
     assert captured.value is final_error
     assert sleep.await_count == 2
@@ -684,11 +709,11 @@ async def test_fetch_once_http_fingerprint_error_can_fail_over(
     """An HTTP probe redirected to mismatched TLS may switch transports."""
     mismatch = aiohttp.ServerFingerprintMismatch(b"expected", b"actual", "nano", 443)
     expected = {"transport": "https"}
-    coordinator._async_fetch_with_client = AsyncMock(side_effect=[mismatch, expected])
-    coordinator._async_failover_client = AsyncMock(return_value=True)
+    coordinator._async_fetch_with_client = AsyncMock(side_effect=[mismatch, expected])  # noqa: SLF001
+    coordinator._async_failover_client = AsyncMock(return_value=True)  # noqa: SLF001
 
-    assert await coordinator._async_fetch_once() == expected
-    coordinator._async_failover_client.assert_awaited_once_with(mismatch)
+    assert await coordinator._async_fetch_once() == expected  # noqa: SLF001
+    coordinator._async_failover_client.assert_awaited_once_with(mismatch)  # noqa: SLF001
 
 
 async def test_fetch_once_https_fingerprint_error_starts_reauthentication(
@@ -697,13 +722,13 @@ async def test_fetch_once_https_fingerprint_error_starts_reauthentication(
     """A fingerprint change on active HTTPS is an entry-auth failure."""
     coordinator.client.url = URL("https://nanokvm.local/api/")
     mismatch = aiohttp.ServerFingerprintMismatch(b"expected", b"actual", "nano", 443)
-    coordinator._async_fetch_with_client = AsyncMock(side_effect=mismatch)
-    coordinator._async_failover_client = AsyncMock()
+    coordinator._async_fetch_with_client = AsyncMock(side_effect=mismatch)  # noqa: SLF001
+    coordinator._async_failover_client = AsyncMock()  # noqa: SLF001
 
     with pytest.raises(ConfigEntryAuthFailed, match="SSL certificate changed"):
-        await coordinator._async_fetch_once()
+        await coordinator._async_fetch_once()  # noqa: SLF001
 
-    coordinator._async_failover_client.assert_not_awaited()
+    coordinator._async_failover_client.assert_not_awaited()  # noqa: SLF001
 
 
 async def test_fetch_once_connection_failure_without_fallback_is_update_failed(
@@ -711,11 +736,11 @@ async def test_fetch_once_connection_failure_without_fallback_is_update_failed(
 ) -> None:
     """An exhausted connection failover remains a retryable update failure."""
     disconnected = aiohttp.ServerDisconnectedError("gone")
-    coordinator._async_fetch_with_client = AsyncMock(side_effect=disconnected)
-    coordinator._async_failover_client = AsyncMock(return_value=False)
+    coordinator._async_fetch_with_client = AsyncMock(side_effect=disconnected)  # noqa: SLF001
+    coordinator._async_failover_client = AsyncMock(return_value=False)  # noqa: SLF001
 
     with pytest.raises(UpdateFailed, match="Error communicating with NanoKVM"):
-        await coordinator._async_fetch_once()
+        await coordinator._async_fetch_once()  # noqa: SLF001
 
 
 @pytest.mark.parametrize(
@@ -732,7 +757,7 @@ async def test_fetch_once_connection_failure_without_fallback_is_update_failed(
             "Error communicating with NanoKVM",
         ),
         (
-            asyncio.TimeoutError(),
+            TimeoutError(),
             UpdateFailed,
             "Timed out communicating with NanoKVM",
         ),
@@ -750,13 +775,13 @@ async def test_fetch_once_maps_error_after_transport_failover(
     message: str,
 ) -> None:
     """A retry after transport failover preserves Home Assistant error types."""
-    coordinator._async_fetch_with_client = AsyncMock(
+    coordinator._async_fetch_with_client = AsyncMock(  # noqa: SLF001
         side_effect=[aiohttp.ServerDisconnectedError("gone"), retry_error]
     )
-    coordinator._async_failover_client = AsyncMock(return_value=True)
+    coordinator._async_failover_client = AsyncMock(return_value=True)  # noqa: SLF001
 
     with pytest.raises(expected_exception, match=message):
-        await coordinator._async_fetch_once()
+        await coordinator._async_fetch_once()  # noqa: SLF001
 
 
 async def test_fetch_once_reauthenticates_then_returns_data(
@@ -765,11 +790,11 @@ async def test_fetch_once_reauthenticates_then_returns_data(
     """An expired token is replaced before retrying the fetch once."""
     expected = {"reauthenticated": True}
     expired = NanoKVMAuthenticationFailure("expired")
-    coordinator._async_fetch_with_client = AsyncMock(side_effect=[expired, expected])
-    coordinator._async_reauthenticate_client = AsyncMock()
+    coordinator._async_fetch_with_client = AsyncMock(side_effect=[expired, expected])  # noqa: SLF001
+    coordinator._async_reauthenticate_client = AsyncMock()  # noqa: SLF001
 
-    assert await coordinator._async_fetch_once() == expected
-    coordinator._async_reauthenticate_client.assert_awaited_once_with()
+    assert await coordinator._async_fetch_once() == expected  # noqa: SLF001
+    coordinator._async_reauthenticate_client.assert_awaited_once_with()  # noqa: SLF001
 
 
 @pytest.mark.parametrize(
@@ -800,20 +825,20 @@ async def test_fetch_once_maps_error_after_reauthentication(
     message: str,
 ) -> None:
     """The retry after reauthentication preserves auth and HTTP contracts."""
-    coordinator._async_fetch_with_client = AsyncMock(
+    coordinator._async_fetch_with_client = AsyncMock(  # noqa: SLF001
         side_effect=[NanoKVMAuthenticationFailure("expired"), second_error]
     )
-    coordinator._async_reauthenticate_client = AsyncMock()
+    coordinator._async_reauthenticate_client = AsyncMock()  # noqa: SLF001
 
     with pytest.raises(expected_exception, match=message):
-        await coordinator._async_fetch_once()
+        await coordinator._async_fetch_once()  # noqa: SLF001
 
 
 @pytest.mark.parametrize(
     ("error", "message"),
     [
         (_response_error(500), "HTTP error with NanoKVM"),
-        (asyncio.TimeoutError(), "Timed out communicating with NanoKVM"),
+        (TimeoutError(), "Timed out communicating with NanoKVM"),
         (NanoKVMError("broken response"), "Error communicating with NanoKVM"),
     ],
 )
@@ -823,10 +848,10 @@ async def test_fetch_once_maps_non_authentication_failures(
     message: str,
 ) -> None:
     """HTTP, timeout, and library errors retain stable update messages."""
-    coordinator._async_fetch_with_client = AsyncMock(side_effect=error)
+    coordinator._async_fetch_with_client = AsyncMock(side_effect=error)  # noqa: SLF001
 
     with pytest.raises(UpdateFailed, match=message):
-        await coordinator._async_fetch_once()
+        await coordinator._async_fetch_once()  # noqa: SLF001
 
 
 async def test_fetch_with_client_authenticates_and_runs_fetch_groups(
@@ -834,17 +859,17 @@ async def test_fetch_with_client_authenticates_and_runs_fetch_groups(
 ) -> None:
     """An unauthenticated poll runs core, storage, optional, and snapshot stages."""
     coordinator.client.token = None
-    coordinator._async_fetch_core_data = AsyncMock()
-    coordinator._async_fetch_storage_data = AsyncMock()
-    coordinator._async_refresh_ssh_data = AsyncMock()
-    coordinator._async_schedule_app_version_refresh = MagicMock()
+    coordinator._async_fetch_core_data = AsyncMock()  # noqa: SLF001
+    coordinator._async_fetch_storage_data = AsyncMock()  # noqa: SLF001
+    coordinator._async_refresh_ssh_data = AsyncMock()  # noqa: SLF001
+    coordinator._async_schedule_app_version_refresh = MagicMock()  # noqa: SLF001
 
-    await coordinator._async_fetch_with_client()
+    await coordinator._async_fetch_with_client()  # noqa: SLF001
     coordinator.client.authenticate.assert_awaited_once_with("admin", "password")
-    coordinator._async_fetch_core_data.assert_awaited_once_with()
-    coordinator._async_fetch_storage_data.assert_awaited_once_with()
-    coordinator._async_refresh_ssh_data.assert_awaited_once_with()
-    coordinator._async_schedule_app_version_refresh.assert_called_once_with()
+    coordinator._async_fetch_core_data.assert_awaited_once_with()  # noqa: SLF001
+    coordinator._async_fetch_storage_data.assert_awaited_once_with()  # noqa: SLF001
+    coordinator._async_refresh_ssh_data.assert_awaited_once_with()  # noqa: SLF001
+    coordinator._async_schedule_app_version_refresh.assert_called_once_with()  # noqa: SLF001
 
 
 async def test_reauthentication_rejects_invalid_stored_credentials(
@@ -856,10 +881,12 @@ async def test_reauthentication_rejects_invalid_stored_credentials(
         "http://nanokvm.local/api/",
         authenticate_error=NanoKVMAuthenticationFailure("invalid"),
     )
-    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
+    monkeypatch.setattr(
+        utils_module, "NanoKVMClient", MagicMock(return_value=candidate)
+    )
 
     with pytest.raises(ConfigEntryAuthFailed, match="Stored NanoKVM credentials"):
-        await coordinator._async_reauthenticate_client()
+        await coordinator._async_reauthenticate_client()  # noqa: SLF001
 
 
 async def test_reauthentication_maps_non_auth_http_error(
@@ -871,10 +898,12 @@ async def test_reauthentication_maps_non_auth_http_error(
         "http://nanokvm.local/api/",
         authenticate_error=_response_error(500),
     )
-    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
+    monkeypatch.setattr(
+        utils_module, "NanoKVMClient", MagicMock(return_value=candidate)
+    )
 
     with pytest.raises(UpdateFailed, match="Reauthentication failed"):
-        await coordinator._async_reauthenticate_client()
+        await coordinator._async_reauthenticate_client()  # noqa: SLF001
 
 
 async def test_reauthentication_fingerprint_redirect_tries_https(
@@ -891,7 +920,7 @@ async def test_reauthentication_fingerprint_redirect_tries_https(
     factory = MagicMock(side_effect=[http_candidate, https_candidate])
     monkeypatch.setattr(utils_module, "NanoKVMClient", factory)
 
-    await coordinator._async_reauthenticate_client()
+    await coordinator._async_reauthenticate_client()  # noqa: SLF001
 
     assert coordinator.client is https_candidate
     assert factory.call_count == 2
@@ -910,16 +939,18 @@ async def test_reauthentication_https_fingerprint_failure_is_auth_failed(
         "https://nanokvm.local/api/",
         authenticate_error=mismatch,
     )
-    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
+    monkeypatch.setattr(
+        utils_module, "NanoKVMClient", MagicMock(return_value=candidate)
+    )
 
     with pytest.raises(ConfigEntryAuthFailed, match="SSL certificate changed"):
-        await coordinator._async_reauthenticate_client()
+        await coordinator._async_reauthenticate_client()  # noqa: SLF001
 
 
 @pytest.mark.parametrize(
     ("candidate_error", "message"),
     [
-        (asyncio.TimeoutError(), "Timed out reauthenticating"),
+        (TimeoutError(), "Timed out reauthenticating"),
         (NanoKVMError("broken"), "Reauthentication failed: broken"),
     ],
 )
@@ -936,10 +967,12 @@ async def test_reauthentication_maps_timeout_and_library_errors(
         "http://nanokvm.local/api/",
         authenticate_error=candidate_error,
     )
-    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
+    monkeypatch.setattr(
+        utils_module, "NanoKVMClient", MagicMock(return_value=candidate)
+    )
 
     with pytest.raises(UpdateFailed, match=message):
-        await coordinator._async_reauthenticate_client()
+        await coordinator._async_reauthenticate_client()  # noqa: SLF001
 
 
 async def test_reauthentication_exhausts_connection_candidates(
@@ -957,10 +990,12 @@ async def test_reauthentication_exhausts_connection_candidates(
             authenticate_error=aiohttp.ServerDisconnectedError("https"),
         ),
     ]
-    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(side_effect=candidates))
+    monkeypatch.setattr(
+        utils_module, "NanoKVMClient", MagicMock(side_effect=candidates)
+    )
 
     with pytest.raises(UpdateFailed, match="Reauthentication failed: https"):
-        await coordinator._async_reauthenticate_client()
+        await coordinator._async_reauthenticate_client()  # noqa: SLF001
 
 
 async def test_failover_replaces_client_after_authentication(
@@ -969,12 +1004,11 @@ async def test_failover_replaces_client_after_authentication(
 ) -> None:
     """A working alternate transport becomes the shared client."""
     candidate = _candidate_client("https://nanokvm.local/api/")
-    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
-
-    assert (
-        await coordinator._async_failover_client(RuntimeError("disconnect"))
-        is True
+    monkeypatch.setattr(
+        utils_module, "NanoKVMClient", MagicMock(return_value=candidate)
     )
+
+    assert await coordinator._async_failover_client(RuntimeError("disconnect")) is True  # noqa: SLF001
     assert coordinator.client is candidate
     candidate.authenticate.assert_awaited_once_with("admin", "password")
 
@@ -993,7 +1027,7 @@ async def test_failover_replaces_client_after_authentication(
             "SSL certificate changed",
         ),
         (
-            asyncio.TimeoutError(),
+            TimeoutError(),
             UpdateFailed,
             "Timed out checking alternate NanoKVM API transport",
         ),
@@ -1012,10 +1046,12 @@ async def test_failover_maps_candidate_errors(
         "https://nanokvm.local/api/",
         authenticate_error=candidate_error,
     )
-    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
+    monkeypatch.setattr(
+        utils_module, "NanoKVMClient", MagicMock(return_value=candidate)
+    )
 
     with pytest.raises(expected_exception, match=message):
-        await coordinator._async_failover_client(RuntimeError("disconnect"))
+        await coordinator._async_failover_client(RuntimeError("disconnect"))  # noqa: SLF001
 
 
 async def test_failover_returns_false_when_connector_cannot_reach_alternate(
@@ -1028,12 +1064,11 @@ async def test_failover_returns_false_when_connector_cannot_reach_alternate(
         "https://nanokvm.local/api/",
         authenticate_error=aiohttp.ClientConnectorError(None, OSError("refused")),
     )
-    monkeypatch.setattr(utils_module, "NanoKVMClient", MagicMock(return_value=candidate))
-
-    assert (
-        await coordinator._async_failover_client(RuntimeError("disconnect"))
-        is False
+    monkeypatch.setattr(
+        utils_module, "NanoKVMClient", MagicMock(return_value=candidate)
     )
+
+    assert await coordinator._async_failover_client(RuntimeError("disconnect")) is False  # noqa: SLF001
     assert coordinator.client is current
 
 
@@ -1044,10 +1079,7 @@ async def test_failover_explicit_scheme_has_no_alternate(
     """An explicitly configured transport has no implicit alternate."""
     config_entry_mock.data[CONF_HOST] = "http://nanokvm.local"
 
-    assert (
-        await coordinator._async_failover_client(RuntimeError("disconnect"))
-        is False
-    )
+    assert await coordinator._async_failover_client(RuntimeError("disconnect")) is False  # noqa: SLF001
 
 
 @pytest.mark.parametrize(
@@ -1066,7 +1098,7 @@ async def test_optional_endpoint_suppresses_unavailable_responses(
     """Known optional-endpoint failures produce unavailable state."""
     endpoint = AsyncMock(side_effect=error)
 
-    assert await coordinator._fetch_optional("/optional", endpoint) is expected
+    assert await coordinator._fetch_optional("/optional", endpoint) is expected  # noqa: SLF001
 
 
 async def test_optional_endpoint_returns_value_and_reraises_other_http_errors(
@@ -1074,11 +1106,11 @@ async def test_optional_endpoint_returns_value_and_reraises_other_http_errors(
 ) -> None:
     """Optional calls return success and do not hide non-404 HTTP failures."""
     endpoint = AsyncMock(return_value={"enabled": True})
-    assert await coordinator._fetch_optional("/optional", endpoint) == {"enabled": True}
+    assert await coordinator._fetch_optional("/optional", endpoint) == {"enabled": True}  # noqa: SLF001
 
     endpoint.side_effect = _response_error(500)
     with pytest.raises(aiohttp.ClientResponseError):
-        await coordinator._fetch_optional("/optional", endpoint)
+        await coordinator._fetch_optional("/optional", endpoint)  # noqa: SLF001
 
 
 async def test_oled_fetch_handles_only_missing_optional_file(
@@ -1087,17 +1119,17 @@ async def test_oled_fetch_handles_only_missing_optional_file(
     """The OLED helper suppresses only the known missing-file response."""
     oled = GetOLEDRsp(exist=True, sleep=60)
     coordinator.client.get_oled_info.return_value = oled
-    assert await coordinator._fetch_oled_info() is oled
+    assert await coordinator._fetch_oled_info() is oled  # noqa: SLF001
 
     coordinator.client.get_oled_info.side_effect = _api_error(
         code=-2,
         message="invalid file content",
     )
-    assert await coordinator._fetch_oled_info() is None
+    assert await coordinator._fetch_oled_info() is None  # noqa: SLF001
 
     coordinator.client.get_oled_info.side_effect = _api_error()
     with pytest.raises(NanoKVMApiError):
-        await coordinator._fetch_oled_info()
+        await coordinator._fetch_oled_info()  # noqa: SLF001
 
 
 async def test_core_fetch_refreshes_the_library_firmware_version_after_an_update(
@@ -1108,15 +1140,15 @@ async def test_core_fetch_refreshes_the_library_firmware_version_after_an_update
     polled = coordinator.client.get_info.return_value.application
 
     coordinator.client.application_version = polled
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
     coordinator.client.detect_versions.assert_not_awaited()
 
     coordinator.client.application_version = None
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
     coordinator.client.detect_versions.assert_not_awaited()
 
     coordinator.client.application_version = f"{polled}-old"
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
     coordinator.client.detect_versions.assert_awaited_once_with()
 
 
@@ -1129,9 +1161,9 @@ async def test_core_fetch_as_non_admin_skips_administrator_endpoints(
         client, hardware=HWVersion.PCIE, role="user"
     )
 
-    await coordinator._async_fetch_core_data()
-    await coordinator._async_fetch_storage_data()
-    coordinator._async_schedule_app_version_refresh()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
+    await coordinator._async_fetch_storage_data()  # noqa: SLF001
+    coordinator._async_schedule_app_version_refresh()  # noqa: SLF001
 
     assert coordinator.is_admin is False
     for attribute in ("gpio_info", "hid_mode", "hdmi_state", "keyboard_leds"):
@@ -1149,7 +1181,7 @@ async def test_core_fetch_as_non_admin_skips_administrator_endpoints(
     ):
         assert getattr(coordinator, attribute) is None
         endpoint.assert_not_awaited()
-    assert coordinator._app_version_fetch_task is None
+    assert coordinator._app_version_fetch_task is None  # noqa: SLF001
 
 
 @pytest.mark.parametrize("role", [None, "admin"])
@@ -1170,16 +1202,16 @@ async def test_account_role_change_reloads_the_entry(
     _configure_required_client_responses(client, hardware=HWVersion.PCIE, role="user")
     reload = coordinator.hass.config_entries.async_schedule_reload
 
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
     # A poll that cannot read the account keeps the role it knew.
     client.get_account.side_effect = _api_error()
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
     assert coordinator.account.role == "user"
     reload.assert_not_called()
 
     client.get_account.side_effect = None
     client.get_account.return_value = GetAccountRsp(username="nano", role="admin")
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
     reload.assert_called_once_with(coordinator.config_entry.entry_id)
 
 
@@ -1204,9 +1236,9 @@ async def test_core_fetch_follows_the_grants_of_a_user_account(
         file="", cdrom=False, readOnly=False
     )
 
-    await coordinator._async_fetch_core_data()
-    await coordinator._async_fetch_storage_data()
-    coordinator._async_schedule_app_version_refresh()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
+    await coordinator._async_fetch_storage_data()  # noqa: SLF001
+    coordinator._async_schedule_app_version_refresh()  # noqa: SLF001
 
     for attribute in (
         "hid_mode",
@@ -1226,7 +1258,7 @@ async def test_core_fetch_follows_the_grants_of_a_user_account(
     ):
         assert getattr(coordinator, attribute) is None
         endpoint.assert_not_awaited()
-    assert coordinator._app_version_fetch_task is None
+    assert coordinator._app_version_fetch_task is None  # noqa: SLF001
 
 
 @pytest.mark.parametrize(
@@ -1258,14 +1290,14 @@ async def test_account_grant_change_reloads_the_entry(
     client.get_account.return_value = GetAccountRsp(
         username="nano", role="user", permissions=["console.view"]
     )
-    await coordinator._async_fetch_core_data()
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
     reload.assert_not_called()
 
     client.get_account.return_value = GetAccountRsp(
         username="nano", role="user", permissions=["console.view", "power"]
     )
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
     reload.assert_called_once_with(coordinator.config_entry.entry_id)
 
 
@@ -1276,7 +1308,7 @@ async def test_optional_fetch_treats_a_forbidden_endpoint_as_unavailable(
     endpoint = AsyncMock(
         side_effect=NanoKVMPermissionError(method="GET", path="/vm/ssh")
     )
-    assert await coordinator._fetch_optional("/vm/ssh", endpoint) is None
+    assert await coordinator._fetch_optional("/vm/ssh", endpoint) is None  # noqa: SLF001
 
 
 async def test_core_fetch_populates_pcie_state(
@@ -1288,7 +1320,7 @@ async def test_core_fetch_populates_pcie_state(
         hardware=HWVersion.PCIE,
     )
 
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
 
     for attribute in (
         "device_info",
@@ -1325,7 +1357,7 @@ async def test_core_fetch_failure_keeps_the_previous_state(
     )
 
     with pytest.raises(aiohttp.ClientConnectionError):
-        await coordinator._async_fetch_core_data()
+        await coordinator._async_fetch_core_data()  # noqa: SLF001
 
     assert coordinator.gpio_info is previous_gpio
     assert coordinator.swap_size == previous_swap
@@ -1346,18 +1378,18 @@ async def test_core_fetch_bounds_concurrent_requests_and_cancels_on_failure(
         peak = max(peak, active)
         try:
             await asyncio.sleep(0)
-            if started == coordinator_module._MAX_CONCURRENT_REQUESTS:
+            if started == coordinator_module._MAX_CONCURRENT_REQUESTS:  # noqa: SLF001
                 raise NanoKVMError("endpoint failed")
             await asyncio.sleep(0)
         finally:
             active -= 1
 
     with pytest.raises(NanoKVMError, match="endpoint failed"):
-        await coordinator._async_fetch_concurrently(
+        await coordinator._async_fetch_concurrently(  # noqa: SLF001
             {f"endpoint_{index}": call for index in range(12)}
         )
 
-    assert peak == coordinator_module._MAX_CONCURRENT_REQUESTS
+    assert peak == coordinator_module._MAX_CONCURRENT_REQUESTS  # noqa: SLF001
     assert active == 0
     assert started < 12
 
@@ -1371,7 +1403,7 @@ async def test_core_fetch_skips_hardware_gated_endpoints_without_hardware(
     coordinator.hdmi_state = object()
     coordinator.swap_size = 256
 
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
 
     assert coordinator.virtual_device_info is None
     assert coordinator.hdmi_state is None
@@ -1403,7 +1435,7 @@ async def test_core_fetch_populates_pro_optional_state(
     coordinator.client.get_time_status.return_value = expected["time_status"]
     coordinator.client.get_static_ip.return_value = expected["static_ip"]
 
-    await coordinator._async_fetch_core_data()
+    await coordinator._async_fetch_core_data()  # noqa: SLF001
 
     for attribute, value in expected.items():
         assert getattr(coordinator, attribute) == value
@@ -1422,7 +1454,7 @@ async def test_storage_fetch_reads_mounted_image_and_cdrom(
     coordinator.client.get_mounted_image.return_value = mounted
     coordinator.client.get_cdrom_status.return_value = cdrom
 
-    await coordinator._async_fetch_storage_data()
+    await coordinator._async_fetch_storage_data()  # noqa: SLF001
 
     assert coordinator.mounted_image == mounted
     assert coordinator.cdrom_status == cdrom
@@ -1437,7 +1469,7 @@ async def test_storage_fetch_uses_default_when_mounted_image_fails(
     coordinator.client.get_mounted_image.side_effect = _api_error()
     coordinator.client.get_cdrom_status.side_effect = NanoKVMNotSupportedError()
 
-    await coordinator._async_fetch_storage_data()
+    await coordinator._async_fetch_storage_data()  # noqa: SLF001
 
     assert coordinator.mounted_image == GetMountedImageRsp(
         file="",
@@ -1453,10 +1485,10 @@ async def test_storage_fetch_skips_cdrom_for_pro_in_normal_hid_mode(
     """Normal HID on Pro reads media but skips the non-Pro CD-ROM endpoint."""
     coordinator.hid_mode = GetHidModeRsp(mode=HidMode.NORMAL)
     coordinator.hardware_info = GetHardwareRsp(version=HWVersion.PRO)
-    mounted = GetMountedImageRsp(file="images/rescue.iso")
+    mounted = GetMountedImageRsp(file="images/rescue.iso", readOnly=False)
     coordinator.client.get_mounted_image.return_value = mounted
 
-    await coordinator._async_fetch_storage_data()
+    await coordinator._async_fetch_storage_data()  # noqa: SLF001
 
     assert coordinator.mounted_image == mounted
     assert coordinator.cdrom_status is None
@@ -1479,7 +1511,7 @@ async def test_storage_fetch_uses_defaults_outside_normal_hid_mode(
     coordinator.hid_mode = GetHidModeRsp(mode=HidMode.HID_ONLY)
     coordinator.hardware_info = GetHardwareRsp(version=hardware)
 
-    await coordinator._async_fetch_storage_data()
+    await coordinator._async_fetch_storage_data()  # noqa: SLF001
 
     assert coordinator.mounted_image == GetMountedImageRsp(
         file="",
@@ -1488,28 +1520,6 @@ async def test_storage_fetch_uses_defaults_outside_normal_hid_mode(
     )
     assert coordinator.cdrom_status == expected_cdrom
     coordinator.client.get_mounted_image.assert_not_awaited()
-
-
-@pytest.mark.parametrize(
-    ("application", "expected"),
-    [
-        ("", False),
-        (" ", False),
-        ("2.2.1", False),
-        ("2.2.2", True),
-        ("2.3.0", True),
-        ("not a version", False),
-    ],
-)
-def test_watchdog_capability_uses_application_version(
-    coordinator: NanoKVMDataUpdateCoordinator,
-    application: str,
-    expected: bool,
-) -> None:
-    """Watchdog support begins at firmware 2.2.2 and rejects invalid versions."""
-    coordinator.device_info = _device_info(application=application)
-
-    assert coordinator.supports_watchdog is expected
 
 
 @pytest.mark.parametrize(
@@ -1552,7 +1562,6 @@ def test_hardware_capability_properties(
     assert coordinator.supports_hdmi_endpoint is hdmi
     assert coordinator.is_non_pro_hardware is swap
     assert coordinator.is_non_pro_hardware is cdrom
-
 
 
 async def test_ensure_ssh_collector_creates_once_and_reuses(
@@ -1620,7 +1629,7 @@ async def test_ssh_host_key_failure_disconnects_collector(
     collector.disconnect = AsyncMock()
     coordinator.ssh_metrics_collector = collector
 
-    await coordinator._async_update_ssh_data()
+    await coordinator._async_update_ssh_data()  # noqa: SLF001
 
     collector.disconnect.assert_awaited_once_with()
     assert "host-key verification" in caplog.text
@@ -1639,13 +1648,13 @@ async def test_ssh_authentication_failure_warns_about_ssh_login(
     )
     coordinator.ssh_metrics_collector = collector
 
-    await coordinator._async_update_ssh_data()
-    await coordinator._async_update_ssh_data()
+    await coordinator._async_update_ssh_data()  # noqa: SLF001
+    await coordinator._async_update_ssh_data()  # noqa: SLF001
 
     warnings = [r for r in caplog.records if r.levelname == "WARNING"]
     assert len(warnings) == 1
     assert "rejected the SSH login" in warnings[0].getMessage()
-    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+    assert coordinator.ssh_metrics == SSHMetrics()
     assert collector.disconnect.await_count == 2
 
 
@@ -1653,8 +1662,8 @@ async def test_successful_ssh_update_assigns_metrics(
     coordinator: NanoKVMDataUpdateCoordinator,
 ) -> None:
     """Successful SSH collection stores the collected metrics snapshot."""
-    metrics = SSHMetricsSnapshot(
-        uptime=datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
+    metrics = SSHMetrics(
+        boot_time=dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
         cpu_temperature=51.5,
         memory_total=512.0,
         memory_used_percent=25.0,
@@ -1669,8 +1678,8 @@ async def test_successful_ssh_update_assigns_metrics(
     coordinator.ssh_metrics_collector = collector
     coordinator.device_info = _device_info(application="2.2.2")
 
-    await coordinator._async_update_ssh_data()
-    await coordinator._async_update_ssh_data()
+    await coordinator._async_update_ssh_data()  # noqa: SLF001
+    await coordinator._async_update_ssh_data()  # noqa: SLF001
 
     assert coordinator.ssh_metrics is metrics
     assert collector.collect.await_count == 2
@@ -1685,11 +1694,11 @@ async def test_failed_ssh_update_clears_metrics_and_disconnects(
         disconnect=AsyncMock(),
     )
     coordinator.ssh_metrics_collector = collector
-    coordinator.ssh_metrics = SSHMetricsSnapshot(watchdog_enabled=True)
+    coordinator.ssh_metrics = SSHMetrics(watchdog_enabled=True)
 
-    await coordinator._async_update_ssh_data()
+    await coordinator._async_update_ssh_data()  # noqa: SLF001
 
-    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+    assert coordinator.ssh_metrics == SSHMetrics()
     collector.disconnect.assert_awaited_once_with()
 
 
@@ -1698,8 +1707,8 @@ async def test_ssh_connection_warning_logs_once_per_failure_streak(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Repeated SSH failures warn once and a successful poll resets the streak."""
-    metrics = SSHMetricsSnapshot(
-        uptime=datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
+    metrics = SSHMetrics(
+        boot_time=dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
         cpu_temperature=51.5,
         memory_total=512.0,
         memory_used_percent=25.0,
@@ -1717,11 +1726,11 @@ async def test_ssh_connection_warning_logs_once_per_failure_streak(
     coordinator.ssh_metrics_collector = collector
 
     with caplog.at_level("DEBUG", logger=coordinator_module.__name__):
-        await coordinator._async_update_ssh_data()
-        await coordinator._async_update_ssh_data()
-        await coordinator._async_update_ssh_data()
-        assert coordinator._ssh_connection_warning_logged is False
-        await coordinator._async_update_ssh_data()
+        await coordinator._async_update_ssh_data()  # noqa: SLF001
+        await coordinator._async_update_ssh_data()  # noqa: SLF001
+        await coordinator._async_update_ssh_data()  # noqa: SLF001
+        assert coordinator._ssh_connection_warning_logged is False  # noqa: SLF001
+        await coordinator._async_update_ssh_data()  # noqa: SLF001
 
     warning_records = [
         record
@@ -1748,11 +1757,11 @@ async def test_disabled_ssh_refresh_clears_collector_and_metrics(
     collector = SimpleNamespace(disconnect=AsyncMock())
     coordinator.ssh_metrics_collector = collector
     coordinator.ssh_state = GetSSHStateRsp(enabled=False)
-    coordinator.ssh_metrics = SSHMetricsSnapshot(cpu_temperature=50.0)
+    coordinator.ssh_metrics = SSHMetrics(cpu_temperature=50.0)
 
-    await coordinator._async_refresh_ssh_data()
+    await coordinator._async_refresh_ssh_data()  # noqa: SLF001
 
-    assert coordinator.ssh_metrics == SSHMetricsSnapshot()
+    assert coordinator.ssh_metrics == SSHMetrics()
     assert coordinator.ssh_metrics_collector is None
     collector.disconnect.assert_awaited_once_with()
 
@@ -1762,18 +1771,18 @@ async def test_app_version_schedule_refreshes_state_and_listeners(
 ) -> None:
     """A stale version cache schedules one background refresh."""
     version = GetVersionRsp(current="2.2.2", latest="2.3.0")
-    coordinator._async_fetch_app_version = AsyncMock(return_value=version)
+    coordinator._async_fetch_app_version = AsyncMock(return_value=version)  # noqa: SLF001
     coordinator.async_update_listeners = MagicMock()
     coordinator.hass.async_create_task = asyncio.create_task
 
-    coordinator._async_schedule_app_version_refresh()
-    task = coordinator._app_version_fetch_task
+    coordinator._async_schedule_app_version_refresh()  # noqa: SLF001
+    task = coordinator._app_version_fetch_task  # noqa: SLF001
     assert task is not None
     await task
 
     assert coordinator.application_version_info == version
-    assert coordinator._app_version_last_fetched is not None
-    assert coordinator._app_version_fetch_task is None
+    assert coordinator._app_version_last_fetched is not None  # noqa: SLF001
+    assert coordinator._app_version_fetch_task is None  # noqa: SLF001
     coordinator.async_update_listeners.assert_called_once_with()
 
 
@@ -1782,24 +1791,24 @@ async def test_app_version_schedule_skips_active_and_fresh_cache(
 ) -> None:
     """An active task or fresh success/failure cache suppresses duplicate work."""
     active_task = asyncio.create_task(asyncio.Event().wait())
-    coordinator._app_version_fetch_task = active_task
+    coordinator._app_version_fetch_task = active_task  # noqa: SLF001
     coordinator.hass.async_create_task = MagicMock()
-    coordinator._async_schedule_app_version_refresh()
+    coordinator._async_schedule_app_version_refresh()  # noqa: SLF001
     coordinator.hass.async_create_task.assert_not_called()
     active_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await active_task
 
-    coordinator._app_version_fetch_task = None
-    coordinator._app_version_last_fetched = datetime.datetime.now(datetime.UTC)
+    coordinator._app_version_fetch_task = None  # noqa: SLF001
+    coordinator._app_version_last_fetched = dt.datetime.now(dt.UTC)  # noqa: SLF001
     coordinator.application_version_info = GetVersionRsp(
         current="2.2.2", latest="2.3.0"
     )
-    coordinator._async_schedule_app_version_refresh()
+    coordinator._async_schedule_app_version_refresh()  # noqa: SLF001
     coordinator.hass.async_create_task.assert_not_called()
 
     coordinator.application_version_info = None
-    coordinator._async_schedule_app_version_refresh()
+    coordinator._async_schedule_app_version_refresh()  # noqa: SLF001
     coordinator.hass.async_create_task.assert_not_called()
 
 
@@ -1813,16 +1822,16 @@ async def test_app_version_refresh_cancellation_clears_task_reference(
         started.set()
         await asyncio.Event().wait()
 
-    coordinator._async_fetch_app_version = wait_for_cancellation
-    task = asyncio.create_task(coordinator._async_refresh_app_version())
-    coordinator._app_version_fetch_task = task
+    coordinator._async_fetch_app_version = wait_for_cancellation  # noqa: SLF001
+    task = asyncio.create_task(coordinator._async_refresh_app_version())  # noqa: SLF001
+    coordinator._app_version_fetch_task = task  # noqa: SLF001
     await started.wait()
     task.cancel()
 
     with pytest.raises(asyncio.CancelledError):
         await task
 
-    assert coordinator._app_version_fetch_task is None
+    assert coordinator._app_version_fetch_task is None  # noqa: SLF001
 
 
 async def test_app_version_client_returns_value_and_suppresses_device_failure(
@@ -1841,8 +1850,8 @@ async def test_app_version_client_returns_value_and_suppresses_device_failure(
     factory = MagicMock(side_effect=[success, failure])
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
-    assert await coordinator._async_fetch_app_version() == version
-    assert await coordinator._async_fetch_app_version() is None
+    assert await coordinator._async_fetch_app_version() == version  # noqa: SLF001
+    assert await coordinator._async_fetch_app_version() is None  # noqa: SLF001
     assert factory.call_args_list == [
         call(
             "http://nanokvm.local/api/",
@@ -1880,9 +1889,7 @@ def test_clone_client_follows_active_transport_and_token(
     monkeypatch.setattr(coordinator_module, "NanoKVMClient", factory)
 
     assert coordinator.clone_client() is factory.return_value
-    factory.assert_called_once_with(
-        url, token="token", ssl_fingerprint=ssl_fingerprint
-    )
+    factory.assert_called_once_with(url, token="token", ssl_fingerprint=ssl_fingerprint)
 
 
 async def test_ensure_authenticated_logs_in_only_without_a_token(
@@ -1906,7 +1913,7 @@ async def test_shutdown_cleans_owned_resources_when_base_shutdown_fails(
     """Coordinator-owned tasks and SSH are released even if base cleanup fails."""
     task = asyncio.create_task(asyncio.Event().wait())
     collector = SimpleNamespace(disconnect=AsyncMock())
-    coordinator._app_version_fetch_task = task
+    coordinator._app_version_fetch_task = task  # noqa: SLF001
     coordinator.ssh_metrics_collector = collector
     base_shutdown = AsyncMock(side_effect=RuntimeError("base failed"))
     monkeypatch.setattr(DataUpdateCoordinator, "async_shutdown", base_shutdown)
@@ -1915,6 +1922,6 @@ async def test_shutdown_cleans_owned_resources_when_base_shutdown_fails(
         await coordinator.async_shutdown()
 
     assert task.cancelled()
-    assert coordinator._app_version_fetch_task is None
+    assert coordinator._app_version_fetch_task is None  # noqa: SLF001
     collector.disconnect.assert_awaited_once_with()
     assert coordinator.ssh_metrics_collector is None

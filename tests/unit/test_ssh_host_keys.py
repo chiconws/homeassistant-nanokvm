@@ -1,104 +1,19 @@
-"""Tests for SSH host-key probing and persistence."""
+"""Tests for SSH login checks and host-key persistence."""
 
-from __future__ import annotations
-
-import base64
 from pathlib import Path
-import socket
+from types import TracebackType
+from typing import Self
 from unittest.mock import MagicMock
 
-from nanokvm.ssh_client import (
-    NanoKVMSSHAuthenticationError,
-    NanoKVMSSHConnectionError,
-)
-import paramiko
+from nanokvm.ssh_client import NanoKVMSSHAuthenticationError
 import pytest
 
 import custom_components.nanokvm.ssh_host_keys as host_keys_module
 from custom_components.nanokvm.ssh_host_keys import (
-    SSHHostKey,
     async_check_ssh_login,
-    async_probe_host_key,
     async_write_known_hosts,
     known_hosts_path,
 )
-
-
-class _FakeKey:
-    """Minimal Paramiko public-key boundary."""
-
-    def __init__(self, key_type: str = "ssh-ed25519", raw: bytes = b"key") -> None:
-        self.key_type = key_type
-        self.raw = raw
-
-    def get_name(self) -> str:
-        """Return the OpenSSH key type."""
-        return self.key_type
-
-    def get_base64(self) -> str:
-        """Return the OpenSSH public-key payload."""
-        return base64.b64encode(self.raw).decode()
-
-    @property
-    def fingerprint(self) -> str:
-        """Return the OpenSSH fingerprint Paramiko computes for the key."""
-        return f"SHA256:{self.raw.decode()}"
-
-
-class _FakeTransport:
-    """Handshake-only transport that records authentication boundaries."""
-
-    instances: list[_FakeTransport] = []
-
-    def __init__(self, sock: socket.socket) -> None:
-        self.sock = sock
-        self.start_client_calls = 0
-        self.closed = False
-        self.key = _FakeKey(raw=b"known-public-key")
-        self.__class__.instances.append(self)
-
-    def start_client(self, *, timeout: float) -> None:
-        """Record the unauthenticated SSH handshake."""
-        self.start_client_calls += 1
-        assert timeout == 10
-
-    def get_remote_server_key(self) -> _FakeKey:
-        """Return the server key negotiated by the handshake."""
-        return self.key
-
-    def close(self) -> None:
-        """Record transport cleanup."""
-        self.closed = True
-        self.sock.close()
-
-
-@pytest.mark.asyncio
-async def test_probe_host_key_only_performs_unauthenticated_handshake(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The probe reads a key without exposing a password-authentication path."""
-    _FakeTransport.instances = []
-    sock = MagicMock(spec=socket.socket)
-    create_connection = MagicMock(return_value=sock)
-    monkeypatch.setattr(host_keys_module.socket, "create_connection", create_connection)
-    monkeypatch.setattr(host_keys_module.paramiko, "Transport", _FakeTransport)
-
-    result = await async_probe_host_key("nanokvm.local")
-
-    assert result == SSHHostKey(
-        host="nanokvm.local",
-        known_hosts_line="nanokvm.local ssh-ed25519 a25vd24tcHVibGljLWtleQ==",
-        fingerprint="SHA256:known-public-key",
-    )
-    transport = _FakeTransport.instances[0]
-    create_connection.assert_called_once_with(
-        ("nanokvm.local", 22),
-        timeout=10,
-    )
-    assert transport.sock is sock
-    assert transport.start_client_calls == 1
-    assert transport.closed is True
-    sock.close.assert_called_once()
 
 
 def test_known_hosts_path_is_scoped_to_the_entry(tmp_path: Path) -> None:
@@ -106,7 +21,9 @@ def test_known_hosts_path_is_scoped_to_the_entry(tmp_path: Path) -> None:
     assert known_hosts_path(tmp_path, "entry-1") == (
         tmp_path / "nanokvm" / "ssh" / "entry-1.known_hosts"
     )
-    assert known_hosts_path(tmp_path, "entry-2") != known_hosts_path(tmp_path, "entry-1")
+    assert known_hosts_path(tmp_path, "entry-2") != known_hosts_path(
+        tmp_path, "entry-1"
+    )
 
 
 def test_retarget_known_hosts_line_keeps_the_trusted_key() -> None:
@@ -137,32 +54,10 @@ def test_retarget_known_hosts_line_rejects_invalid_entries(
         host_keys_module.retarget_known_hosts_line(known_hosts_line, host)
 
 
-def test_probe_host_key_closes_socket_if_transport_initialization_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A failed Paramiko initialization does not leak its TCP socket."""
-    sock = MagicMock(spec=socket.socket)
-    monkeypatch.setattr(
-        host_keys_module.socket,
-        "create_connection",
-        MagicMock(return_value=sock),
-    )
-    monkeypatch.setattr(
-        host_keys_module.paramiko,
-        "Transport",
-        MagicMock(side_effect=RuntimeError("transport failed")),
-    )
-
-    with pytest.raises(RuntimeError, match="transport failed"):
-        host_keys_module._probe_host_key("nanokvm.local")
-
-    sock.close.assert_called_once()
-
-
 def test_write_known_hosts_rejects_multiline_content(tmp_path: Path) -> None:
     """Host-key storage cannot be used to inject extra known-hosts entries."""
     with pytest.raises(ValueError, match="exactly one non-empty line"):
-        host_keys_module._write_known_hosts(
+        host_keys_module._write_known_hosts(  # noqa: SLF001
             tmp_path / "known_hosts",
             "host ssh-ed25519 key\nother-host ssh-ed25519 key",
         )
@@ -173,69 +68,66 @@ async def test_write_known_hosts_creates_owner_only_file(tmp_path: Path) -> None
     """Persisting a public key creates a private filesystem entry safely."""
     hass = MagicMock()
     hass.config.path.return_value = str(tmp_path)
-    key = SSHHostKey(
-        host="nanokvm.local",
-        known_hosts_line="nanokvm.local ssh-ed25519 ZHVtbXk=",
-        fingerprint="SHA256:dummy",
-    )
+    line = "nanokvm.local ssh-ed25519 ZHVtbXk="
 
-    path = await async_write_known_hosts(hass, "entry-1", key.known_hosts_line)
+    path = await async_write_known_hosts(hass, "entry-1", line)
 
     assert path == tmp_path / "nanokvm" / "ssh" / "entry-1.known_hosts"
-    assert path.read_text() == key.known_hosts_line + "\n"
+    assert path.read_text() == line + "\n"
     assert path.stat().st_mode & 0o777 == 0o600
     assert path.parent.stat().st_mode & 0o777 == 0o700
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("connect_error", "expected"),
-    [
-        (None, None),
-        (paramiko.AuthenticationException("denied"), NanoKVMSSHAuthenticationError),
-        (paramiko.BadHostKeyException("nanokvm.local", MagicMock(), MagicMock()),
-         NanoKVMSSHConnectionError),
-        (OSError("unreachable"), NanoKVMSSHConnectionError),
-    ],
-)
-async def test_check_ssh_login_only_trusts_the_saved_key(
-    monkeypatch: pytest.MonkeyPatch,
-    connect_error: Exception | None,
-    expected: type[Exception] | None,
-) -> None:
-    """The login check pins the trusted key and maps Paramiko failures."""
-    key = paramiko.RSAKey.generate(1024)
-    line = f"nanokvm.local {key.get_name()} {key.get_base64()}"
-    client = MagicMock()
-    client.get_host_keys.return_value = paramiko.HostKeys()
-    client.connect.side_effect = connect_error
-    monkeypatch.setattr(host_keys_module.paramiko, "SSHClient", lambda: client)
+class _FakeSSH:
+    """Record how the login check uses the library's SSH client."""
 
-    if expected is None:
+    instances: list[_FakeSSH] = []
+    error: Exception | None = None
+
+    def __init__(self, host: str, username: str, *, host_key: str) -> None:
+        self.host = host
+        self.username = username
+        self.host_key = host_key
+        self.passwords: list[str] = []
+        self.closed = False
+        _FakeSSH.instances.append(self)
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.closed = True
+
+    async def authenticate(self, password: str) -> None:
+        self.passwords.append(password)
+        if _FakeSSH.error is not None:
+            raise _FakeSSH.error
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [None, NanoKVMSSHAuthenticationError("denied")])
+async def test_check_ssh_login_pins_the_saved_key_and_disconnects(
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception | None,
+) -> None:
+    """The check signs in to the line's host with only that key, then closes."""
+    _FakeSSH.instances = []
+    _FakeSSH.error = error
+    monkeypatch.setattr(host_keys_module, "NanoKVMSSH", _FakeSSH)
+    line = "nanokvm.local,192.0.2.20 ssh-ed25519 ZHVtbXk="
+
+    if error is None:
         await async_check_ssh_login(line, "root", "secret")
     else:
-        with pytest.raises(expected):
+        with pytest.raises(NanoKVMSSHAuthenticationError):
             await async_check_ssh_login(line, "root", "secret")
 
-    assert client.get_host_keys().lookup("nanokvm.local")[key.get_name()] == key
-    policy = client.set_missing_host_key_policy.call_args.args[0]
-    assert isinstance(policy, paramiko.RejectPolicy)
-    assert client.connect.call_args.args == ("nanokvm.local",)
-    assert client.connect.call_args.kwargs == {
-        "port": 22,
-        "username": "root",
-        "password": "secret",
-        "timeout": 10,
-        "banner_timeout": 10,
-        "auth_timeout": 10,
-        "allow_agent": False,
-        "look_for_keys": False,
-    }
-    client.close.assert_called_once_with()
-
-
-@pytest.mark.asyncio
-async def test_check_ssh_login_rejects_an_unparsable_key_line() -> None:
-    """A malformed trusted key line reports a connection failure."""
-    with pytest.raises(NanoKVMSSHConnectionError):
-        await async_check_ssh_login("# comment", "root", "secret")
+    [ssh] = _FakeSSH.instances
+    assert (ssh.host, ssh.username, ssh.host_key) == ("nanokvm.local", "root", line)
+    assert ssh.passwords == ["secret"]
+    assert ssh.closed is True

@@ -1,0 +1,22 @@
+name: Bug report
+description: Something does not work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Integration and Home Assistant versions
+      placeholder: v1.2.0 on Home Assistant 2026.10.2
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Diagnostics or debug logs
+      description: Settings → Devices & services → Sipeed NanoKVM → ⋮ → Download diagnostics, then drag the file here.

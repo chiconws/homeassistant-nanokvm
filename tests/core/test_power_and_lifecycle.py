@@ -1,34 +1,34 @@
 """Regression tests for NanoKVM power and coordinator lifecycle behavior."""
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
 from types import SimpleNamespace
+from typing import Self
 from unittest.mock import AsyncMock, MagicMock
 
-from homeassistant.config_entries import ConfigEntry
 from nanokvm.models import GpioType
-from pytest import MonkeyPatch
+import pytest
 
 from custom_components.nanokvm import async_unload_entry
 from custom_components.nanokvm.coordinator import NanoKVMDataUpdateCoordinator
+import custom_components.nanokvm.switch as switch_module
 from custom_components.nanokvm.switch import (
     SWITCHES,
     NanoKVMPowerSwitch,
     NanoKVMSwitchEntityDescription,
 )
-import custom_components.nanokvm.switch as switch_module
+from homeassistant.config_entries import ConfigEntry
 
 
 class FakeClient:
     """Minimal async context-managed NanoKVM client for power tests."""
 
     def __init__(self) -> None:
+        """Initialize the test double."""
         self.enter_count = 0
         self.push_button = AsyncMock()
 
-    async def __aenter__(self) -> FakeClient:
+    async def __aenter__(self) -> Self:
         """Reject entity code that enters the shared client directly."""
         raise AssertionError("power switch bypassed coordinator client access")
 
@@ -86,7 +86,7 @@ def test_power_turn_off_is_noop_when_already_off() -> None:
 
 
 def test_power_turn_on_uses_coordinator_client_access(
-    monkeypatch: MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A power action must use serialized coordinator client access."""
     switch, coordinator = _power_switch(False)
@@ -131,14 +131,14 @@ def test_coordinator_shutdown_stops_base_and_owned_resources() -> None:
         coordinator, _ = _coordinator()
         app_version_task = asyncio.create_task(asyncio.Event().wait())
         collector = SimpleNamespace(disconnect=AsyncMock())
-        coordinator._app_version_fetch_task = app_version_task
+        coordinator._app_version_fetch_task = app_version_task  # noqa: SLF001
         coordinator.ssh_metrics_collector = collector
 
         await coordinator.async_shutdown()
 
-        assert coordinator._shutdown_requested is True
+        assert coordinator._shutdown_requested is True  # noqa: SLF001
         assert app_version_task.cancelled()
-        assert coordinator._app_version_fetch_task is None
+        assert coordinator._app_version_fetch_task is None  # noqa: SLF001
         collector.disconnect.assert_awaited_once_with()
         assert coordinator.ssh_metrics_collector is None
 

@@ -1,31 +1,29 @@
 """Behavior tests for NanoKVM WebRTC signaling and session lifecycle."""
 
-from __future__ import annotations
-
 import asyncio
 from collections import deque
 from collections.abc import Callable, Coroutine
 import json
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Self
 
 from aiohttp import WSMsgType
+from nanokvm.client import NanoKVMClient
+from nanokvm.webrtc import WebRTCSignaling
+import pytest
+import pytest_asyncio
+from webrtc_models import RTCIceCandidateInit
+
+from custom_components.nanokvm.media import signaling as webrtc_module
+from custom_components.nanokvm.media.signaling import NanoKVMWebRTCManager
 from homeassistant.components.camera.webrtc import (
     WebRTCAnswer,
     WebRTCCandidate,
     WebRTCError,
 )
 from homeassistant.exceptions import HomeAssistantError
-import pytest
-import pytest_asyncio
-from webrtc_models import RTCIceCandidateInit
-from yarl import URL
 
-from custom_components.nanokvm.media import signaling as webrtc_module
-from custom_components.nanokvm.media.signaling import NanoKVMWebRTCManager
-
-
-COMBINED_OFFER = "\r\n".join(
+COMBINED_OFFER = "\r\n".join(  # noqa: FLY002 - one SDP line per item
     (
         "v=0",
         "o=- 1 1 IN IP4 127.0.0.1",
@@ -41,7 +39,7 @@ COMBINED_OFFER = "\r\n".join(
         "",
     )
 )
-VIDEO_ONLY_OFFER = "\r\n".join(
+VIDEO_ONLY_OFFER = "\r\n".join(  # noqa: FLY002 - one SDP line per item
     (
         "v=0",
         "o=- 1 1 IN IP4 127.0.0.1",
@@ -54,7 +52,7 @@ VIDEO_ONLY_OFFER = "\r\n".join(
         "",
     )
 )
-VIDEO_ANSWER = "\r\n".join(
+VIDEO_ANSWER = "\r\n".join(  # noqa: FLY002 - one SDP line per item
     (
         "v=0",
         "o=- 2 2 IN IP4 127.0.0.1",
@@ -68,7 +66,7 @@ VIDEO_ANSWER = "\r\n".join(
         "",
     )
 )
-AUDIO_ANSWER = "\r\n".join(
+AUDIO_ANSWER = "\r\n".join(  # noqa: FLY002 - one SDP line per item
     (
         "v=0",
         "o=- 3 3 IN IP4 127.0.0.1",
@@ -89,6 +87,7 @@ class FakeWebSocket:
     """Small asynchronous WebSocket boundary with observable I/O."""
 
     def __init__(self) -> None:
+        """Initialize the test double."""
         self.sent: list[dict[str, object]] = []
         self.closed = False
         self.close_code: int | None = None
@@ -98,10 +97,12 @@ class FakeWebSocket:
         self._incoming: asyncio.Queue[object] = asyncio.Queue()
         self._exception: Exception | None = None
 
-    def __aiter__(self) -> FakeWebSocket:
+    def __aiter__(self) -> Self:
+        """Return the message iterator."""
         return self
 
     async def __anext__(self) -> object:
+        """Return the next queued message."""
         item = await self._incoming.get()
         if item is _END:
             raise StopAsyncIteration
@@ -110,12 +111,14 @@ class FakeWebSocket:
         return item
 
     async def send_json(self, payload: dict[str, object]) -> None:
+        """Record a sent message."""
         event = payload.get("event")
         if isinstance(event, str) and event in self.send_failures:
             raise self.send_failures[event]
         self.sent.append(payload)
 
     async def close(self) -> None:
+        """Close the WebSocket."""
         self.close_calls += 1
         self.closed = True
         self._incoming.put_nowait(_END)
@@ -146,46 +149,35 @@ class FakeWebSocket:
         self._incoming.put_nowait(SimpleNamespace(type=WSMsgType.CLOSE, data=None))
 
 
-class FakeTransport:
-    """NanoKVM client's aiohttp session boundary."""
-
-    def __init__(self, websocket: FakeWebSocket) -> None:
-        self.websocket = websocket
-        self.calls: list[tuple[str, dict[str, object]]] = []
-        self.error: Exception | None = None
-        self.connect_started = asyncio.Event()
-        self.connect_release: asyncio.Event | None = None
-
-    async def open_ws(self, path: str, **kwargs: object) -> FakeWebSocket:
-        """Record the WebSocket request and return or fail the connection."""
-        self.calls.append((path, kwargs))
-        self.connect_started.set()
-        if self.connect_release is not None:
-            await self.connect_release.wait()
-        if self.error is not None:
-            raise self.error
-        return self.websocket
-
-
 class FakeClient:
-    """Authenticated NanoKVM streaming-client boundary."""
+    """NanoKVM client boundary, opening real signaling on a fake WebSocket."""
 
     def __init__(
-        self,
-        websocket: FakeWebSocket | None = None,
-        *,
-        url: str = "http://nanokvm.local/api",
+        self, websocket: FakeWebSocket | None = None, *, pro: bool = False
     ) -> None:
-        self.url = URL(url)
-        self.token: str | None = "stream-token"
+        """Initialize the test double."""
         self.websocket = websocket or FakeWebSocket()
-        self.transport = FakeTransport(self.websocket)
-        self.open_ws = self.transport.open_ws
+        self.pro = pro
+        self.open_calls = 0
+        self.open_error: Exception | None = None
+        self.open_started = asyncio.Event()
+        self.open_release: asyncio.Event | None = None
         self.enter_calls = 0
         self.exit_calls = 0
         self.exit_error: Exception | None = None
 
-    async def __aenter__(self) -> FakeClient:
+    async def open_webrtc_signaling(self) -> WebRTCSignaling:
+        """Record the request and return or fail the signaling session."""
+        self.open_calls += 1
+        self.open_started.set()
+        if self.open_release is not None:
+            await self.open_release.wait()
+        if self.open_error is not None:
+            raise self.open_error
+        return WebRTCSignaling(self.websocket, pro=self.pro)  # type: ignore[arg-type]
+
+    async def __aenter__(self) -> Self:
+        """Enter the client context."""
         self.enter_calls += 1
         return self
 
@@ -195,6 +187,7 @@ class FakeClient:
         exc: BaseException | None,
         traceback: object,
     ) -> None:
+        """Leave the client context."""
         self.exit_calls += 1
         if self.exit_error is not None:
             raise self.exit_error
@@ -204,6 +197,7 @@ class FakeHass:
     """Home Assistant task-scheduling boundary."""
 
     def __init__(self) -> None:
+        """Initialize the test double."""
         self.tasks: list[asyncio.Task[None]] = []
 
     def async_create_task(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
@@ -221,10 +215,10 @@ class WebRTCHarness:
         *,
         clients: list[FakeClient] | None = None,
         hass: FakeHass | None = None,
-        pro: bool = False,
         authenticate_error: Exception | None = None,
         session_state_callback: Callable[[bool], None] = lambda streaming: None,
     ) -> None:
+        """Initialize the test double."""
         self.clients = deque(clients or [FakeClient()])
         self.hass = hass or FakeHass()
         self.authenticate_error = authenticate_error
@@ -238,7 +232,6 @@ class WebRTCHarness:
         self.manager = NanoKVMWebRTCManager(
             SimpleNamespace(
                 hass=self.hass,
-                is_pro_hardware=pro,
                 clone_client=lambda: self.clients.popleft(),
                 async_ensure_authenticated=authenticate,
             ),
@@ -252,17 +245,8 @@ async def harness_factory(monkeypatch: pytest.MonkeyPatch) -> Any:
     harnesses: list[WebRTCHarness] = []
 
     def factory(
-        *,
-        signaling_heartbeat_seconds: float | None = None,
-        max_pending_ice_candidates: int | None = None,
-        **kwargs: object,
+        *, max_pending_ice_candidates: int | None = None, **kwargs: object
     ) -> WebRTCHarness:
-        if signaling_heartbeat_seconds is not None:
-            monkeypatch.setattr(
-                webrtc_module,
-                "_SIGNALING_HEARTBEAT_SECONDS",
-                signaling_heartbeat_seconds,
-            )
         if max_pending_ice_candidates is not None:
             monkeypatch.setattr(
                 webrtc_module,
@@ -316,7 +300,7 @@ async def test_non_pro_session_signals_offer_answer_candidate_and_cleanup(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
     """A complete non-Pro exchange must preserve SDP, ICE, and transport state."""
-    client = FakeClient(url="https://nanokvm.local/api")
+    client = FakeClient()
     harness = harness_factory(clients=[client])
     messages: list[object] = []
 
@@ -326,15 +310,7 @@ async def test_non_pro_session_signals_offer_answer_candidate_and_cleanup(
 
     assert client.enter_calls == 1
     assert harness.authenticated == [client]
-    assert len(client.transport.calls) == 1
-    path, kwargs = client.transport.calls[0]
-    assert path == "stream/h264"
-    assert set(kwargs) == {"heartbeat", "timeout"}
-    assert kwargs["heartbeat"] == 30.0
-    timeout = kwargs["timeout"]
-    assert isinstance(timeout, webrtc_module.aiohttp.ClientWSTimeout)
-    assert timeout.ws_close == 15
-    assert timeout.ws_receive is None
+    assert client.open_calls == 1
     assert client.websocket.sent == [
         {
             "event": "video-offer",
@@ -379,10 +355,7 @@ async def test_session_state_callback_tracks_first_open_and_last_close(
     """Only the first open and last close transition the public streaming state."""
     clients = [FakeClient(), FakeClient()]
     states: list[bool] = []
-    harness = harness_factory(
-        clients=clients,
-        session_state_callback=states.append,
-    )
+    harness = harness_factory(clients=clients, session_state_callback=states.append)
 
     await harness.manager.async_handle_async_webrtc_offer(
         VIDEO_ONLY_OFFER, "first", lambda _message: None
@@ -393,14 +366,14 @@ async def test_session_state_callback_tracks_first_open_and_last_close(
 
     assert states == [True]
 
-    await harness.manager._async_close_webrtc_session("first")
+    await harness.manager._async_close_webrtc_session("first")  # noqa: SLF001
     assert states == [True]
 
-    await harness.manager._async_close_webrtc_session("second")
+    await harness.manager._async_close_webrtc_session("second")  # noqa: SLF001
     assert states == [True, False]
 
 
-async def test_reader_ignores_malformed_irrelevant_and_non_text_messages(
+async def test_reader_ignores_malformed_and_irrelevant_messages(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
     """Noise on the signaling socket must not surface false HA messages."""
@@ -412,13 +385,8 @@ async def test_reader_ignores_malformed_irrelevant_and_non_text_messages(
     )
 
     client.websocket.feed_raw("not json")
-    client.websocket.feed_raw(json.dumps(["not", "an", "envelope"]))
-    client.websocket.feed_raw(json.dumps({"data": "{}"}))
-    client.websocket.feed_signal("heartbeat")
-    client.websocket.feed_signal("video-answer", "not json")
-    client.websocket.feed_signal("video-answer", json.dumps(["not", "a", "mapping"]))
     client.websocket.feed_signal("video-answer", {})
-    client.websocket.feed_signal("unknown", {"value": 1})
+    client.websocket.feed_signal("video-candidate", json.dumps({"sdpMid": "0"}))
     client.websocket.feed_raw(b"ignored", message_type=WSMsgType.BINARY)
     await _finish_reader(client, harness.hass)
 
@@ -426,45 +394,31 @@ async def test_reader_ignores_malformed_irrelevant_and_non_text_messages(
     assert client.exit_calls == 1
 
 
-async def test_pro_session_splits_offer_and_merges_answers_and_candidates(
+async def test_pro_session_presents_one_combined_peer_connection(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
     """Pro split peers must appear to HA as one combined peer connection."""
-    client = FakeClient()
-    harness = harness_factory(clients=[client], pro=True)
+    client = FakeClient(pro=True)
+    harness = harness_factory(clients=[client])
     messages: list[object] = []
 
     await harness.manager.async_handle_async_webrtc_offer(
         COMBINED_OFFER, "pro-session", messages.append
     )
+    await harness.manager.async_on_webrtc_candidate(
+        "pro-session", _candidate(mid="audio-main", index=1)
+    )
 
     assert [message["event"] for message in client.websocket.sent] == [
         "video-offer",
         "audio-offer",
+        "audio-candidate",
     ]
-    assert client.transport.calls[0][0] == "stream/h264/webrtc"
-    assert client.transport.calls[0][1]["heartbeat"] is None
-    client.websocket.feed_signal(
-        "video-candidate",
-        json.dumps(
-            {
-                "candidate": "candidate:video-before-answer",
-                "sdpMid": "0",
-                "sdpMLineIndex": 0,
-            }
-        ),
-    )
     client.websocket.feed_signal("video-answer", json.dumps({"sdp": VIDEO_ANSWER}))
     client.websocket.feed_signal("audio-answer", json.dumps({"sdp": AUDIO_ANSWER}))
     client.websocket.feed_signal(
         "audio-candidate",
-        json.dumps(
-            {
-                "candidate": "candidate:audio-after-answer",
-                "sdpMid": "0",
-                "sdpMLineIndex": 0,
-            }
-        ),
+        json.dumps({"candidate": "candidate:audio", "sdpMid": "0"}),
     )
     await _finish_reader(client, harness.hass)
 
@@ -474,54 +428,18 @@ async def test_pro_session_splits_offer_and_merges_answers_and_candidates(
     assert messages[1:] == [
         WebRTCCandidate(
             candidate=RTCIceCandidateInit(
-                "candidate:video-before-answer",
-                sdp_mid="video-main",
-                sdp_m_line_index=0,
-            )
-        ),
-        WebRTCCandidate(
-            candidate=RTCIceCandidateInit(
-                "candidate:audio-after-answer",
-                sdp_mid="audio-main",
-                sdp_m_line_index=1,
+                "candidate:audio", sdp_mid="audio-main", sdp_m_line_index=1
             )
         ),
     ]
-
-
-async def test_pro_video_only_offer_completes_with_one_answer(
-    harness_factory: Callable[..., WebRTCHarness],
-) -> None:
-    """Pro video-only offers must not wait for an audio answer that was not offered."""
-    client = FakeClient()
-    harness = harness_factory(clients=[client], pro=True)
-    messages: list[object] = []
-
-    await harness.manager.async_handle_async_webrtc_offer(
-        VIDEO_ONLY_OFFER, "pro-video", messages.append
-    )
-    client.websocket.feed_signal("video-status", {"status": 1})
-    client.websocket.feed_signal("audio-status", None)
-    client.websocket.feed_signal("audio-answer", None)
-    client.websocket.feed_signal("video-answer", {})
-    client.websocket.feed_signal("audio-candidate", None)
-    client.websocket.feed_signal("video-candidate", {})
-    client.websocket.feed_signal("unknown", {"value": 1})
-    client.websocket.feed_signal("audio-answer", json.dumps({"sdp": AUDIO_ANSWER}))
-    client.websocket.feed_signal("video-answer", json.dumps({"sdp": VIDEO_ANSWER}))
-    await _finish_reader(client, harness.hass)
-
-    assert [message["event"] for message in client.websocket.sent] == ["video-offer"]
-    assert len(messages) == 1
-    assert isinstance(messages[0], WebRTCAnswer)
 
 
 async def test_pro_inconsistent_video_status_reports_error_and_closes(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
     """A conflicting firmware video mode must not leave a frozen HA session."""
-    client = FakeClient()
-    harness = harness_factory(clients=[client], pro=True)
+    client = FakeClient(pro=True)
+    harness = harness_factory(clients=[client])
     messages: list[object] = []
     await harness.manager.async_handle_async_webrtc_offer(
         VIDEO_ONLY_OFFER, "pro-session", messages.append
@@ -530,44 +448,16 @@ async def test_pro_inconsistent_video_status_reports_error_and_closes(
     client.websocket.feed_signal("video-status", json.dumps({"status": "-4"}))
     await harness.hass.tasks[0]
 
-    try:
-        assert messages == [
-            WebRTCError(
-                code="webrtc_inconsistent_video_mode",
-                message=(
-                    "NanoKVM Pro stopped WebRTC video because another video mode "
-                    "is active"
-                ),
-            )
-        ]
-        assert client.websocket.closed
-        assert client.exit_calls == 1
-    finally:
-        await harness.manager.async_shutdown()
-
-
-@pytest.mark.parametrize(
-    ("data", "raw_data", "expected"),
-    [
-        ({"code": 1.9}, None, 1),
-        ({"value": "-4"}, None, -4),
-        ({"status": "bad"}, -1.2, -1),
-        (None, '"1"', 1),
-        (None, "{}", None),
-        (None, None, None),
-        (None, "not-a-status", None),
-    ],
-)
-def test_pro_status_decoding_accepts_device_payload_variants(
-    harness_factory: Callable[..., WebRTCHarness],
-    data: dict[str, object] | None,
-    raw_data: object,
-    expected: int | None,
-) -> None:
-    """Known Pro firmware status shapes must normalize to numeric codes."""
-    manager = harness_factory().manager
-
-    assert manager._status_code_from_signal_data(data, raw_data) == expected
+    assert messages == [
+        WebRTCError(
+            code="webrtc_inconsistent_video_mode",
+            message=(
+                "NanoKVM Pro stopped WebRTC video because another video mode is active"
+            ),
+        )
+    ]
+    assert client.websocket.closed
+    assert client.exit_calls == 1
 
 
 async def test_candidate_concurrent_with_connection_is_queued_capped_and_flushed(
@@ -575,7 +465,7 @@ async def test_candidate_concurrent_with_connection_is_queued_capped_and_flushed
 ) -> None:
     """ICE arriving during setup must flush after the offer without exceeding the cap."""
     client = FakeClient()
-    client.transport.connect_release = asyncio.Event()
+    client.open_release = asyncio.Event()
     harness = harness_factory(clients=[client], max_pending_ice_candidates=2)
     offer_task = asyncio.create_task(
         harness.manager.async_handle_async_webrtc_offer(
@@ -583,7 +473,7 @@ async def test_candidate_concurrent_with_connection_is_queued_capped_and_flushed
         )
     )
     try:
-        await client.transport.connect_started.wait()
+        await client.open_started.wait()
 
         candidates = [_candidate(f"candidate:{index}") for index in range(3)]
         await asyncio.gather(
@@ -592,10 +482,10 @@ async def test_candidate_concurrent_with_connection_is_queued_capped_and_flushed
                 for item in candidates
             )
         )
-        client.transport.connect_release.set()
+        client.open_release.set()
         await offer_task
     finally:
-        client.transport.connect_release.set()
+        client.open_release.set()
         if not offer_task.done():
             offer_task.cancel()
             await asyncio.gather(offer_task, return_exceptions=True)
@@ -610,45 +500,23 @@ async def test_candidate_concurrent_with_connection_is_queued_capped_and_flushed
     ] == ["candidate:0", "candidate:1"]
 
 
-async def test_frontend_candidates_route_to_non_pro_and_pro_media(
+async def test_frontend_candidate_keeps_its_fields(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
-    """Frontend ICE must use the signaling event and media mapping for each model."""
-    non_pro_client = FakeClient()
-    non_pro = harness_factory(clients=[non_pro_client])
-    await non_pro.manager.async_handle_async_webrtc_offer(
-        VIDEO_ONLY_OFFER, "non-pro", lambda message: None
+    """Frontend ICE must reach the device with every field it carries."""
+    client = FakeClient()
+    harness = harness_factory(clients=[client])
+    await harness.manager.async_handle_async_webrtc_offer(
+        VIDEO_ONLY_OFFER, "session", lambda message: None
     )
-    await non_pro.manager.async_on_webrtc_candidate(
-        "non-pro", _candidate(mid=None, index=None, user_fragment=None)
-    )
+    await harness.manager.async_on_webrtc_candidate("session", _candidate())
 
-    pro_client = FakeClient()
-    pro = harness_factory(clients=[pro_client], pro=True)
-    await pro.manager.async_handle_async_webrtc_offer(
-        COMBINED_OFFER, "pro", lambda message: None
-    )
-    await pro.manager.async_on_webrtc_candidate(
-        "pro", _candidate(mid="audio-main", index=0)
-    )
-    await pro.manager.async_on_webrtc_candidate(
-        "pro", _candidate(mid="unknown", index=99)
-    )
-
-    non_pro_message = non_pro_client.websocket.sent[-1]
-    assert non_pro_message["event"] == "video-candidate"
-    assert _decode_sent_data(non_pro_message) == {
+    assert _decode_sent_data(client.websocket.sent[-1]) == {
         "candidate": "candidate:1 1 UDP 1 192.0.2.10 5000 typ host",
+        "sdpMid": "video-main",
         "sdpMLineIndex": 0,
+        "usernameFragment": "ufrag",
     }
-    assert [message["event"] for message in pro_client.websocket.sent[-3:]] == [
-        "audio-candidate",
-        "video-candidate",
-        "audio-candidate",
-    ]
-    for message in pro_client.websocket.sent[-3:]:
-        assert _decode_sent_data(message)["sdpMid"] == "0"
-        assert _decode_sent_data(message)["sdpMLineIndex"] == 0
 
 
 async def test_candidate_send_failure_is_home_assistant_error(
@@ -669,51 +537,42 @@ async def test_candidate_send_failure_is_home_assistant_error(
         await harness.manager.async_on_webrtc_candidate("session", _candidate())
 
 
-async def test_pro_offer_without_supported_media_is_rejected_before_client_entry(
-    harness_factory: Callable[..., WebRTCHarness],
-) -> None:
-    """A Pro peer request with no audio/video section must not open a client."""
-    client = FakeClient()
-    harness = harness_factory(clients=[client], pro=True)
-
-    with pytest.raises(
-        HomeAssistantError,
-        match="offer does not contain audio or video media",
-    ):
-        await harness.manager.async_handle_async_webrtc_offer(
-            "v=0\r\nm=application 9 UDP/DTLS/SCTP 5000\r\n",
-            "session",
-            lambda value: None,
-        )
-
-    assert client.enter_calls == 0
-
-
 @pytest.mark.parametrize(
-    ("configure", "expected"),
+    ("configure", "expected", "closes_websocket"),
     [
         (
             lambda harness, client: setattr(
                 harness, "authenticate_error", RuntimeError("bad credentials")
             ),
             "bad credentials",
+            False,
         ),
         (
             lambda harness, client: setattr(
-                client.transport, "error", TimeoutError("connect timed out")
+                client, "open_error", TimeoutError("connect timed out")
             ),
             "connect timed out",
+            False,
+        ),
+        (
+            lambda harness, client: client.websocket.send_failures.__setitem__(
+                "video-offer", RuntimeError("write failed")
+            ),
+            "write failed",
+            True,
         ),
     ],
 )
-async def test_offer_setup_failures_release_unregistered_client(
+async def test_offer_setup_failures_release_the_client(
     harness_factory: Callable[..., WebRTCHarness],
     configure: Callable[[WebRTCHarness, FakeClient], None],
     expected: str,
+    closes_websocket: bool,
 ) -> None:
-    """Failures before session startup must remove queues and exit the client."""
+    """Failures before the session starts must remove queues and exit the client."""
     client = FakeClient()
-    harness = harness_factory(clients=[client])
+    states: list[bool] = []
+    harness = harness_factory(clients=[client], session_state_callback=states.append)
     configure(harness, client)
 
     with pytest.raises(
@@ -725,29 +584,30 @@ async def test_offer_setup_failures_release_unregistered_client(
         )
 
     assert client.exit_calls == 1
-    assert client.websocket.close_calls == 0
-    assert "session" not in harness.manager._pending_candidates
+    assert client.websocket.closed is closes_websocket
+    assert "session" not in harness.manager._pending_candidates  # noqa: SLF001
+    assert states == []
+    assert harness.hass.tasks == []
 
 
-async def test_offer_write_failure_closes_registered_session(
+async def test_pro_offer_without_supported_media_is_rejected(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
-    """A failed initial offer write must close WebSocket, task, and client."""
-    client = FakeClient()
-    client.websocket.send_failures["video-offer"] = RuntimeError("write failed")
+    """A Pro offer with no audio/video section must fail and release the client."""
+    client = FakeClient(pro=True)
     harness = harness_factory(clients=[client])
 
     with pytest.raises(
-        HomeAssistantError,
-        match="Unable to establish NanoKVM WebRTC signaling: write failed",
+        HomeAssistantError, match="offer does not contain audio or video media"
     ):
         await harness.manager.async_handle_async_webrtc_offer(
-            VIDEO_ONLY_OFFER, "session", lambda value: None
+            "v=0\r\nm=application 9 UDP/DTLS/SCTP 5000\r\n",
+            "session",
+            lambda value: None,
         )
 
     assert client.websocket.closed
     assert client.exit_calls == 1
-    assert harness.hass.tasks[0].cancelled()
 
 
 async def test_reader_timeout_reports_error_and_releases_session(
@@ -771,54 +631,6 @@ async def test_reader_timeout_reports_error_and_releases_session(
     assert client.exit_calls == 1
 
 
-async def test_pro_heartbeat_is_sent_until_shutdown_cancels_tasks(
-    harness_factory: Callable[..., WebRTCHarness],
-) -> None:
-    """Pro sessions must heartbeat and shutdown must cancel both owned tasks."""
-    client = FakeClient()
-    harness = harness_factory(
-        clients=[client], pro=True, signaling_heartbeat_seconds=0.001
-    )
-    await harness.manager.async_handle_async_webrtc_offer(
-        VIDEO_ONLY_OFFER, "session", lambda value: None
-    )
-
-    async with asyncio.timeout(1):
-        while not any(
-            message["event"] == "heartbeat" for message in client.websocket.sent
-        ):
-            await asyncio.sleep(0)
-    owned_tasks = tuple(harness.hass.tasks)
-    await harness.manager.async_shutdown()
-
-    assert [message["event"] for message in client.websocket.sent].count(
-        "heartbeat"
-    ) >= 1
-    assert all(task.cancelled() for task in owned_tasks)
-    assert client.exit_calls == 1
-
-
-async def test_heartbeat_failure_closes_session(
-    harness_factory: Callable[..., WebRTCHarness],
-) -> None:
-    """A failed Pro heartbeat must terminate and release the signaling session."""
-    client = FakeClient()
-    client.websocket.send_failures["heartbeat"] = RuntimeError("heartbeat failed")
-    harness = harness_factory(
-        clients=[client], pro=True, signaling_heartbeat_seconds=0.001
-    )
-    await harness.manager.async_handle_async_webrtc_offer(
-        VIDEO_ONLY_OFFER, "session", lambda value: None
-    )
-
-    async with asyncio.timeout(1):
-        while client.exit_calls == 0:
-            await asyncio.sleep(0)
-
-    assert client.websocket.closed
-    assert client.exit_calls == 1
-
-
 async def test_close_callback_schedules_cleanup(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
@@ -832,13 +644,14 @@ async def test_close_callback_schedules_cleanup(
     harness.manager.close_webrtc_session("session")
     await harness.hass.tasks[-1]
     assert client.exit_calls == 1
+    assert harness.hass.tasks[0].cancelled()
 
 
-async def test_shutdown_closes_all_non_pro_sessions_and_tolerates_close_errors(
+async def test_shutdown_closes_all_sessions_and_tolerates_close_errors(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
     """Manager shutdown must attempt every session even when resource closes fail."""
-    first = FakeClient()
+    first = FakeClient(pro=True)
     first.websocket.close_error = RuntimeError("close failed")
     first.exit_error = RuntimeError("exit failed")
     second = FakeClient()
@@ -849,43 +662,21 @@ async def test_shutdown_closes_all_non_pro_sessions_and_tolerates_close_errors(
     await harness.manager.async_handle_async_webrtc_offer(
         VIDEO_ONLY_OFFER, "second", lambda value: None
     )
-    second.websocket.closed = True
 
     await harness.manager.async_shutdown()
 
-    assert first.websocket.close_calls == 1
-    assert second.websocket.close_calls == 0
+    assert first.websocket.close_calls >= 1
+    assert second.websocket.closed
     assert first.exit_calls == second.exit_calls == 1
 
 
-async def test_heartbeat_stops_when_websocket_is_already_closed(
-    harness_factory: Callable[..., WebRTCHarness],
-) -> None:
-    """A Pro heartbeat worker must retire after observing a closed transport."""
-    client = FakeClient()
-    harness = harness_factory(
-        clients=[client], pro=True, signaling_heartbeat_seconds=0.001
-    )
-    await harness.manager.async_handle_async_webrtc_offer(
-        VIDEO_ONLY_OFFER, "session", lambda value: None
-    )
-
-    client.websocket.closed = True
-    heartbeat_task = harness.hass.tasks[1]
-    async with asyncio.timeout(1):
-        await heartbeat_task
-
-    assert heartbeat_task.done()
-    assert [message["event"] for message in client.websocket.sent] == ["video-offer"]
-
-
-async def test_new_pro_session_keeps_other_active_session_alive(
+async def test_new_session_keeps_other_active_session_alive(
     harness_factory: Callable[..., WebRTCHarness],
 ) -> None:
     """NanoKVM Pro can broadcast one encoder stream to multiple clients."""
-    first = FakeClient()
-    second = FakeClient()
-    harness = harness_factory(clients=[first, second], pro=True)
+    first = FakeClient(pro=True)
+    second = FakeClient(pro=True)
+    harness = harness_factory(clients=[first, second])
     await harness.manager.async_handle_async_webrtc_offer(
         VIDEO_ONLY_OFFER, "first", lambda value: None
     )
@@ -900,26 +691,7 @@ async def test_new_pro_session_keeps_other_active_session_alive(
     assert second.exit_calls == 0
 
 
-async def test_invalid_device_candidate_is_ignored(
-    harness_factory: Callable[..., WebRTCHarness],
-) -> None:
-    """Malformed ICE from a device must not escape the signaling reader."""
-    client = FakeClient()
-    harness = harness_factory(clients=[client])
-    messages: list[object] = []
-    await harness.manager.async_handle_async_webrtc_offer(
-        VIDEO_ONLY_OFFER, "session", messages.append
-    )
-
-    client.websocket.feed_signal("video-candidate", json.dumps({"sdpMid": "0"}))
-    await _finish_reader(client, harness.hass)
-
-    assert messages == []
-
-
 def test_real_client_exposes_the_stream_methods() -> None:
     """The stream paths call these library methods; fail if they move."""
-    from nanokvm.client import NanoKVMClient
-
-    assert callable(NanoKVMClient.open_ws)
+    assert callable(NanoKVMClient.open_webrtc_signaling)
     assert callable(NanoKVMClient.mjpeg_stream_bytes)

@@ -1,22 +1,15 @@
 """The Sipeed NanoKVM integration."""
-from __future__ import annotations
 
 import logging
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
-from .const import (
-    CONF_SSH_HOST_KEY,
-    CONF_SSL_FINGERPRINT,
-    CONF_USE_STATIC_HOST,
-    DOMAIN,
-)
-from .coordinator import NanoKVMDataUpdateCoordinator
+from .const import CONF_SSH_HOST_KEY, CONF_SSL_FINGERPRINT, CONF_USE_STATIC_HOST, DOMAIN
+from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
 from .services import async_register_services
 from .ssh_host_keys import async_write_known_hosts
 from .utils import (
@@ -50,7 +43,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: NanoKVMConfigEntry) -> bool:
     """Set up Sipeed NanoKVM from a config entry."""
     host = entry.data[CONF_HOST]
     username = entry.data[CONF_USERNAME]
@@ -107,6 +100,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: NanoKVMConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

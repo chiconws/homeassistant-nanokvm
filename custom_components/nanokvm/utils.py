@@ -1,7 +1,5 @@
 """Shared utility helpers for the Sipeed NanoKVM integration."""
-from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import TypeVar, overload
@@ -9,10 +7,7 @@ from typing import TypeVar, overload
 import aiohttp
 from yarl import URL
 
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr
-
 from nanokvm.client import NanoKVMAuthenticationFailure, NanoKVMClient, NanoKVMError
 
 _ResultT = TypeVar("_ResultT")
@@ -93,19 +88,6 @@ def verification_url(host: str, default_scheme: str = "https") -> str:
     return _api_base_url(
         origin, origin.scheme if has_explicit_scheme else default_scheme
     )
-
-
-def async_get_entry_device(
-    hass: HomeAssistant, entry_id: str, identifier: tuple[str, str]
-) -> dr.DeviceEntry | None:
-    """Return the device with the identifier that the config entry owns."""
-    registry = dr.async_get(hass)
-    if hasattr(registry, "async_get_device_by_identifier"):
-        return registry.async_get_device_by_identifier(identifier, entry_id)
-    # TODO: Home Assistant added the per-entry lookup in 2026.8.0 and removes
-    # async_get_device in 2027.8.0. Before then, raise "homeassistant" in
-    # hacs.json to 2026.8.0 and drop this fallback and the hasattr check.
-    return registry.async_get_device(identifiers={identifier})
 
 
 def api_base_url_to_web_url(base_url: str) -> str:
@@ -190,7 +172,6 @@ async def async_connect(
             async with client:
                 await client.authenticate(username, password)
                 result = await then(client) if then is not None else None
-            return client, result
         except (
             aiohttp.ServerFingerprintMismatch,
             aiohttp.ClientConnectorCertificateError,
@@ -201,10 +182,12 @@ async def async_connect(
             raise SSLCertificateChanged from err
         except aiohttp.ClientConnectionError as err:
             last_error = err
-        except (aiohttp.ClientError, NanoKVMError, asyncio.TimeoutError) as err:
+        except (TimeoutError, aiohttp.ClientError, NanoKVMError) as err:
             if is_auth_failure(err):
                 raise InvalidAuth from err
             last_error = err
             break
+        else:
+            return client, result
 
     raise CannotConnect from last_error

@@ -1,9 +1,9 @@
 """Camera platform for Sipeed NanoKVM."""
-from __future__ import annotations
 
-import asyncio
 import logging
-from contextlib import aclosing
+from typing import override
+
+from webrtc_models import RTCIceCandidateInit
 
 from homeassistant.components.camera import (
     Camera,
@@ -11,14 +11,14 @@ from homeassistant.components.camera import (
     CameraEntityFeature,
 )
 from homeassistant.components.camera.webrtc import WebRTCSendMessage
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from webrtc_models import RTCIceCandidateInit
 
-from .coordinator import NanoKVMDataUpdateCoordinator
+from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
 from .media.signaling import NanoKVMWebRTCManager
+
+PARALLEL_UPDATES = 0
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ SNAPSHOT_TIMEOUT_SECONDS = 20
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NanoKVMConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM camera based on a config entry."""
@@ -50,9 +50,7 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         Camera.__init__(self)
         self._attr_supported_features = CameraEntityFeature.STREAM
         self._attr_is_streaming = False
-        self._webrtc = NanoKVMWebRTCManager(
-            coordinator, self._handle_streaming_state
-        )
+        self._webrtc = NanoKVMWebRTCManager(coordinator, self._handle_streaming_state)
 
     @callback
     def _handle_streaming_state(self, streaming: bool) -> None:
@@ -74,24 +72,20 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         client = self.coordinator.clone_client()
         async with client:
             await self.coordinator.async_ensure_authenticated(client)
-            async with (
-                asyncio.timeout(SNAPSHOT_TIMEOUT_SECONDS),
-                aclosing(client.mjpeg_stream_bytes()) as frames,
-            ):
-                async for frame in frames:
-                    return frame
-        return None
+            return await client.get_snapshot(SNAPSHOT_TIMEOUT_SECONDS)
 
+    @override
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
         """Return a still image response from the camera."""
         try:
             return await self._async_read_snapshot_frame()
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 - a failed snapshot must not break the camera
             _LOGGER.warning("Error fetching still image: %s", err)
             return None
 
+    @override
     async def async_handle_async_webrtc_offer(
         self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
     ) -> None:
@@ -100,6 +94,7 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
             offer_sdp, session_id, send_message
         )
 
+    @override
     async def async_on_webrtc_candidate(
         self, session_id: str, candidate: RTCIceCandidateInit
     ) -> None:
@@ -107,10 +102,12 @@ class NanoKVMCamera(NanoKVMEntity, Camera):
         await self._webrtc.async_on_webrtc_candidate(session_id, candidate)
 
     @callback
+    @override
     def close_webrtc_session(self, session_id: str) -> None:
         """Close a WebRTC session when frontend unsubscribes."""
         self._webrtc.close_webrtc_session(session_id)
 
+    @override
     async def async_will_remove_from_hass(self) -> None:
         """Cleanup camera resources when entity is removed."""
         await super().async_will_remove_from_hass()

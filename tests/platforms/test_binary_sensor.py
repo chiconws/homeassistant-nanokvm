@@ -1,13 +1,10 @@
 """Tests for NanoKVM binary-sensor helpers and entity descriptions."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from types import SimpleNamespace
 
-import pytest
-
 from nanokvm.models import HWVersion, IPInfo
+import pytest
 
 from custom_components.nanokvm.binary_sensor import (
     BINARY_SENSORS,
@@ -293,7 +290,9 @@ def test_keyboard_led_sensors_follow_the_host_report(
     coordinator_state_factory: CoordinatorStateFactory,
 ) -> None:
     """Each lock sensor reads its own LED and needs a report from the host."""
-    by_key = {description.key: description for description in KEYBOARD_LED_BINARY_SENSORS}
+    by_key = {
+        description.key: description for description in KEYBOARD_LED_BINARY_SENSORS
+    }
     reported = coordinator_state_factory(
         keyboard_leds=SimpleNamespace(
             num_lock=True, caps_lock=False, scroll_lock=True, known=True

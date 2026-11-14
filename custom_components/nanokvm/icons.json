@@ -1,14 +1,26 @@
 {
   "entity": {
     "binary_sensor": {
+      "caps_lock": {
+        "default": "mdi:apple-keyboard-caps"
+      },
       "cdrom_mode": {
         "default": "mdi:harddisk"
       },
       "hdd_led": {
         "default": "mdi:harddisk"
       },
+      "hdmi_signal": {
+        "default": "mdi:video-input-hdmi"
+      },
+      "num_lock": {
+        "default": "mdi:keyboard"
+      },
       "power_led": {
         "default": "mdi:power"
+      },
+      "scroll_lock": {
+        "default": "mdi:keyboard"
       },
       "static_ip_enabled": {
         "default": "mdi:ethernet"
@@ -21,18 +33,6 @@
       },
       "wired_connected": {
         "default": "mdi:ethernet"
-      },
-      "num_lock": {
-        "default": "mdi:keyboard"
-      },
-      "caps_lock": {
-        "default": "mdi:apple-keyboard-caps"
-      },
-      "scroll_lock": {
-        "default": "mdi:keyboard"
-      },
-      "hdmi_signal": {
-        "default": "mdi:video-input-hdmi"
       }
     },
     "button": {
@@ -61,6 +61,9 @@
       }
     },
     "number": {
+      "hdmi_idle_timeout": {
+        "default": "mdi:timer-outline"
+      },
       "led_brightness": {
         "default": "mdi:led-strip-variant"
       },
@@ -69,9 +72,6 @@
       },
       "led_vertical_beads": {
         "default": "mdi:led-strip-variant"
-      },
-      "hdmi_idle_timeout": {
-        "default": "mdi:timer-outline"
       }
     },
     "select": {
@@ -95,6 +95,9 @@
       }
     },
     "sensor": {
+      "account_role": {
+        "default": "mdi:account-key"
+      },
       "cpu_temperature": {
         "default": "mdi:thermometer"
       },
@@ -121,9 +124,6 @@
       },
       "wireless_ip_address": {
         "default": "mdi:wifi"
-      },
-      "account_role": {
-        "default": "mdi:account-key"
       }
     },
     "switch": {

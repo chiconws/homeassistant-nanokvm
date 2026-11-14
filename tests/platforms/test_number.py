@@ -1,12 +1,8 @@
 """Tests for NanoKVM number platform helpers and descriptions."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from types import SimpleNamespace
 
-from homeassistant.components.number import NumberMode
-from homeassistant.const import EntityCategory, PERCENTAGE
 import pytest
 
 from custom_components.nanokvm.const import (
@@ -25,7 +21,8 @@ from custom_components.nanokvm.number import (
     _led_vertical_max,
     _led_vertical_value,
 )
-
+from homeassistant.components.number import NumberMode
+from homeassistant.const import PERCENTAGE, EntityCategory
 
 CoordinatorStateFactory = Callable[..., SimpleNamespace]
 
@@ -171,7 +168,9 @@ def test_hdmi_idle_timeout_description_contract(
     assert description.available_fn(admin) is True
     # Older firmware reports no timeout; a role=user account cannot set it.
     older = SimpleNamespace(enabled=True, signal=None, idle_timeout=None)
-    assert description.available_fn(coordinator_state_factory(hdmi_state=older)) is False
+    assert (
+        description.available_fn(coordinator_state_factory(hdmi_state=older)) is False
+    )
     assert (
         description.available_fn(
             coordinator_state_factory(hdmi_state=reported, can=lambda _: False)

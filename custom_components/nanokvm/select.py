@@ -1,16 +1,13 @@
 """Select platform for Sipeed NanoKVM."""
-from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
 from nanokvm.models import (
     DiskType,
     HidMode,
@@ -20,8 +17,10 @@ from nanokvm.models import (
     VirtualDevice,
 )
 
-from .coordinator import NanoKVMDataUpdateCoordinator
+from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
 from .entity import NanoKVMEntity
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -132,7 +131,9 @@ def _hid_mode_value(coordinator: NanoKVMDataUpdateCoordinator) -> str:
     """Return current HID mode option."""
     if coordinator.hid_mode is None:
         return HID_MODE_VALUES[HidMode.NORMAL]
-    return HID_MODE_VALUES.get(coordinator.hid_mode.mode, HID_MODE_VALUES[HidMode.NORMAL])
+    return HID_MODE_VALUES.get(
+        coordinator.hid_mode.mode, HID_MODE_VALUES[HidMode.NORMAL]
+    )
 
 
 def _set_hid_mode(
@@ -144,7 +145,10 @@ def _set_hid_mode(
 
 def _mouse_jiggler_mode_value(coordinator: NanoKVMDataUpdateCoordinator) -> str:
     """Return current mouse jiggler option."""
-    if not coordinator.mouse_jiggler_state or not coordinator.mouse_jiggler_state.enabled:
+    if (
+        not coordinator.mouse_jiggler_state
+        or not coordinator.mouse_jiggler_state.enabled
+    ):
         return "disable"
     return f"{coordinator.mouse_jiggler_state.mode.value}_mode"
 
@@ -163,7 +167,9 @@ def _oled_sleep_value(coordinator: NanoKVMDataUpdateCoordinator) -> str:
     """Return current OLED sleep option."""
     if coordinator.oled_info is None:
         return "never"
-    return OLED_SLEEP_VALUES.get(coordinator.oled_info.sleep, f"{coordinator.oled_info.sleep}_sec")
+    return OLED_SLEEP_VALUES.get(
+        coordinator.oled_info.sleep, f"{coordinator.oled_info.sleep}_sec"
+    )
 
 
 def _set_oled_sleep(
@@ -198,9 +204,7 @@ def _set_lcd_time_format(
     coordinator: NanoKVMDataUpdateCoordinator, option: str
 ) -> Awaitable[Any]:
     """Set LCD time format from option key."""
-    return coordinator.client.set_lcd_time_format(
-        LCD_TIME_FORMAT_OPTIONS[option]
-    )
+    return coordinator.client.set_lcd_time_format(LCD_TIME_FORMAT_OPTIONS[option])
 
 
 def _pro_disk_value(coordinator: NanoKVMDataUpdateCoordinator) -> str | None:
@@ -216,9 +220,7 @@ def _pro_disk_value(coordinator: NanoKVMDataUpdateCoordinator) -> str | None:
     return mounted_disk
 
 
-async def _set_pro_disk(
-    coordinator: NanoKVMDataUpdateCoordinator, option: str
-) -> None:
+async def _set_pro_disk(coordinator: NanoKVMDataUpdateCoordinator, option: str) -> None:
     """Set Pro virtual disk type."""
     disk_type = DISK_TYPE_OPTIONS[option]
     # The Pro unmounts a disk that is requested again, so compare with its
@@ -293,7 +295,7 @@ SELECTS: tuple[NanoKVMSelectEntityDescription, ...] = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NanoKVMConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up NanoKVM select based on a config entry."""
@@ -327,17 +329,20 @@ class NanoKVMSelect(NanoKVMEntity, SelectEntity):
         )
 
     @property
+    @override
     def current_option(self) -> str | None:
         """Return the current selected option."""
         return self.entity_description.value_fn(self.coordinator)
 
     @property
+    @override
     def options(self) -> list[str]:
         """Return selectable options."""
         if self.entity_description.options_fn is not None:
             return self.entity_description.options_fn(self.coordinator)
         return self.entity_description.options or []
 
+    @override
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         async with self._async_device_action():

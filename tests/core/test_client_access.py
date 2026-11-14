@@ -1,31 +1,31 @@
 """Regression tests for serialized coordinator client access."""
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
 from types import SimpleNamespace
+from typing import Self
 from unittest.mock import AsyncMock, MagicMock
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
-from pytest import MonkeyPatch
+import pytest
 from yarl import URL
 
 from custom_components.nanokvm.coordinator import NanoKVMDataUpdateCoordinator
 import custom_components.nanokvm.utils as utils_module
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 
 
 class TrackingClient:
     """Async context manager that records overlapping entries."""
 
     def __init__(self, url: str = "http://nanokvm.local/api/") -> None:
+        """Initialize the test double."""
         self.active_entries = 0
         self.maximum_active_entries = 0
         self.token = "authenticated"
         self.url = URL(url)
 
-    async def __aenter__(self) -> TrackingClient:
+    async def __aenter__(self) -> Self:
         """Record an active client user."""
         self.active_entries += 1
         self.maximum_active_entries = max(
@@ -43,7 +43,7 @@ class DirectEntryForbiddenClient(TrackingClient):
 
     token = "authenticated"
 
-    async def __aenter__(self) -> DirectEntryForbiddenClient:
+    async def __aenter__(self) -> Self:
         """Reject direct context entry."""
         raise AssertionError("shared client was entered directly")
 
@@ -136,18 +136,20 @@ def test_coordinator_poll_uses_serialized_client_access() -> None:
             yield client
 
         coordinator.async_client = MagicMock(side_effect=serialized_client)
-        coordinator._async_fetch_core_data = AsyncMock()
-        coordinator._async_fetch_storage_data = AsyncMock()
-        coordinator._async_refresh_ssh_data = AsyncMock()
-        coordinator._async_schedule_app_version_refresh = MagicMock()
+        coordinator._async_fetch_core_data = AsyncMock()  # noqa: SLF001
+        coordinator._async_fetch_storage_data = AsyncMock()  # noqa: SLF001
+        coordinator._async_refresh_ssh_data = AsyncMock()  # noqa: SLF001
+        coordinator._async_schedule_app_version_refresh = MagicMock()  # noqa: SLF001
 
-        await coordinator._async_fetch_with_client()
+        await coordinator._async_fetch_with_client()  # noqa: SLF001
         coordinator.async_client.assert_called_once_with()
 
     asyncio.run(run_test())
 
 
-def test_client_replacement_waits_for_active_user(monkeypatch: MonkeyPatch) -> None:
+def test_client_replacement_waits_for_active_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Reauthentication must not replace a client that is still in use."""
 
     async def run_test() -> None:
@@ -168,7 +170,7 @@ def test_client_replacement_waits_for_active_user(monkeypatch: MonkeyPatch) -> N
 
         async with coordinator.async_client():
             replacement_task = asyncio.create_task(
-                coordinator._async_reauthenticate_client()
+                coordinator._async_reauthenticate_client()  # noqa: SLF001
             )
             await asyncio.sleep(0)
             assert not replacement_started.is_set()

@@ -1,0 +1,69 @@
+# Mirrors home-assistant/core .pre-commit-config.yaml.
+# Run with prek (in requirements_test.txt) or pre-commit: `prek install`, then `prek run --all-files`.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        args:
+          - --fix
+      - id: ruff-format
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
+        args:
+          - --ignore-words-list=hass
+          - --skip="./.*,*.csv,*.json,*.ambr"
+          - --quiet-level=2
+        exclude_types: [csv, json, html]
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.31.1
+    hooks:
+      - id: zizmor
+        args:
+          - --pedantic
+          - --no-online-audits
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-executables-have-shebangs
+        stages: [manual]
+      - id: check-json
+        exclude: ^\.vscode/
+      - id: no-commit-to-branch
+        args:
+          - --branch=dev
+          - --branch=main
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.6.2
+    hooks:
+      - id: prettier
+        additional_dependencies:
+          - prettier@3.6.2
+          - prettier-plugin-sort-json@4.2.0
+  # Not in core (core does not lint Markdown)
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.24.0
+    hooks:
+      - id: markdownlint-cli2
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: .venv/bin/mypy
+        language: system
+        require_serial: true
+        types_or: [python, pyi]
+        files: ^custom_components/.+\.(py|pyi)$
+      # Not in core; keeps Pylance in VS Code and the gate in agreement.
+      - id: pyright
+        name: pyright
+        entry: .venv/bin/pyright
+        language: system
+        pass_filenames: false
+        types_or: [python, pyi]
