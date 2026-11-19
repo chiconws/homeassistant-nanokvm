@@ -121,17 +121,17 @@ _GATED_CORE_ATTRIBUTES = (
 _LEGACY_USER_PERMISSIONS = frozenset(
     {Permission.CONSOLE_VIEW, Permission.CONSOLE_CONTROL, Permission.POWER}
 )
-_INVALID_FILE_CONTENT_CODE = -2
-_INVALID_FILE_CONTENT_MESSAGE = "invalid file content"
+# How /vm/oled answers on a NanoKVM Pro whose screen it does not recognise,
+# such as some Pro Desk units: before Pro 1.2.16, then from 1.2.16.
+_NO_OLED_ERRORS = frozenset(
+    {(-2, "invalid file content"), (-1, "read screen type failed")}
+)
 _ResponseT = TypeVar("_ResponseT")
 
 
-def _is_invalid_file_content_error(error: NanoKVMApiError) -> bool:
-    """Return whether the API error is NanoKVM's optional-file missing response."""
-    return (
-        error.code == _INVALID_FILE_CONTENT_CODE
-        and error.msg == _INVALID_FILE_CONTENT_MESSAGE
-    )
+def _is_no_oled_error(error: NanoKVMApiError) -> bool:
+    """Return whether /vm/oled reports a screen it does not recognise."""
+    return (error.code, error.msg) in _NO_OLED_ERRORS
 
 
 def _format_timeout_error(action: str) -> str:
@@ -546,15 +546,15 @@ class NanoKVMDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return None
 
     async def _fetch_oled_info(self) -> GetOLEDRsp | None:
-        """Fetch OLED state, treating NanoKVM Pro's missing OLED file as unavailable."""
+        """Fetch OLED state, treating a screen the Pro does not recognise as no OLED."""
         try:
             return await self.client.get_oled_info()
         except NanoKVMApiError as err:
-            if not _is_invalid_file_content_error(err):
+            if not _is_no_oled_error(err):
                 raise
             _LOGGER.debug(
                 "NanoKVM endpoint /vm/oled returned %r; treating OLED as unavailable",
-                _INVALID_FILE_CONTENT_MESSAGE,
+                err.msg,
             )
             return None
 

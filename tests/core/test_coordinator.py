@@ -66,7 +66,7 @@ import custom_components.nanokvm.coordinator as coordinator_module
 from custom_components.nanokvm.coordinator import (
     NanoKVMDataUpdateCoordinator,
     _format_timeout_error,
-    _is_invalid_file_content_error,
+    _is_no_oled_error,
 )
 import custom_components.nanokvm.utils as utils_module
 from homeassistant.const import CONF_HOST
@@ -215,15 +215,17 @@ def test_auth_failure_classification(error: Exception, expected: bool) -> None:
     assert utils_module.is_auth_failure(error) is expected
 
 
-def test_invalid_file_content_error_requires_matching_code_and_message() -> None:
-    """The optional OLED-file policy matches the complete API error signature."""
-    matching = _api_error(code=-2, message="invalid file content")
+def test_no_oled_error_requires_matching_code_and_message() -> None:
+    """The no-OLED policy matches the complete API error signature of each firmware."""
+    before_1_2_16 = _api_error(code=-2, message="invalid file content")
+    from_1_2_16 = _api_error(code=-1, message="read screen type failed")
     wrong_code = _api_error(code=-1, message="invalid file content")
     wrong_message = _api_error(code=-2, message="other")
 
-    assert _is_invalid_file_content_error(matching) is True
-    assert _is_invalid_file_content_error(wrong_code) is False
-    assert _is_invalid_file_content_error(wrong_message) is False
+    assert _is_no_oled_error(before_1_2_16) is True
+    assert _is_no_oled_error(from_1_2_16) is True
+    assert _is_no_oled_error(wrong_code) is False
+    assert _is_no_oled_error(wrong_message) is False
     assert _format_timeout_error("testing") == "Timed out testing after 10 seconds"
 
 
@@ -1124,6 +1126,12 @@ async def test_oled_fetch_handles_only_missing_optional_file(
     coordinator.client.get_oled_info.side_effect = _api_error(
         code=-2,
         message="invalid file content",
+    )
+    assert await coordinator._fetch_oled_info() is None  # noqa: SLF001
+
+    coordinator.client.get_oled_info.side_effect = _api_error(
+        code=-1,
+        message="read screen type failed",
     )
     assert await coordinator._fetch_oled_info() is None  # noqa: SLF001
 
