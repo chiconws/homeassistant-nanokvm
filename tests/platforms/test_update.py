@@ -74,18 +74,18 @@ def test_update_entity_exposes_platform_metadata(
 @pytest.mark.parametrize(
     ("current", "application", "expected"),
     [
-        (" 2.0.0 ", "1.0.0", "2.0.0"),
-        ("", " 1.0.0 ", "1.0.0"),
+        ("1.0.0", " 2.0.0 ", "2.0.0"),
+        (" 1.0.0 ", "", "1.0.0"),
         (None, "", None),
     ],
 )
-def test_installed_version_prefers_api_current_then_device_application(
+def test_installed_version_prefers_device_application_then_api_current(
     coordinator_state_factory: Callable[..., SimpleNamespace],
     current: str | None,
     application: str | None,
     expected: str | None,
 ) -> None:
-    """Installed version must fall back when version metadata is empty."""
+    """The polled device version must win over the cached one after an install."""
     entity = _update_entity(
         coordinator_state_factory,
         current=current,
