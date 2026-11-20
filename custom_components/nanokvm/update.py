@@ -1,6 +1,5 @@
 """Update platform for Sipeed NanoKVM."""
 
-import logging
 from typing import Any, override
 
 import aiohttp
@@ -17,12 +16,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from nanokvm.client import NanoKVMError
 from nanokvm.models import Permission
 
-from .coordinator import NanoKVMConfigEntry, NanoKVMDataUpdateCoordinator
+from .coordinator import (
+    _APP_VERSION_REQUEST_TIMEOUT_SECONDS,
+    NanoKVMConfigEntry,
+    NanoKVMDataUpdateCoordinator,
+)
 from .entity import NanoKVMEntity
 
 PARALLEL_UPDATES = 0
-
-_LOGGER = logging.getLogger(__name__)
 
 
 def _normalize_version(version: str | None) -> str | None:
@@ -73,16 +74,13 @@ class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
     @override
     def installed_version(self) -> str | None:
         """Version installed and in use."""
-        current_version = None
-        if self.coordinator.application_version_info is not None:
-            current_version = _normalize_version(
-                self.coordinator.application_version_info.current
-            )
-
-        if current_version is not None:
-            return current_version
-
-        return _normalize_version(self.coordinator.device_info.application)
+        # Device info is polled every cycle; the version info is cached for minutes,
+        # so after an install it would still name the old version.
+        installed = _normalize_version(self.coordinator.device_info.application)
+        version_info = self.coordinator.application_version_info
+        if installed is None and version_info is not None:
+            return _normalize_version(version_info.current)
+        return installed
 
     @property
     @override
@@ -103,20 +101,27 @@ class NanoKVMUpdate(NanoKVMEntity, UpdateEntity):
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
     ) -> None:
-        """Trigger NanoKVM application update."""
+        """Install the latest application and wait until the device runs it.
+
+        Home Assistant shows the install in progress until this returns. Pro
+        1.2.16 and later answer once the package is downloaded and install it in
+        the background, so only the new version shows that the install finished.
+        """
         del version, backup, kwargs
+        coordinator = self.coordinator
+        # Its own client: the wait outlasts polls, and the restart ends the
+        # session, so the library logs in again with the kept credentials.
+        client = coordinator.clone_client(
+            request_timeout=_APP_VERSION_REQUEST_TIMEOUT_SECONDS,
+            keep_credentials=True,
+        )
         try:
-            async with self.coordinator.async_client() as client:
-                await client.update_application()
-        except aiohttp.ServerDisconnectedError:
-            _LOGGER.debug(
-                "NanoKVM disconnected while starting the application update; "
-                "assuming the update is continuing"
-            )
-            return
+            async with client:
+                await client.authenticate(coordinator.username, coordinator.password)
+                await client.install_application_update()
         except (TimeoutError, NanoKVMError, aiohttp.ClientError) as err:
             raise HomeAssistantError(
-                f"Failed to start NanoKVM application update: {err}"
+                f"Failed to install NanoKVM application update: {err}"
             ) from err
 
         await self.coordinator.async_request_refresh()
