@@ -634,42 +634,45 @@ def _update_entity(coordinator: SimpleNamespace) -> update_module.NanoKVMUpdate:
     return update_module.NanoKVMUpdate(coordinator)
 
 
+def _install_coordinator(client: MagicMock) -> SimpleNamespace:
+    """Build a coordinator whose cloned client runs the install."""
+    client.authenticate = AsyncMock()
+    return _coordinator(
+        clone_client=MagicMock(return_value=client),
+        username="admin",
+        password="secret",
+    )
+
+
 @pytest.mark.asyncio
-async def test_update_install_calls_client_and_refreshes() -> None:
-    """Successful application updates must refresh coordinator state."""
-    coordinator = _coordinator()
-    coordinator.client.update_application = AsyncMock()
+async def test_update_install_waits_for_new_version_and_refreshes() -> None:
+    """The install must wait for the new version on a client that can log in again."""
+    client = MagicMock(install_application_update=AsyncMock(return_value="1.1.0"))
+    coordinator = _install_coordinator(client)
 
     await _update_entity(coordinator).async_install(None, False, ignored=True)
 
-    coordinator.client.update_application.assert_awaited_once_with()
+    assert coordinator.clone_client.call_args.kwargs["keep_credentials"] is True
+    client.authenticate.assert_awaited_once_with("admin", "secret")
+    client.install_application_update.assert_awaited_once_with()
     coordinator.async_request_refresh.assert_awaited_once_with()
-
-
-@pytest.mark.asyncio
-async def test_update_install_accepts_expected_server_disconnect() -> None:
-    """A server disconnect after starting update must not become an HA error."""
-    coordinator = _coordinator()
-    coordinator.client.update_application = AsyncMock(
-        side_effect=aiohttp.ServerDisconnectedError("updating")
-    )
-
-    await _update_entity(coordinator).async_install("1.1.0", True)
-
-    coordinator.async_request_refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "error",
-    [aiohttp.ClientError("network"), TimeoutError("timeout")],
+    [
+        aiohttp.ServerDisconnectedError("updating"),
+        NanoKVMError("could not reach its update server"),
+        TimeoutError("did not run a new application version"),
+    ],
 )
 async def test_update_install_translates_client_failures(error: Exception) -> None:
-    """Known client failures must surface as Home Assistant errors."""
-    coordinator = _coordinator()
-    coordinator.client.update_application = AsyncMock(side_effect=error)
+    """A failed or unfinished install must surface as a Home Assistant error."""
+    client = MagicMock(install_application_update=AsyncMock(side_effect=error))
+    coordinator = _install_coordinator(client)
 
-    with pytest.raises(HomeAssistantError, match="Failed to start NanoKVM"):
+    with pytest.raises(HomeAssistantError, match="Failed to install NanoKVM"):
         await _update_entity(coordinator).async_install(None, False)
 
     coordinator.async_request_refresh.assert_not_awaited()
